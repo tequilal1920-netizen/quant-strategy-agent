@@ -1,0 +1,4 @@
+interface:
+  display_name: "行业景气度"
+  short_description: "运行并审计行业景气、风格轮动、事件修正、配置权重与跟踪回测"
+  default_prompt: "Use $industry-rotation to inspect, run, or verify the industry-prosperity and style-allocation workflow."

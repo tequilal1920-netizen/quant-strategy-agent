@@ -1,0 +1,9 @@
+{
+    "nav_title":  "组合优化",
+    "slug":  "portfolio-optimization",
+    "role":  "primary",
+    "local_path":  "model/portfolio_optimization",
+    "skill_path":  "skill/portfolio-optimization",
+    "github_url":  "https://github.com/tequilal1920-netizen/quant-strategy-agent/tree/main/model/portfolio_optimization",
+    "github_status":  "ready_to_publish"
+}

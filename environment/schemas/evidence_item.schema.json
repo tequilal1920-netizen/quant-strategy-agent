@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EvidenceItem",
+  "type": "object",
+  "required": [
+    "evidence_id",
+    "source_title",
+    "source_type",
+    "source_tier",
+    "claim",
+    "usage"
+  ],
+  "properties": {
+    "evidence_id": {"type": "string"},
+    "source_title": {"type": "string"},
+    "source_type": {
+      "type": "string",
+      "enum": ["pdf", "docx", "ipynb", "database", "web", "api", "book", "code"]
+    },
+    "source_tier": {"type": "string", "enum": ["S", "A", "B", "C", "D"]},
+    "source_path_or_url": {"type": "string"},
+    "page_or_location": {"type": "string"},
+    "claim": {"type": "string"},
+    "usage": {
+      "type": "string",
+      "enum": ["model_structure", "parameter", "data_field", "engineering_pattern", "risk_warning", "background"]
+    },
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "notes": {"type": "string"}
+  }
+}
+

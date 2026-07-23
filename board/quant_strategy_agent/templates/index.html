@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>量化策略Agent</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg', v=app_version) }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=app_version) }}">
+</head>
+<body class="is-login">
+  <main class="login-shell">
+    <section class="login-card">
+      <div class="brand-lockup">
+        <span class="brand-mark">策</span>
+        <div><strong>量化策略Agent</strong></div>
+      </div>
+      <h1>登录统一工作台</h1>
+      {% if message %}<div class="login-alert">{{ message }}</div>{% endif %}
+      <form method="post" class="login-form">
+        <label>账号<input name="username" autocomplete="username" required></label>
+        <label>密码<input name="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit">进入工作台</button>
+      </form>
+      <footer>版本 {{ app_version }}</footer>
+    </section>
+  </main>
+</body>
+</html>

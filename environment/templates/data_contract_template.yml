@@ -1,0 +1,33 @@
+run_id:
+topic:
+
+data_items:
+  - data_item_id:
+    name:
+    required_by:
+    evidence_refs:
+    local_source:
+      database:
+      table:
+      fields:
+      date_range:
+      sample_available:
+    fallback_sources:
+      - source:
+        api:
+        requires_user_approval:
+        quota_risk:
+    frequency:
+    point_in_time_rule:
+    lag_rule:
+    missing_rule:
+    adjustment_rule:
+    quality_checks:
+      - primary_key_unique
+      - date_coverage
+      - missing_rate
+
+unavailable_items: []
+paid_api_requests: []
+risk_register: []
+

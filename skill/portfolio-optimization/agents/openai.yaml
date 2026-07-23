@@ -1,0 +1,4 @@
+interface:
+  display_name: "组合优化"
+  short_description: "运行并审计优化求解、风险约束、候选组合、配置权重与回测证据"
+  default_prompt: "Use $portfolio-optimization to solve or verify the portfolio-optimization and strategy workflow."

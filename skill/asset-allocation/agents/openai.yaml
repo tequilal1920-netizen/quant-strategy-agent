@@ -1,0 +1,4 @@
+interface:
+  display_name: "资产配置"
+  short_description: "运行并审计周期跟踪、配置策略、资产权重、风险贡献与回测证据"
+  default_prompt: "Use $asset-allocation to run or verify the cycle-tracking and allocation-strategy workflow."

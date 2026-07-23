@@ -1,0 +1,72 @@
+{
+  "wande.dbo.AIndexMembers": {
+    "status": "error",
+    "message": "('42S02', '[42S02] [Microsoft][ODBC SQL Server Driver][SQL Server]对象名 \\'wande.dbo.AIndexMembers\\' 无效。 (208) (SQLExecDirectW); [42S02] [Microsoft][ODBC SQL Server Driver][SQL Server]无法预定义语句。 (8180); [42S02] [Microsoft][ODBC SQL Server Driver][SQL Server]链接服务器\"WANDE\"的 OLE DB 访问接口 \"SQLNCLI11\" 返回了消息 \"无法完成延迟准备。\"。 (7412)')"
+  },
+  "wande.dbo.AINDEXMEMBERS": {
+    "status": "ok",
+    "n": 3,
+    "cols": [
+      "OBJECT_ID",
+      "S_INFO_WINDCODE",
+      "S_CON_WINDCODE",
+      "S_CON_INDATE",
+      "S_CON_OUTDATE",
+      "CUR_SIGN",
+      "OPDATE",
+      "OPMODE"
+    ]
+  },
+  "wande.dbo.AIndexCSI800Weight": {
+    "status": "error",
+    "message": "('42S02', '[42S02] [Microsoft][ODBC SQL Server Driver][SQL Server]对象名 \\'wande.dbo.AIndexCSI800Weight\\' 无效。 (208) (SQLExecDirectW); [42S02] [Microsoft][ODBC SQL Server Driver][SQL Server]无法预定义语句。 (8180); [42S02] [Microsoft][ODBC SQL Server Driver][SQL Server]链接服务器\"WANDE\"的 OLE DB 访问接口 \"SQLNCLI11\" 返回了消息 \"无法完成延迟准备。\"。 (7412)')"
+  },
+  "wande.dbo.AINDEXCSI800WEIGHT": {
+    "status": "ok",
+    "n": 3,
+    "cols": [
+      "OBJECT_ID",
+      "TRADE_DT",
+      "S_INFO_WINDCODE",
+      "INDEXNAME",
+      "INDEXNAME_ENG",
+      "S_CON_WINDCODE",
+      "EXCHANGE",
+      "TOT_SHR",
+      "FREE_SHR_RATIO",
+      "SHR_CALCULATION",
+      "WEIGHTFACTOR",
+      "CLOSEVALUE",
+      "OPEN_ADJUSTED",
+      "TOT_MV",
+      "MV_CALCULATION",
+      "WEIGHT",
+      "OPDATE",
+      "OPMODE"
+    ]
+  },
+  "wande.dbo.AShareStrangeTrade": {
+    "status": "error",
+    "message": "('42S02', '[42S02] [Microsoft][ODBC SQL Server Driver][SQL Server]对象名 \\'wande.dbo.AShareStrangeTrade\\' 无效。 (208) (SQLExecDirectW); [42S02] [Microsoft][ODBC SQL Server Driver][SQL Server]无法预定义语句。 (8180); [42S02] [Microsoft][ODBC SQL Server Driver][SQL Server]链接服务器\"WANDE\"的 OLE DB 访问接口 \"SQLNCLI11\" 返回了消息 \"无法完成延迟准备。\"。 (7412)')"
+  },
+  "wande.dbo.ASHARESTRANGETRADE": {
+    "status": "ok",
+    "n": 3,
+    "cols": [
+      "OBJECT_ID",
+      "S_INFO_WINDCODE",
+      "S_STRANGE_BGDATE",
+      "S_STRANGE_ENDDATE",
+      "S_STRANGE_RANGE",
+      "S_STRANGE_VOLUME",
+      "S_STRANGE_AMOUNT",
+      "S_STRANGE_TRADERNAME",
+      "S_STRANGE_TRADERAMOUNT",
+      "S_STRANGE_BUYAMOUNT",
+      "S_STRANGE_SELLAMOUNT",
+      "S_VARIANT_TYPE",
+      "OPDATE",
+      "OPMODE"
+    ]
+  }
+}

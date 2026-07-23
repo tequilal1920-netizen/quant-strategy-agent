@@ -1,0 +1,49 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.private.env
+*.secret.*
+*.key
+*.pem
+
+# Python and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.playwright-cli/
+
+# Databases and mutable state
+database/*.db
+database/*.db-*
+database/*.sqlite
+database/*.sqlite3
+database/*.sqlite3-*
+
+# Generated output, caches and private runtime state
+output/
+board/**/private/
+board/**/runtime/
+board/**/data_cache/
+copy/
+*.log
+*.tmp
+*.bak
+
+# Locally vendored third-party packages; install from requirements instead
+environment/vendor/
+board/**/vendor/
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+# Local research and Office artifacts
+*.docx
+*.xlsx
+*.xls
+*.pdf

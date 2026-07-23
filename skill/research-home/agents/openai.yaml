@@ -1,0 +1,4 @@
+interface:
+  display_name: "研究主页"
+  short_description: "汇总跨模型研究结论，并生成可审计的日度、周度与月度组合权重"
+  default_prompt: "Use $research-home to produce or verify the cross-model research brief and daily, weekly, and monthly portfolio outputs."

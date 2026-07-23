@@ -1,0 +1,333 @@
+{
+  "principle": "先学习书本和券商研报，抽取可复现规则，再进入回测；未通过审计的规则只进入候选库，不写成正式 skill。",
+  "learning_stages": [
+    {
+      "stage": "source_ingestion",
+      "objective": "收集内地量化、技术分析、资产配置书本章节和券商金工深度报告。",
+      "output": "source_cards / report_cards"
+    },
+    {
+      "stage": "method_extraction",
+      "objective": "抽取策略 DNA：假设、字段、窗口、调仓、风控、交易成本、失败场景。",
+      "output": "strategy_dna.json"
+    },
+    {
+      "stage": "agent_debate",
+      "objective": "宏观、行业、技术、因子、基本面、组合 Agent 交叉审计信号方向。",
+      "output": "agent_votes.json"
+    },
+    {
+      "stage": "backtest_audit",
+      "objective": "真实数据库回测，检查未来函数、公告可得性、路径止损和样本不足。",
+      "output": "model_leaderboard / target_gate_report"
+    },
+    {
+      "stage": "skill_lifecycle",
+      "objective": "只把稳定、可解释、可复现且样本外待审的规则沉淀为 skill。",
+      "output": "skill_registry / changelog"
+    }
+  ],
+  "book_and_report_learning_map": {
+    "technical_skill_agent": {
+      "domestic_books": [
+        "丁鹏《量化投资：策略与技术》",
+        "丁鹏《量化投资：数据挖掘技术与实践》",
+        "国内证券投资技术分析教材中的趋势、形态、量价、止损和交易纪律章节"
+      ],
+      "broker_reports": [
+        "华泰金工 GPT-Kline 系列",
+        "国信证券 AI 赋能资产配置系列中的技术分析和 Agent 化研究"
+      ],
+      "learning_outputs": [
+        "K 线 skill 卡：趋势确认、突破确认、波动收缩、资金确认、过热惩罚",
+        "每个 skill 明确输入字段、计算窗口、风险约束、失效条件和可视化输出"
+      ]
+    },
+    "factor_factory_agent": {
+      "domestic_books": [
+        "丁鹏《量化投资：策略与技术》",
+        "国内多因子选股、统计套利、机器学习量化投资教材中的因子检验章节"
+      ],
+      "broker_reports": [
+        "华泰金工 GPT 因子工厂、GPT 因子工厂 2.0",
+        "民生、海通、广发、招商等机器学习/深度学习因子研究"
+      ],
+      "learning_outputs": [
+        "因子表达式卡：经济含义、字段依赖、可得性、单调性、RankIC、换手和相关性审计",
+        "候选表达式库和失败表达式黑名单，避免每轮重学同一个错误"
+      ]
+    },
+    "industry_rotation_agent": {
+      "domestic_books": [
+        "国内行业比较、资产配置、金融工程实证研究教材中的景气、估值、资金和拥挤章节"
+      ],
+      "broker_reports": [
+        "国信证券《AI赋能资产配置（三十八）：Agent赋能开发行业轮动策略》",
+        "国金证券行业轮动双周度跟踪",
+        "金融街证券行业轮动 ETF 策略周报"
+      ],
+      "learning_outputs": [
+        "行业五 Agent 卡：景气、资金、技术、拥挤、事件叙事",
+        "行业选择、行业内个股增强和行业 ETF 映射三层输出"
+      ]
+    },
+    "asset_allocator_agent": {
+      "domestic_books": [
+        "国内资产配置、FOF、风险预算和组合管理教材中的股债商品现金配置章节"
+      ],
+      "broker_reports": [
+        "金融街、中银、华安等 ETF 资产配置、全天候、BL 和策略主题 ETF 研究"
+      ],
+      "learning_outputs": [
+        "大类资产袖套卡：权益、风格、跨境、商品、债券现金",
+        "风险状态、袖套预算、ETF 选择、波动目标和现金保护规则"
+      ]
+    },
+    "portfolio_optimizer_agent": {
+      "domestic_books": [
+        "国内组合管理、风险模型和量化投资教材中的优化、约束和交易成本章节"
+      ],
+      "broker_reports": [
+        "华泰金工 PortfolioNet",
+        "国金证券大模型投研、MCP 研报复现和投研 Agent 协同框架"
+      ],
+      "learning_outputs": [
+        "组合约束卡：权益预算、行业上限、个股上限、换手成本、止损路径",
+        "模型医生卡：收益归因、失败模式、替换建议和样本外审计"
+      ]
+    }
+  },
+  "strategy_reference_map": {
+    "ai_factor_factory": {
+      "model_ids": [
+        "stock_factor_ai_factory",
+        "stock_factor_ai_composite"
+      ],
+      "broker_report_basis": [
+        "华泰金工：GPT 因子工厂、GPT 因子工厂 2.0、大模型 + 强化学习因子挖掘",
+        "民生/海通/广发/招商等机器学习和深度学习因子模型动物园"
+      ],
+      "implementation": [
+        "把单一因子打分替换为多表达式库：动量质量价值、低波红利、盈利修复、量价资金四类候选表达式。",
+        "每期只使用当期之前可见的行情和财务公告字段，输出表达式得分、综合得分和逐期权重。",
+        "使用市场宽度、波动、日内路径止损和行业上限作为可交易性闸门。"
+      ]
+    },
+    "ai_kline_skill": {
+      "model_ids": [
+        "stock_ai_kline_skill"
+      ],
+      "broker_report_basis": [
+        "华泰金工：GPT-Kline、技术分析大模型化",
+        "国信证券 AI 赋能资产配置系列：技术分析与 Agent 化信号审计"
+      ],
+      "implementation": [
+        "把传统趋势突破替换为 K 线 skill 组合：中期趋势、短期突破、波动收缩、资金确认和过热惩罚。",
+        "输出可审计的技术技能分数，避免只用未来区间收益做剪裁。"
+      ]
+    },
+    "agent_industry_rotation": {
+      "model_ids": [
+        "industry_agent_rotation",
+        "style_agent_rotation"
+      ],
+      "broker_report_basis": [
+        "国信证券 2026-06-16《AI赋能资产配置（三十八）：Agent赋能开发行业轮动策略》",
+        "国金证券行业轮动双周度跟踪、金融街证券行业轮动ETF策略周报"
+      ],
+      "implementation": [
+        "行业分数拆成景气、资金、技术、拥挤和个股 alpha 五个 Agent 子分。",
+        "行业选择后再做行业内个股增强，组合层使用行业上限、风险预算和路径止损。"
+      ]
+    },
+    "asset_allocation_etf": {
+      "model_ids": [
+        "asset_allocation_etf"
+      ],
+      "broker_report_basis": [
+        "金融街/中银/华安 ETF 资产配置、全天候、BL、行业配置和因子配置研究",
+        "金融街证券 2026-06-10《主题ETF系列研究报告：策略主题ETF：A股市场因子配置的精细化工具》"
+      ],
+      "implementation": [
+        "ETF 池按权益、风格、跨境、商品、债券现金袖套分类。",
+        "根据风险状态切换股债商品现金预算，袖套内用趋势、回撤和波动惩罚排序。"
+      ]
+    },
+    "portfolio_optimizer": {
+      "model_ids": [
+        "portfolio_agent_optimizer"
+      ],
+      "broker_report_basis": [
+        "华泰金工 PortfolioNet、组合优化与风险预算框架",
+        "国金证券大模型投研、MCP 研报复现和投研 Agent 协同框架"
+      ],
+      "implementation": [
+        "组合层不再平均叠加弱信号，而以 AI 因子 alpha 为主、技术和行业为增强、基本面为稳定器。",
+        "保留交易成本、行业集中度、市场风险预算和日度路径止损审计。"
+      ]
+    }
+  },
+  "available_report_evidence_count": 418,
+  "latest_report_evidence": [
+    {
+      "date": "2026-07-01",
+      "org": "华鑫证券",
+      "title": "计算机行业点评报告：赛富时：Q1收入与EPS保持增长，Agentforce/Data 360 ARR高增且全年收入指引上修",
+      "researcher": "任春阳,谢孟津",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202607011826619267",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-30",
+      "org": "国金证券",
+      "title": "AI周观察：美光长期合同锁定未来产能，GPT5.6系列发布",
+      "researcher": "刘道明,黄晓军",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606281826515039",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-30",
+      "org": "华鑫证券",
+      "title": "计算机行业点评报告：GitLab（GTLB）：Q1营收增长23%，Duo AgentPlatform推进AI功能用量变现",
+      "researcher": "任春阳,谢孟津",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606301826605686",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-30",
+      "org": "国信证券",
+      "title": "传媒互联网周报：OpenAI发布GPT-5.6 Sol预览版，豆包推出付费专业版",
+      "researcher": "张衡,熊莉,陈瑶蓉",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606301826594301",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-29",
+      "org": "华鑫证券",
+      "title": "计算机行业点评报告：高通（QCOM.O）：发布数据中心路线图，全面布局Agentic AI时代",
+      "researcher": "谢孟津,陈明璋",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606291826524183",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-29",
+      "org": "国金证券",
+      "title": "互联网行业研究：字节发布Seed 2.1和Seedance 2.5，OpenAI推出GPT-5.6",
+      "researcher": "朱珺,柴梦婷",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606281826514693",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-29",
+      "org": "头豹研究院",
+      "title": "2026年音乐大模型行业研究：从“基础生成”到“成品级输出”，AI音乐开启商业化新浪潮",
+      "researcher": "袁栩聪,付淑芳",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606291826548335",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-29",
+      "org": "开源证券",
+      "title": "传媒行业点评报告：大模型Token量持续高增，物理AI星辰大海，聚焦AI",
+      "researcher": "方光照",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606291826527220",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-28",
+      "org": "华鑫证券",
+      "title": "计算机行业点评报告：OpenAI发布GPT-5.6，大模型仍处高速迭代期",
+      "researcher": "谢孟津,陈明璋",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606281826512829",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-28",
+      "org": "华鑫证券",
+      "title": "计算机行业点评报告：英特尔强调CPU需求激增，Agentic AI带来CPU行业重大战略机遇",
+      "researcher": "谢孟津,陈明璋",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606281826515047",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-25",
+      "org": "中邮证券",
+      "title": "计算机行业：火山引擎Force大会召开，豆包Agent与多模态能力全面升级",
+      "researcher": "李佩京,王思",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606251823849032",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-24",
+      "org": "国金证券",
+      "title": "互联网行业研究：字节全面进军Coding和Agent，多模态seedance2.5提质增效",
+      "researcher": "朱珺,柴梦婷",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606241823793070",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-24",
+      "org": "云安全联盟",
+      "title": "Enterprise AI Security Starts With AI Agents",
+      "researcher": "希拉里·巴伦",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606241823809983",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-24",
+      "org": "国信证券",
+      "title": "传媒互联网行业周报：大模型快速迭代，Agent平台与工具链持续繁荣",
+      "researcher": "张衡,熊莉,陈瑶蓉",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606241823817820",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-23",
+      "org": "头豹研究院",
+      "title": "2026年中国企业级AI行业：从流程嵌入到AgenticAI协同，迈向企业级AGI的演进路径",
+      "researcher": "袁栩聪,徐小雅",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606231823777918",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-22",
+      "org": "开源证券",
+      "title": "传媒行业周报：继续布局大模型、物理AI、核心AI应用、算力租赁",
+      "researcher": "方光照",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606221823715544",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-22",
+      "org": "华源证券",
+      "title": "传媒互联网行业周报：重视微信AI Agent灰测进度，关注字节FORCE原动力大会",
+      "researcher": "陈良栋,陈逸凡,周政宇,许孟婕",
+      "link": "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202606221823716341",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-19",
+      "org": "深圳来觅数据信息科技",
+      "title": "【RimeData周报】AI资本战事升温，DeepSeek 500亿融资背后的估值逻辑与生态博弈2026年第24周",
+      "researcher": "",
+      "link": "https://data.eastmoney.com/report/zw_strategy.jshtml?encodeUrl=HL4tS9tLZZ9KFm9UIDn44dwSU1AWpSGUBBAs1IGhIo8%3D",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-16",
+      "org": "国信证券",
+      "title": "AI赋能资产配置（三十八）：Agent赋能开发行业轮动策略",
+      "researcher": "陈凯畅",
+      "link": "https://data.eastmoney.com/report/zw_strategy.jshtml?encodeUrl=DFBMkX5WIiTdr8VSVb2JH2qqiQKPZzqd5v8eEi4H85o%3D",
+      "source": "recent_ai_quant_report_index"
+    },
+    {
+      "date": "2026-06-16",
+      "org": "金融街证券",
+      "title": "行业轮动ETF策略周报",
+      "researcher": "张一,李杜",
+      "link": "https://data.eastmoney.com/report/zw_strategy.jshtml?encodeUrl=DFBMkX5WIiTdr8VSVb2JH4VFF9X4DLl6uRNqKKv5Pxc%3D",
+      "source": "recent_ai_quant_report_index"
+    }
+  ]
+}

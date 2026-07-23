@@ -1,0 +1,12 @@
+{
+    "nav_title":  "技术分析",
+    "slug":  "technical-analysis",
+    "role":  "primary",
+    "local_path":  "model/technical_analysis",
+    "skill_path":  "skill/technical-analysis",
+    "github_url":  "https://github.com/tequilal1920-netizen/quant-strategy-agent/tree/main/model/technical_analysis",
+    "github_status":  "ready_to_publish",
+    "components":  [
+                       "kline_memory_learning"
+                   ]
+}

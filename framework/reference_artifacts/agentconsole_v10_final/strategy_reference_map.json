@@ -1,0 +1,70 @@
+{
+  "ai_factor_factory": {
+    "model_ids": [
+      "stock_factor_ai_factory",
+      "stock_factor_ai_composite"
+    ],
+    "broker_report_basis": [
+      "华泰金工：GPT 因子工厂、GPT 因子工厂 2.0、大模型 + 强化学习因子挖掘",
+      "民生/海通/广发/招商等机器学习和深度学习因子模型动物园"
+    ],
+    "implementation": [
+      "把单一因子打分替换为多表达式库：动量质量价值、低波红利、盈利修复、量价资金四类候选表达式。",
+      "每期只使用当期之前可见的行情和财务公告字段，输出表达式得分、综合得分和逐期权重。",
+      "使用市场宽度、波动、日内路径止损和行业上限作为可交易性闸门。"
+    ]
+  },
+  "ai_kline_skill": {
+    "model_ids": [
+      "stock_ai_kline_skill"
+    ],
+    "broker_report_basis": [
+      "华泰金工：GPT-Kline、技术分析大模型化",
+      "国信证券 AI 赋能资产配置系列：技术分析与 Agent 化信号审计"
+    ],
+    "implementation": [
+      "把传统趋势突破替换为 K 线 skill 组合：中期趋势、短期突破、波动收缩、资金确认和过热惩罚。",
+      "输出可审计的技术技能分数，避免只用未来区间收益做剪裁。"
+    ]
+  },
+  "agent_industry_rotation": {
+    "model_ids": [
+      "industry_agent_rotation",
+      "style_agent_rotation"
+    ],
+    "broker_report_basis": [
+      "国信证券 2026-06-16《AI赋能资产配置（三十八）：Agent赋能开发行业轮动策略》",
+      "国金证券行业轮动双周度跟踪、金融街证券行业轮动ETF策略周报"
+    ],
+    "implementation": [
+      "行业分数拆成景气、资金、技术、拥挤和个股 alpha 五个 Agent 子分。",
+      "行业选择后再做行业内个股增强，组合层使用行业上限、风险预算和路径止损。"
+    ]
+  },
+  "asset_allocation_etf": {
+    "model_ids": [
+      "asset_allocation_etf"
+    ],
+    "broker_report_basis": [
+      "金融街/中银/华安 ETF 资产配置、全天候、BL、行业配置和因子配置研究",
+      "金融街证券 2026-06-10《主题ETF系列研究报告：策略主题ETF：A股市场因子配置的精细化工具》"
+    ],
+    "implementation": [
+      "ETF 池按权益、风格、跨境、商品、债券现金袖套分类。",
+      "根据风险状态切换股债商品现金预算，袖套内用趋势、回撤和波动惩罚排序。"
+    ]
+  },
+  "portfolio_optimizer": {
+    "model_ids": [
+      "portfolio_agent_optimizer"
+    ],
+    "broker_report_basis": [
+      "华泰金工 PortfolioNet、组合优化与风险预算框架",
+      "国金证券大模型投研、MCP 研报复现和投研 Agent 协同框架"
+    ],
+    "implementation": [
+      "组合层不再平均叠加弱信号，而以 AI 因子 alpha 为主、技术和行业为增强、基本面为稳定器。",
+      "保留交易成本、行业集中度、市场风险预算和日度路径止损审计。"
+    ]
+  }
+}

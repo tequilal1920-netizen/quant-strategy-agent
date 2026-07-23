@@ -1,0 +1,72 @@
+{
+  "probe": {
+    "cols": [
+      "OBJECT_ID",
+      "S_INFO_WINDCODE",
+      "S_EVENT_CATEGORYCODE",
+      "S_EVENT_ANNCEDATE",
+      "S_EVENT_HAPDATE",
+      "S_EVENT_EXPDATE",
+      "S_EVENT_CONTENT",
+      "S_EVENT_TEMPLATEID",
+      "SEC_ID",
+      "OPDATE",
+      "OPMODE"
+    ],
+    "rows": [
+      {
+        "OBJECT_ID": "{000016C5-D92F-43B0-8C78-3864C1A92AAF}",
+        "S_INFO_WINDCODE": "688186.SH",
+        "S_EVENT_CATEGORYCODE": "204006020",
+        "S_EVENT_ANNCEDATE": "20251024",
+        "S_EVENT_HAPDATE": "20251024",
+        "S_EVENT_EXPDATE": "20250930",
+        "S_EVENT_CONTENT": "2025年三季报正式披露，营业总收入37.75亿元，同比去年增长27.56%，归母净利润为2.49亿元，同比去年增长213.65%，基本EPS为1.09元，平均ROE为5.91%",
+        "S_EVENT_TEMPLATEID": "204006020001",
+        "SEC_ID": "S10394031",
+        "OPDATE": "2025-10-23 17:30:57",
+        "OPMODE": "0"
+      },
+      {
+        "OBJECT_ID": "{00001740-1089-4984-86D1-FF1F718AB082}",
+        "S_INFO_WINDCODE": "000883.SZ",
+        "S_EVENT_CATEGORYCODE": "204008009",
+        "S_EVENT_ANNCEDATE": "20250829",
+        "S_EVENT_HAPDATE": "20250916",
+        "S_EVENT_EXPDATE": "20250916",
+        "S_EVENT_CONTENT": "2025-09-16召开临时股东大会互联网投票时间：2025-09-16交易系统投票时间：2025-09-16投票代码：3608831.关于修订《湖北能源集团股份有限公司章程》的议案2.关于修订《湖北能源集团股份有限公司股东会议事规则》的议案3.关于修订《湖北能源集团股份有限公司董事会议事规则》的议案",
+        "S_EVENT_TEMPLATEID": "204008009101",
+        "SEC_ID": null,
+        "OPDATE": "2025-08-29 16:01:28",
+        "OPMODE": "0"
+      },
+      {
+        "OBJECT_ID": "{00001781-60C1-7B23-E050-C80A10016DA4}",
+        "S_INFO_WINDCODE": "000418.SZ",
+        "S_EVENT_CATEGORYCODE": "204008001",
+        "S_EVENT_ANNCEDATE": null,
+        "S_EVENT_HAPDATE": "20140815",
+        "S_EVENT_EXPDATE": "20140815",
+        "S_EVENT_CONTENT": "临时股东大会，召开通知公告日：2014-08-07，股权登记日：2014-08-15，会议召开日：2014-08-22，会议登记时间：2014-08-18至2014-08-19。\\n审议内容主要有：\\n1.审议《无锡小天鹅股份有限公司章程修正案》2.审议《关于更换公司独立董事的议案》3.审议《关于更换公司监事的议案》",
+        "S_EVENT_TEMPLATEID": "204008001101",
+        "SEC_ID": null,
+        "OPDATE": "2014-08-07 08:23:10",
+        "OPMODE": "0"
+      }
+    ]
+  },
+  "count": {
+    "cols": [
+      "n",
+      "min_d",
+      "max_d"
+    ],
+    "rows": [
+      {
+        "n": 2923118,
+        "min_d": "20120101",
+        "max_d": "20260630"
+      }
+    ]
+  }
+}

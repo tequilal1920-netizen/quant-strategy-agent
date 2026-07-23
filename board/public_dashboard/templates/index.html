@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="覆盖宏观、全球市场、申万行业、大宗商品、个股与新闻事件的日度研究看板。">
+  <title>市场数据驾驶舱</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+  <script defer src="{{ url_for('static', filename='js/plotly-loader.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</head>
+<body>
+  <a class="skip-link" href="#dashboard-main">跳到主要内容</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="主导航">
+      <div class="brand-block">
+        <span class="brand-mark" aria-hidden="true">数</span>
+        <div><strong>市场数据驾驶舱</strong><small>DAILY RESEARCH BOARD</small></div>
+      </div>
+      <nav class="module-nav" aria-label="看板模块">
+        {% for key, meta in module_meta.items() %}
+          <button class="module-nav__item{% if loop.first %} is-active{% endif %}" type="button"
+                  data-module="{{ key }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">
+            <span class="nav-index">0{{ loop.index }}</span><span>{{ meta.nav }}</span>
+            <i class="status-dot status-{{ snapshot.modules[key].status }}" aria-hidden="true"></i>
+          </button>
+        {% endfor %}
+      </nav>
+      <div class="sidebar-note">
+        <span class="eyebrow">数据原则</span>
+        <p>失败、停更、超时和缺失均显式标记；不以零值、旧值或示例值静默回填。</p>
+      </div>
+    </aside>
+
+    <main id="dashboard-main" class="dashboard-main" tabindex="-1">
+      <header class="topbar">
+        <div class="mobile-brand"><span class="brand-mark" aria-hidden="true">数</span><strong>市场数据驾驶舱</strong></div>
+        <div class="topbar-meta"><span>日度自动更新</span><span aria-hidden="true">·</span><span>Asia/Shanghai</span></div>
+        <div class="topbar-actions">
+          <label class="compact-select" for="saved-view-select"><span>已存视图</span>
+            <select id="saved-view-select" aria-label="选择已保存视图"><option value="">默认视图</option></select>
+          </label>
+          <button id="save-view" class="ghost-button" type="button">保存视图</button>
+          <button id="delete-view" class="ghost-button" type="button" disabled>删除</button>
+          <span id="overall-badge" class="status-badge status-{{ snapshot.status }}" aria-live="polite">
+            <i aria-hidden="true"></i><span id="overall-status">{{ snapshot.status }}</span>
+          </span>
+        </div>
+      </header>
+
+      <section class="page-heading" aria-labelledby="module-title">
+        <div><span class="eyebrow">RESEARCH OVERVIEW</span><h1 id="module-title">{{ snapshot.modules.macro.title }}</h1>
+          <p id="module-subtitle">{{ snapshot.modules.macro.subtitle }}</p></div>
+        <div class="heading-stamps">
+          <div><span>数据日期</span><strong id="as-of">{{ snapshot.as_of or '暂无数据' }}</strong></div>
+          <div><span>生成时间</span><strong id="generated-at">{{ snapshot.generated_at or '暂无数据' }}</strong></div>
+        </div>
+      </section>
+
+      <section class="module-tabs" aria-label="移动端模块导航">
+        {% for key, meta in module_meta.items() %}
+          <button class="module-tab{% if loop.first %} is-active{% endif %}" type="button"
+                  data-module="{{ key }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ meta.nav }}</button>
+        {% endfor %}
+      </section>
+
+      <section class="freshness-strip" aria-label="数据运行状态">
+        <article><span>快照状态</span><strong id="fresh-status">{{ snapshot.status }}</strong></article>
+        <article><span>当前模块</span><strong id="fresh-module">宏观</strong></article>
+        <article><span>模块水位</span><strong id="fresh-as-of">{{ snapshot.modules.macro.as_of or snapshot.as_of or '暂无数据' }}</strong></article>
+        <article><span>运行时序列覆盖</span><strong id="fresh-coverage">待加载</strong></article>
+        <article><span>运行时 可用 / 滞后 / 失败</span><strong id="fresh-breakdown">待加载</strong></article>
+        <article><span>字段目录 live / 总量</span><strong id="fresh-catalog">待加载</strong></article>
+        <article><span>目录 live / stale / unavailable / metadata</span><strong id="fresh-catalog-breakdown">待加载</strong></article>
+        <article><span>质量状态</span><strong id="fresh-quality">{{ snapshot.quality.get('status', '未提供') }}</strong></article>
+      </section>
+
+      <section id="data-warning" class="data-warning{% if not data_error %} is-hidden{% endif %}" role="status">
+        <strong>当前无法读取数据快照</strong><span>页面不会展示推测值；数据恢复后刷新即可。</span>
+      </section>
+
+      <form id="stock-search" class="stock-search is-hidden" autocomplete="off" novalidate>
+        <label for="stock-code">查询个股</label>
+        <div class="stock-search__controls">
+          <input id="stock-code" name="code" type="text" maxlength="32" inputmode="text"
+                 placeholder="输入证券代码，如 000001.SZ" aria-describedby="stock-search-status">
+          <button type="submit">加载</button>
+        </div>
+        <p id="stock-search-status" role="status" aria-live="polite">仅返回快照中已存在的数据。</p>
+      </form>
+
+      <nav class="submodule-nav" aria-label="模块分析视图">
+        <button type="button" class="submodule-tab is-active" data-view="overview" aria-pressed="true">总览</button>
+        <button type="button" class="submodule-tab" data-view="trend" aria-pressed="false">趋势</button>
+        <button type="button" class="submodule-tab" data-view="cross_section" aria-pressed="false">横截面</button>
+        <button type="button" class="submodule-tab" data-view="events" aria-pressed="false">事件 / 明细</button>
+        <button type="button" class="submodule-tab" data-view="quality" aria-pressed="false">数据质量</button>
+      </nav>
+
+      <section class="control-deck" aria-labelledby="control-title">
+        <div class="control-deck__heading">
+          <div><span class="eyebrow">ANALYSIS CONTROLS</span><h2 id="control-title">指标观察控制台</h2></div>
+          <div class="control-deck__actions">
+            <button id="export-series" class="action-button" type="button">导出当前序列 CSV</button>
+            <button id="reset-controls" class="ghost-button" type="button">重置</button>
+          </div>
+        </div>
+        <p class="control-scope-note"><strong>作用范围：</strong>日期窗口、频率、数据变换、比较基准、图形与指标多选只作用于“趋势 / 横截面”；总览保留发布图卡，仅响应状态筛选。</p>
+        <div class="control-grid">
+          <fieldset class="control-group control-group--window">
+            <legend>日期窗口</legend>
+            <div id="window-buttons" class="segmented-control" role="group" aria-label="日期窗口">
+              <button type="button" data-window="1m">1M</button><button type="button" data-window="3m">3M</button>
+              <button type="button" data-window="6m">6M</button><button type="button" data-window="ytd">YTD</button>
+              <button type="button" data-window="1y" class="is-active">1Y</button><button type="button" data-window="3y">3Y</button>
+              <button type="button" data-window="all">全部</button>
+            </div>
+          </fieldset>
+          <label class="control-group" for="frequency-select"><span>频率</span>
+            <select id="frequency-select"><option value="auto">原频率</option><option value="daily">日</option><option value="weekly">周</option><option value="monthly">月</option></select>
+          </label>
+          <label class="control-group" for="transform-select"><span>数据变换</span>
+            <select id="transform-select"><option value="raw">原值</option><option value="yoy">同比 %</option><option value="mom">环比 %</option><option value="zscore">滚动 Z-score</option><option value="rebased">起点=100</option></select>
+          </label>
+          <label class="control-group" for="benchmark-select"><span>比较基准</span>
+            <select id="benchmark-select"><option value="">不使用基准</option></select>
+          </label>
+          <label class="control-group" for="chart-type-select"><span>自定义图形</span>
+            <select id="chart-type-select"><option value="line">折线</option><option value="bar">柱状</option><option value="scatter">散点</option><option value="heatmap">热力图</option><option value="candlestick">K线</option></select>
+          </label>
+          <fieldset class="control-group control-group--status">
+            <legend>状态筛选</legend>
+            <div id="status-filters" class="check-row">
+              <label><input type="checkbox" value="ok" checked>可用</label>
+              <label><input type="checkbox" value="partial" checked>部分可用</label>
+              <label><input type="checkbox" value="stale" checked>滞后</label>
+              <label><input type="checkbox" value="warning" checked>待复核</label>
+              <label><input type="checkbox" value="unavailable">不可用</label>
+              <label><input type="checkbox" value="failed">失败</label>
+            </div>
+          </fieldset>
+          <div class="control-group control-group--indicators">
+            <span>指标多选</span>
+            <details id="indicator-picker" class="indicator-picker">
+              <summary><span id="indicator-summary">加载指标…</span><span aria-hidden="true">⌄</span></summary>
+              <div class="indicator-picker__panel">
+                <div class="indicator-picker__tools">
+                  <label class="search-field"><span class="sr-only">搜索指标</span><input id="indicator-search" type="search" placeholder="搜索指标 / 子模块 / 数据源"></label>
+                  <button id="select-visible" type="button">全选可见</button><button id="clear-indicators" type="button">清空</button>
+                </div>
+                <div id="indicator-options" class="indicator-options"></div>
+              </div>
+            </details>
+          </div>
+        </div>
+        <p id="control-note" class="control-note" aria-live="polite">图表按单位分面；缺失值断线，不补零。</p>
+      </section>
+
+      <section id="alerts" class="alerts" aria-label="数据提示" aria-live="polite"></section>
+
+      <div id="view-overview" class="analysis-view" data-analysis-view="overview">
+        <section aria-labelledby="kpi-heading">
+          <div class="section-heading"><div><span class="eyebrow">MARKET PULSE</span><h2 id="kpi-heading">关键指标</h2></div><span id="kpi-count" class="section-count">0 项</span></div>
+          <div id="kpi-grid" class="kpi-grid"></div>
+        </section>
+        <section aria-labelledby="overview-chart-heading">
+          <div class="section-heading"><div><span class="eyebrow">MODULE OVERVIEW</span><h2 id="overview-chart-heading">模块概览图</h2></div><span id="chart-count" class="section-count">0 张</span></div>
+          <div id="chart-grid" class="panel-grid"></div>
+        </section>
+      </div>
+
+      <div id="view-trend" class="analysis-view is-hidden" data-analysis-view="trend">
+        <section aria-labelledby="trend-heading">
+          <div class="section-heading"><div><span class="eyebrow">CUSTOM TREND</span><h2 id="trend-heading">多指标趋势</h2></div><span id="trend-count" class="section-count">0 个序列</span></div>
+          <div id="trend-grid" class="panel-grid panel-grid--full"></div>
+        </section>
+      </div>
+
+      <div id="view-cross-section" class="analysis-view is-hidden" data-analysis-view="cross_section">
+        <section aria-labelledby="cross-heading">
+          <div class="section-heading"><div><span class="eyebrow">CROSS SECTION</span><h2 id="cross-heading">最新横截面</h2></div><span id="cross-count" class="section-count">0 个指标</span></div>
+          <div id="cross-grid" class="panel-grid panel-grid--full"></div>
+        </section>
+      </div>
+
+      <div id="view-events" class="analysis-view is-hidden" data-analysis-view="events">
+        <section aria-labelledby="table-heading">
+          <div class="section-heading"><div><span class="eyebrow">EVENTS &amp; DETAILS</span><h2 id="table-heading">事件与明细</h2></div><span id="table-count" class="section-count">0 张</span></div>
+          <div id="table-grid" class="table-grid"></div>
+        </section>
+      </div>
+
+      <div id="view-quality" class="analysis-view is-hidden" data-analysis-view="quality">
+        <section aria-labelledby="quality-heading">
+          <div class="section-heading"><div><span class="eyebrow">DATA QUALITY</span><h2 id="quality-heading">指标覆盖与失败明细</h2></div><span id="quality-count" class="section-count">0 项</span></div>
+          <div id="quality-summary" class="quality-summary"></div><div id="quality-table" class="table-grid table-grid--full"></div>
+        </section>
+      </div>
+
+      <section id="module-empty" class="empty-state is-hidden" role="status">
+        <span class="empty-state__mark" aria-hidden="true">—</span><strong>该模块暂无可用数据</strong>
+        <p>缺失状态已保留，不使用零值或旧值代替。</p>
+      </section>
+
+      <noscript>
+        <section class="noscript-panel">
+          <h2>关键状态（无需 JavaScript）</h2>
+          <p>快照状态：{{ snapshot.status }}；数据日期：{{ snapshot.as_of or '暂无数据' }}；生成时间：{{ snapshot.generated_at or '暂无数据' }}。</p>
+          <ul>{% for key, meta in module_meta.items() %}<li>{{ meta.nav }}：{{ snapshot.modules[key].status }}，水位 {{ snapshot.modules[key].as_of or '暂无数据' }}</li>{% endfor %}</ul>
+          <p>启用 JavaScript 后可使用指标多选、数据变换和交互图表。</p>
+        </section>
+      </noscript>
+      <footer class="page-footer"><span>仅展示已入库且通过状态标记的数据</span><span>·</span><span>图表不构成投资建议</span></footer>
+    </main>
+  </div>
+</body>
+</html>

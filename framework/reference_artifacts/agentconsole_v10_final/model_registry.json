@@ -1,0 +1,67 @@
+{
+  "target": {
+    "annual_return": 0.2,
+    "sharpe": 1.5
+  },
+  "models": [
+    {
+      "id": "research_report_database",
+      "type": "evidence_database",
+      "gate": "coverage_count",
+      "status": "ready"
+    },
+    {
+      "id": "book_and_report_learning_process",
+      "type": "learning_pipeline",
+      "gate": "evidence_to_skill_traceability",
+      "status": "ready"
+    },
+    {
+      "id": "weekly_macro_event_industry",
+      "type": "report_agent",
+      "gate": "database_coverage",
+      "status": "ready"
+    },
+    {
+      "id": "asset_allocation_etf",
+      "type": "backtest_model",
+      "gate": "performance",
+      "status": "ok"
+    },
+    {
+      "id": "style_agent_rotation",
+      "type": "backtest_model",
+      "gate": "performance"
+    },
+    {
+      "id": "industry_agent_rotation",
+      "type": "backtest_model",
+      "gate": "performance"
+    },
+    {
+      "id": "stock_ai_kline_skill",
+      "type": "backtest_model",
+      "gate": "performance"
+    },
+    {
+      "id": "stock_factor_ai_factory",
+      "type": "backtest_model",
+      "gate": "performance"
+    },
+    {
+      "id": "stock_factor_ai_composite",
+      "type": "backtest_model",
+      "gate": "performance"
+    },
+    {
+      "id": "stock_fundamental_quality",
+      "type": "backtest_model",
+      "gate": "performance"
+    },
+    {
+      "id": "portfolio_agent_optimizer",
+      "type": "backtest_model",
+      "gate": "performance"
+    }
+  ]
+}

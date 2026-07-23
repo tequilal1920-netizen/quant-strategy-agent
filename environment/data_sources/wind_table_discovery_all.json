@@ -1,0 +1,88 @@
+{
+  "info_tables": {
+    "status": "ok",
+    "rows": [
+      {
+        "TABLE_CATALOG": "master",
+        "TABLE_SCHEMA": "dbo",
+        "TABLE_NAME": "spt_fallback_db",
+        "TABLE_TYPE": "BASE TABLE"
+      },
+      {
+        "TABLE_CATALOG": "master",
+        "TABLE_SCHEMA": "dbo",
+        "TABLE_NAME": "spt_fallback_dev",
+        "TABLE_TYPE": "BASE TABLE"
+      },
+      {
+        "TABLE_CATALOG": "master",
+        "TABLE_SCHEMA": "dbo",
+        "TABLE_NAME": "spt_fallback_usg",
+        "TABLE_TYPE": "BASE TABLE"
+      },
+      {
+        "TABLE_CATALOG": "master",
+        "TABLE_SCHEMA": "dbo",
+        "TABLE_NAME": "spt_monitor",
+        "TABLE_TYPE": "BASE TABLE"
+      },
+      {
+        "TABLE_CATALOG": "master",
+        "TABLE_SCHEMA": "dbo",
+        "TABLE_NAME": "spt_values",
+        "TABLE_TYPE": "VIEW"
+      }
+    ]
+  },
+  "sys_objects": {
+    "status": "ok",
+    "rows": [
+      {
+        "name": "spt_fallback_db",
+        "type_desc": "USER_TABLE"
+      },
+      {
+        "name": "spt_fallback_dev",
+        "type_desc": "USER_TABLE"
+      },
+      {
+        "name": "spt_fallback_usg",
+        "type_desc": "USER_TABLE"
+      },
+      {
+        "name": "spt_monitor",
+        "type_desc": "USER_TABLE"
+      },
+      {
+        "name": "spt_values",
+        "type_desc": "VIEW"
+      }
+    ]
+  },
+  "sys_databases": {
+    "status": "ok",
+    "rows": [
+      {
+        "name": "master"
+      },
+      {
+        "name": "model"
+      },
+      {
+        "name": "msdb"
+      },
+      {
+        "name": "sadbawork"
+      },
+      {
+        "name": "tempdb"
+      },
+      {
+        "name": "wande"
+      },
+      {
+        "name": "workdb"
+      }
+    ]
+  }
+}

@@ -1,0 +1,66 @@
+[
+  {
+    "model": "stock_ai_kline_skill",
+    "annual_return": 0.4028302615044024,
+    "sharpe": 1.7622019978453611,
+    "target_pass": true,
+    "status": "pass",
+    "diagnosis": ""
+  },
+  {
+    "model": "stock_fundamental_quality",
+    "annual_return": 0.25486856422387905,
+    "sharpe": 1.6787018982622544,
+    "target_pass": true,
+    "status": "pass",
+    "diagnosis": ""
+  },
+  {
+    "model": "portfolio_agent_optimizer",
+    "annual_return": 0.25019664443206624,
+    "sharpe": 1.6675194786195722,
+    "target_pass": true,
+    "status": "pass",
+    "diagnosis": ""
+  },
+  {
+    "model": "style_agent_rotation",
+    "annual_return": 0.2590286776399693,
+    "sharpe": 1.6585322597123828,
+    "target_pass": true,
+    "status": "pass",
+    "diagnosis": ""
+  },
+  {
+    "model": "stock_factor_ai_composite",
+    "annual_return": 0.28775586929252706,
+    "sharpe": 1.6473099776643203,
+    "target_pass": true,
+    "status": "pass",
+    "diagnosis": ""
+  },
+  {
+    "model": "stock_factor_ai_factory",
+    "annual_return": 0.2713741322574883,
+    "sharpe": 1.6346737471958663,
+    "target_pass": true,
+    "status": "pass",
+    "diagnosis": ""
+  },
+  {
+    "model": "industry_agent_rotation",
+    "annual_return": 0.30767997513758627,
+    "sharpe": 1.6316012837312752,
+    "target_pass": true,
+    "status": "pass",
+    "diagnosis": ""
+  },
+  {
+    "model": "asset_allocation_etf",
+    "annual_return": 0.12667040118439532,
+    "sharpe": 1.1346552598610868,
+    "target_pass": false,
+    "status": "needs_iteration",
+    "diagnosis": "未同时达到 20% 年化与 1.5 夏普；保留真实结果并进入风险预算、样本外、ETF层和更大股票池迭代。"
+  }
+]

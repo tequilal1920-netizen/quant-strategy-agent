@@ -1,0 +1,656 @@
+{
+  "tables": {
+    "calendar_cn": {
+      "columns": [
+        "exchange",
+        "calendar_date",
+        "is_trade_day",
+        "pretrade_date",
+        "next_trade_date",
+        "is_weekend",
+        "is_week_last_trade",
+        "is_month_last_trade",
+        "is_quarter_last_trade",
+        "is_year_last_trade",
+        "weekday_no",
+        "week_no",
+        "month_no",
+        "quarter_no",
+        "year_no",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 18712
+    },
+    "stock_master": {
+      "columns": [
+        "ts_code",
+        "symbol",
+        "stock_name",
+        "stock_full_name",
+        "exchange",
+        "market",
+        "board_name",
+        "list_status",
+        "list_date",
+        "delist_date",
+        "is_hs",
+        "area",
+        "province",
+        "city",
+        "chairman",
+        "manager",
+        "secretary",
+        "reg_capital",
+        "setup_date",
+        "website",
+        "email",
+        "office",
+        "employees",
+        "main_business",
+        "business_scope",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 5854
+    },
+    "stock_market_daily": {
+      "columns": [
+        "trade_date",
+        "ts_code",
+        "stock_name",
+        "open",
+        "high",
+        "low",
+        "close",
+        "pre_close",
+        "change",
+        "pct_chg",
+        "vol",
+        "amount",
+        "adj_factor",
+        "qfq_close",
+        "hfq_close",
+        "turnover_rate",
+        "turnover_rate_f",
+        "volume_ratio",
+        "pe",
+        "pe_ttm",
+        "pb",
+        "ps",
+        "ps_ttm",
+        "dv_ratio",
+        "dv_ttm",
+        "total_share",
+        "float_share",
+        "free_share",
+        "total_mv",
+        "circ_mv",
+        "up_limit",
+        "down_limit",
+        "suspend_timing",
+        "suspend_type",
+        "buy_sm_vol",
+        "buy_sm_amount",
+        "sell_sm_vol",
+        "sell_sm_amount",
+        "buy_md_vol",
+        "buy_md_amount",
+        "sell_md_vol",
+        "sell_md_amount",
+        "buy_lg_vol",
+        "buy_lg_amount",
+        "sell_lg_vol",
+        "sell_lg_amount",
+        "buy_elg_vol",
+        "buy_elg_amount",
+        "sell_elg_vol",
+        "sell_elg_amount",
+        "net_mf_vol",
+        "net_mf_amount",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 19853989
+    },
+    "stock_financial_report": {
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "f_ann_date",
+        "end_date",
+        "report_type",
+        "comp_type",
+        "basic_eps",
+        "total_revenue",
+        "revenue",
+        "operate_profit",
+        "total_profit",
+        "n_income",
+        "n_income_attr_p",
+        "minority_gain",
+        "total_share",
+        "money_cap",
+        "trad_asset",
+        "notes_receiv",
+        "accounts_receiv",
+        "inventories",
+        "total_cur_assets",
+        "total_nca",
+        "total_assets",
+        "accounts_payable",
+        "total_cur_liab",
+        "total_ncl",
+        "total_liab",
+        "total_hldr_eqy_exc_min_int",
+        "total_hldr_eqy_inc_min_int",
+        "c_fr_sale_sg",
+        "recp_tax_rends",
+        "n_cashflow_act",
+        "n_cashflow_inv_act",
+        "n_cash_flows_fnc_act",
+        "n_incr_cash_cash_equ",
+        "eps",
+        "dt_eps",
+        "bps",
+        "ocfps",
+        "gross_margin",
+        "netprofit_margin",
+        "roe",
+        "roe_waa",
+        "roa",
+        "current_ratio",
+        "quick_ratio",
+        "cash_ratio",
+        "debt_to_assets",
+        "assets_to_eqt",
+        "ar_turn",
+        "assets_turn",
+        "op_yoy",
+        "tr_yoy",
+        "or_yoy",
+        "netprofit_yoy",
+        "dt_netprofit_yoy",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 339181
+    },
+    "stock_industry_history": {
+      "columns": [
+        "ts_code",
+        "industry_standard",
+        "l1_code",
+        "l1_name",
+        "l2_code",
+        "l2_name",
+        "l3_code",
+        "l3_name",
+        "in_date",
+        "out_date",
+        "is_current",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 7508
+    },
+    "stock_corporate_action": {
+      "columns": [
+        "ts_code",
+        "event_type",
+        "event_date",
+        "ann_date",
+        "ex_date",
+        "pay_date",
+        "record_date",
+        "old_name",
+        "new_name",
+        "change_reason",
+        "div_proc",
+        "stk_div",
+        "stk_bo_rate",
+        "stk_co_rate",
+        "cash_div",
+        "cash_div_tax",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 39425
+    },
+    "stock_holder_structure": {
+      "columns": [
+        "ts_code",
+        "ann_date",
+        "end_date",
+        "holder_scope",
+        "holder_rank",
+        "holder_name",
+        "hold_amount",
+        "hold_ratio",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 4045815
+    },
+    "fund_master": {
+      "columns": [
+        "ts_code",
+        "fund_name",
+        "management",
+        "custodian",
+        "fund_type",
+        "market",
+        "invest_type",
+        "type",
+        "status",
+        "found_date",
+        "due_date",
+        "list_date",
+        "issue_date",
+        "delist_date",
+        "issue_amount",
+        "m_fee",
+        "c_fee",
+        "duration_year",
+        "p_value",
+        "min_amount",
+        "benchmark",
+        "trustee",
+        "purc_startdate",
+        "redm_startdate",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 17624
+    },
+    "fund_daily": {
+      "columns": [
+        "trade_date",
+        "ts_code",
+        "fund_name",
+        "unit_nav",
+        "accum_nav",
+        "accum_div",
+        "net_asset",
+        "total_netasset",
+        "adj_nav",
+        "fd_share",
+        "open",
+        "high",
+        "low",
+        "close",
+        "pre_close",
+        "change",
+        "pct_chg",
+        "vol",
+        "amount",
+        "fund_type",
+        "market",
+        "update_flag",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 11969786
+    },
+    "index_master": {
+      "columns": [
+        "ts_code",
+        "index_name",
+        "market",
+        "publisher",
+        "category",
+        "base_date",
+        "base_point",
+        "list_date",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 8000
+    },
+    "index_market_daily": {
+      "columns": [
+        "trade_date",
+        "ts_code",
+        "open",
+        "high",
+        "low",
+        "close",
+        "pre_close",
+        "change",
+        "pct_chg",
+        "vol",
+        "amount",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 80132
+    },
+    "index_member_weight": {
+      "columns": [
+        "index_code",
+        "trade_date",
+        "con_code",
+        "weight",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 72520
+    },
+    "future_master": {
+      "columns": [
+        "ts_code",
+        "symbol",
+        "exchange",
+        "contract_name",
+        "fut_code",
+        "multiplier",
+        "trade_unit",
+        "per_unit",
+        "quote_unit",
+        "quote_unit_desc",
+        "d_mode_desc",
+        "list_date",
+        "delist_date",
+        "d_month",
+        "last_ddate",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 10767
+    },
+    "future_market_daily": {
+      "columns": [
+        "trade_date",
+        "ts_code",
+        "pre_close",
+        "pre_settle",
+        "open",
+        "high",
+        "low",
+        "close",
+        "settle",
+        "change_close",
+        "change_settle",
+        "vol",
+        "amount",
+        "oi",
+        "oi_chg",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 2870326
+    },
+    "option_contract": {
+      "columns": [
+        "contract_code",
+        "exchange",
+        "contract_trade_code",
+        "contract_name",
+        "underlying_code",
+        "underlying_name",
+        "call_put",
+        "strike_price",
+        "contract_unit",
+        "list_date",
+        "expire_date",
+        "last_trade_date",
+        "delivery_date",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 1116
+    },
+    "option_market_intraday": {
+      "columns": [
+        "trade_date",
+        "trade_time",
+        "contract_code",
+        "freq",
+        "price",
+        "average_price",
+        "volume",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 7240
+    },
+    "macro_monthly_cn": {
+      "columns": [
+        "month",
+        "pmi_manufacturing",
+        "pmi_non_manufacturing",
+        "pmi_composite",
+        "cpi_national",
+        "cpi_national_yoy",
+        "cpi_national_mom",
+        "cpi_national_accu",
+        "cpi_city",
+        "cpi_city_yoy",
+        "cpi_rural",
+        "cpi_rural_yoy",
+        "ppi_yoy",
+        "ppi_mp_yoy",
+        "ppi_cg_yoy",
+        "m0",
+        "m0_yoy",
+        "m1",
+        "m1_yoy",
+        "m2",
+        "m2_yoy",
+        "sf_inc_month",
+        "sf_inc_cumval",
+        "sf_stock_endval",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 304
+    },
+    "macro_quarterly_cn": {
+      "columns": [
+        "quarter",
+        "gdp",
+        "gdp_yoy",
+        "primary_industry",
+        "primary_industry_yoy",
+        "secondary_industry",
+        "secondary_industry_yoy",
+        "tertiary_industry",
+        "tertiary_industry_yoy",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 100
+    },
+    "macro_rate_cn": {
+      "columns": [
+        "rate_category",
+        "rate_name",
+        "effective_date",
+        "tenor",
+        "rate_date",
+        "rate_value",
+        "rate_value_pre",
+        "rate_value_after",
+        "unit",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 19639
+    },
+    "news_stream": {
+      "columns": [
+        "news_id",
+        "publish_date",
+        "publish_time",
+        "headline",
+        "content",
+        "category",
+        "subject_type",
+        "subject_code",
+        "source_site",
+        "author",
+        "source_url",
+        "source",
+        "ingest_time",
+        "batch_id"
+      ],
+      "rows": 113109
+    },
+    "sys_update_log": {
+      "columns": [
+        "run_id",
+        "table_name",
+        "run_start",
+        "run_end",
+        "status",
+        "rows_written",
+        "watermark_field",
+        "watermark_value",
+        "message"
+      ],
+      "rows": 3180
+    },
+    "sys_data_quality_log": {
+      "columns": [
+        "check_id",
+        "table_name",
+        "check_time",
+        "check_type",
+        "check_result",
+        "detail"
+      ],
+      "rows": 436
+    }
+  },
+  "coverage": {
+    "research_report_database": {
+      "required_tables": [
+        "news_stream"
+      ],
+      "available": [
+        "news_stream"
+      ],
+      "missing": [],
+      "status": "ready"
+    },
+    "weekly_macro_event_industry": {
+      "required_tables": [
+        "macro_monthly_cn",
+        "news_stream",
+        "stock_industry_history",
+        "stock_market_daily"
+      ],
+      "available": [
+        "macro_monthly_cn",
+        "news_stream",
+        "stock_industry_history",
+        "stock_market_daily"
+      ],
+      "missing": [],
+      "status": "ready"
+    },
+    "asset_allocation_etf": {
+      "required_tables": [
+        "fund_daily"
+      ],
+      "available": [
+        "fund_daily"
+      ],
+      "missing": [],
+      "status": "ready"
+    },
+    "style_rotation": {
+      "required_tables": [
+        "stock_market_daily",
+        "stock_financial_report"
+      ],
+      "available": [
+        "stock_market_daily",
+        "stock_financial_report"
+      ],
+      "missing": [],
+      "status": "ready"
+    },
+    "industry_rotation": {
+      "required_tables": [
+        "stock_market_daily",
+        "stock_industry_history"
+      ],
+      "available": [
+        "stock_market_daily",
+        "stock_industry_history"
+      ],
+      "missing": [],
+      "status": "ready"
+    },
+    "stock_technical": {
+      "required_tables": [
+        "stock_market_daily"
+      ],
+      "available": [
+        "stock_market_daily"
+      ],
+      "missing": [],
+      "status": "ready"
+    },
+    "stock_factor": {
+      "required_tables": [
+        "stock_market_daily",
+        "stock_financial_report"
+      ],
+      "available": [
+        "stock_market_daily",
+        "stock_financial_report"
+      ],
+      "missing": [],
+      "status": "ready"
+    },
+    "fundamental_report": {
+      "required_tables": [
+        "stock_master",
+        "stock_financial_report",
+        "news_stream"
+      ],
+      "available": [
+        "stock_master",
+        "stock_financial_report",
+        "news_stream"
+      ],
+      "missing": [],
+      "status": "ready"
+    },
+    "portfolio_optimization": {
+      "required_tables": [
+        "stock_market_daily",
+        "stock_financial_report",
+        "stock_industry_history"
+      ],
+      "available": [
+        "stock_market_daily",
+        "stock_financial_report",
+        "stock_industry_history"
+      ],
+      "missing": [],
+      "status": "ready"
+    }
+  }
+}

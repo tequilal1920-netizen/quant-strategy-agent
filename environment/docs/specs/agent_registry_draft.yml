@@ -1,0 +1,90 @@
+version: "0.1"
+updated_at: "2026-07-03"
+runtime:
+  preferred_model: "gpt-5.5"
+  reasoning_effort: "xhigh"
+  interactive_surface: "current_codex_session"
+  unattended_backend_requires: "codex_runtime_or_openai_api_key"
+global_rules:
+  write_root: "output/industry_depth_report"
+  no_plaintext_secrets: true
+  paid_api_default: "sample_probe_only"
+  evidence_required: true
+  web_reads_artifacts_only: true
+agents:
+  - id: "00_source_librarian"
+    purpose: "管理券商研报、API 文档、书籍、网页和本地项目证据。"
+    inputs: ["source_query", "allowed_platforms"]
+    outputs: ["evidence_map.json", "source_coverage.md"]
+  - id: "01_data_steward"
+    purpose: "扫描数据结构、建立字段映射、记录时点和额度风险。"
+    inputs: ["evidence_map.json", "data_source_permissions"]
+    outputs: ["data_contract.yml", "field_mapping.json", "data_risk_register.md"]
+  - id: "02_research_rag_agent"
+    purpose: "研报和文档 RAG，抽取策略 DNA、参数、假设和缺口。"
+    inputs: ["broker_reports", "research_questions"]
+    outputs: ["strategy_dna.json", "assumptions_pending_review.yml"]
+  - id: "03_weekly_report_agent"
+    purpose: "生成宏观、热点、行业、龙虎榜周报和结构化信号。"
+    inputs: ["macro_data", "news_events", "industry_data", "lhb_data"]
+    outputs: ["weekly_report.md", "weekly_signal_bundle.json"]
+  - id: "04_macro_regime_agent"
+    purpose: "周期划分、权益仓位预算和宏观状态解释。"
+    inputs: ["weekly_signal_bundle.json", "market_data"]
+    outputs: ["macro_regime.json", "equity_budget.json"]
+  - id: "05_asset_allocator_agent"
+    purpose: "股债商品现金 ETF 配置，含 LLM-BL 和风险覆盖。"
+    inputs: ["macro_regime.json", "asset_etf_pool.yml"]
+    outputs: ["asset_allocation.json", "asset_backtest_report.md"]
+  - id: "06_style_rotation_agent"
+    purpose: "成长、价值、红利等风格轮动。"
+    inputs: ["style_index_data", "macro_regime.json", "narrative_signals"]
+    outputs: ["style_weight.json", "style_rotation_report.md"]
+  - id: "07_industry_rotation_agent"
+    purpose: "申万一级行业指标卡、行业轮动、行业 ETF 权重。"
+    inputs: ["industry_panel", "event_graph", "flow_data"]
+    outputs: ["industry_weight.json", "industry_cards.md"]
+  - id: "08_lhb_event_agent"
+    purpose: "龙虎榜个股事件深度和后验统计。"
+    inputs: ["lhb_data", "stock_news", "announcements"]
+    outputs: ["lhb_deep_dive.json", "event_stock_candidates.json"]
+  - id: "09_technical_skill_agent"
+    purpose: "K 线和量价技术面 skill 调用与审计。"
+    inputs: ["ohlcv", "technical_skill_registry.yml"]
+    outputs: ["technical_signals.parquet", "technical_audit.md"]
+  - id: "10_factor_factory_agent"
+    purpose: "人工因子、深度学习因子、LLM/RL 因子生成和筛选。"
+    inputs: ["factor_data", "reports", "stock_pool"]
+    outputs: ["factor_registry.parquet", "factor_diagnosis.md"]
+  - id: "11_fundamental_research_agent"
+    purpose: "公司基本面深度报告和结构化标签。"
+    inputs: ["financials", "announcements", "research_notes", "industry_cards"]
+    outputs: ["stock_research_cards.md", "fundamental_tags.parquet"]
+  - id: "12_stock_selector_agent"
+    purpose: "行业内选股，合成技术、因子、基本面和事件信号。"
+    inputs: ["industry_weight.json", "factor_registry", "technical_signals", "fundamental_tags"]
+    outputs: ["stock_selection.json", "stock_alpha_panel.parquet"]
+  - id: "13_portfolio_optimizer_agent"
+    purpose: "合成大类、行业、个股权重，进行风险约束和交易成本优化。"
+    inputs: ["asset_allocation.json", "industry_weight.json", "stock_selection.json", "risk_model"]
+    outputs: ["target_portfolio.json", "orders_preview.json"]
+  - id: "14_backtest_auditor_agent"
+    purpose: "分层回测、未来函数审计、交易成本审计。"
+    inputs: ["target_portfolio.json", "historical_data", "model_specs"]
+    outputs: ["backtest_report.md", "audit_flags.json"]
+  - id: "15_model_doctor_agent"
+    purpose: "收益归因、失败模式诊断、下一轮实验建议。"
+    inputs: ["backtest_report.md", "audit_flags.json", "live_tracking"]
+    outputs: ["model_diagnosis.md", "next_experiment_plan.yml"]
+  - id: "16_skill_librarian_agent"
+    purpose: "管理 skill 生命周期、测试和版本升级。"
+    inputs: ["validated_methods", "diagnosis_results"]
+    outputs: ["skill_registry.yml", "skill_changelog.md"]
+  - id: "17_web_publisher_agent"
+    purpose: "把 artifacts 导出给网页读取。"
+    inputs: ["all_reports", "charts", "json_artifacts"]
+    outputs: ["web_export_manifest.json"]
+  - id: "18_remote_runner_agent"
+    purpose: "参考 SHH 方式执行远程长任务和回传结果。"
+    inputs: ["remote_job_spec.json"]
+    outputs: ["remote_job_log.json", "remote_artifacts_manifest.json"]

@@ -1,0 +1,145 @@
+{
+  "db_path": "database\\research_warehouse.db",
+  "required_start": "20120101",
+  "required_end": "20260630",
+  "status": "ready",
+  "blocked_count": 0,
+  "warning_count": 0,
+  "checks": [
+    {
+      "name": "trade_calendar",
+      "status": "ready",
+      "message": "5295 rows; threshold 3000",
+      "rows": 5295,
+      "min_date": "20120101",
+      "max_date": "20260630"
+    },
+    {
+      "name": "security_master",
+      "status": "ready",
+      "message": "5861 rows; threshold 4000",
+      "rows": 5861
+    },
+    {
+      "name": "stock_ohlcv_daily",
+      "status": "ready",
+      "message": "15994141 rows; threshold 10000000",
+      "rows": 15994141,
+      "min_date": "20120104",
+      "max_date": "20260630"
+    },
+    {
+      "name": "stock_valuation_daily",
+      "status": "ready",
+      "message": "15994141 rows; threshold 10000000",
+      "rows": 15994141,
+      "min_date": "20120104",
+      "max_date": "20260630"
+    },
+    {
+      "name": "stock_moneyflow_daily",
+      "status": "ready",
+      "message": "15994141 rows; threshold 10000000",
+      "rows": 15994141,
+      "min_date": "20120104",
+      "max_date": "20260630"
+    },
+    {
+      "name": "financial_report_visible",
+      "status": "ready",
+      "message": "287612 rows; threshold 100000; financial reports are point-in-time event data, not daily observations",
+      "rows": 287612,
+      "min_date": "20100104",
+      "max_date": "20260612"
+    },
+    {
+      "name": "sw_l1_industry_daily",
+      "status": "ready",
+      "message": "7397 rows; threshold 4000",
+      "rows": 7397,
+      "min_date": "19901210",
+      "max_date": "20260603"
+    },
+    {
+      "name": "index_constituent_period",
+      "status": "ready",
+      "message": "14832642 rows; threshold 10000000",
+      "rows": 14832642,
+      "min_date": "20120101",
+      "max_date": "20260630"
+    },
+    {
+      "name": "etf_master",
+      "status": "ready",
+      "message": "1640 rows; threshold 100",
+      "rows": 1640
+    },
+    {
+      "name": "etf_ohlcv_daily",
+      "status": "ready",
+      "message": "723818 rows; threshold 200000",
+      "rows": 723818,
+      "min_date": "20120104",
+      "max_date": "20260630"
+    },
+    {
+      "name": "macro_monthly",
+      "status": "ready",
+      "message": "174 rows; threshold 160",
+      "rows": 174,
+      "min_date": "201201",
+      "max_date": "202606"
+    },
+    {
+      "name": "broker_report_index",
+      "status": "ready",
+      "message": "195 rows; threshold 30",
+      "rows": 195,
+      "min_date": "2024-03-13",
+      "max_date": "2026-07-01"
+    },
+    {
+      "name": "universe:ALL_A",
+      "status": "ready",
+      "message": "12007587 rows; 5418 names; 20120104 to 20260630",
+      "rows": 12007587,
+      "min_date": "20120104",
+      "max_date": "20260630",
+      "distinct_codes": 5418
+    },
+    {
+      "name": "universe:CSI800_ENH",
+      "status": "ready",
+      "message": "2813551 rows; 1754 names; 20120101 to 20260630",
+      "rows": 2813551,
+      "min_date": "20120101",
+      "max_date": "20260630",
+      "distinct_codes": 1754
+    },
+    {
+      "name": "universe:CSI2000_ENH",
+      "status": "ready",
+      "message": "11504 rows; 2934 names; 20230811 to 20260630; accepted from official index start 20230811",
+      "rows": 11504,
+      "min_date": "20230811",
+      "max_date": "20260630",
+      "distinct_codes": 2934
+    },
+    {
+      "name": "lhb_daily:coverage",
+      "status": "ready",
+      "message": "1713399 rows; 20120104 to 20260630; required for weekly hot-stock deep dive",
+      "rows": 1713399,
+      "min_date": "20120104",
+      "max_date": "20260630"
+    },
+    {
+      "name": "news_event_daily:coverage",
+      "status": "ready",
+      "message": "3036179 rows; 20120101 to 20260630; required for weekly hot-event review",
+      "rows": 3036179,
+      "min_date": "20120101",
+      "max_date": "20260630"
+    }
+  ]
+}

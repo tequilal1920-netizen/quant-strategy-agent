@@ -1,0 +1,58 @@
+agents:
+  - id: "00_run_gatekeeper"
+    folder: "agents/00_run_gatekeeper"
+    writes:
+      - "runs/{run_id}/00_gatekeeper"
+    next_after_user_approval: "01_research_report"
+  - id: "01_research_report"
+    folder: "agents/01_research_report"
+    writes:
+      - "runs/{run_id}/01_research"
+    next_after_user_approval: "02_data_contract"
+  - id: "02_data_contract"
+    folder: "agents/02_data_contract"
+    writes:
+      - "runs/{run_id}/02_data_contract"
+    next_after_user_approval: "03_design_architect"
+  - id: "03_design_architect"
+    folder: "agents/03_design_architect"
+    writes:
+      - "runs/{run_id}/03_design"
+    next_after_user_approval: "04_spec_critic"
+  - id: "04_spec_critic"
+    folder: "agents/04_spec_critic"
+    writes:
+      - "runs/{run_id}/04_spec"
+    next_after_user_approval: "05_notebook_reproducer"
+  - id: "05_notebook_reproducer"
+    folder: "agents/05_notebook_reproducer"
+    writes:
+      - "runs/{run_id}/05_notebook"
+    next_after_user_approval: "06_audit_repair"
+  - id: "06_audit_repair"
+    folder: "agents/06_audit_repair"
+    writes:
+      - "runs/{run_id}/06_audit"
+    next_after_user_approval: "07_model_doctor"
+  - id: "07_model_doctor"
+    folder: "agents/07_model_doctor"
+    writes:
+      - "runs/{run_id}/07_model_doctor"
+    next_after_user_approval: "08_integration_logger"
+  - id: "08_integration_logger"
+    folder: "agents/08_integration_logger"
+    writes:
+      - "runs/{run_id}/08_integration"
+    next_after_user_approval: "09_skill_librarian"
+  - id: "09_skill_librarian"
+    folder: "agents/09_skill_librarian"
+    writes:
+      - "skill/{skill_name}"
+
+global_constraints:
+  user_approval_required_between_agents: true
+  cross_agent_write_forbidden: true
+  previous_stage_outputs_read_only: true
+  evidence_required_for_model_claims: true
+  notebook_outputs_must_be_preserved: true
+

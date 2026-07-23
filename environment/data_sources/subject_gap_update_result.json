@@ -1,0 +1,148 @@
+{
+  "status": "ok",
+  "subject_db": "G:\\subject\\main\\database\\database.db",
+  "locked_end_date": "20260630",
+  "tables_requested": [
+    "stock_market_daily",
+    "fund_daily",
+    "index_market_daily",
+    "index_member_weight",
+    "macro_monthly_cn"
+  ],
+  "added_index_codes": [
+    "932000.CSI"
+  ],
+  "subject_results": [
+    {
+      "table_name": "calendar_cn",
+      "status": "success",
+      "rows_written": 18624,
+      "watermark_field": "calendar_date",
+      "watermark_value": "20260630"
+    },
+    {
+      "table_name": "stock_master",
+      "status": "success",
+      "rows_written": 5861,
+      "watermark_field": "ts_code",
+      "watermark_value": "T600018.SH"
+    },
+    {
+      "table_name": "stock_market_daily",
+      "status": "success",
+      "rows_written": 84554,
+      "watermark_field": "trade_date",
+      "watermark_value": "20260630"
+    },
+    {
+      "table_name": "fund_master",
+      "status": "success",
+      "rows_written": 17857,
+      "watermark_field": "ts_code",
+      "watermark_value": "970214.OF"
+    },
+    {
+      "table_name": "fund_daily",
+      "status": "success",
+      "rows_written": 138085,
+      "watermark_field": "trade_date",
+      "watermark_value": "20260630"
+    },
+    {
+      "table_name": "index_master",
+      "status": "success",
+      "rows_written": 8000,
+      "watermark_field": "ts_code",
+      "watermark_value": "983094.CNI"
+    },
+    {
+      "table_name": "index_market_daily",
+      "status": "success",
+      "rows_written": 3304,
+      "watermark_field": "trade_date",
+      "watermark_value": "20260630"
+    },
+    {
+      "table_name": "index_member_weight",
+      "status": "success",
+      "rows_written": 15679,
+      "watermark_field": "index_code",
+      "watermark_value": "932000.CSI"
+    },
+    {
+      "table_name": "macro_monthly_cn",
+      "status": "success",
+      "rows_written": 306,
+      "watermark_field": "month",
+      "watermark_value": "202606"
+    }
+  ],
+  "table_summary": {
+    "calendar_cn": {
+      "table": "calendar_cn",
+      "status": "ready",
+      "min_date": "20010101",
+      "max_date": "20260630",
+      "rows": 18624,
+      "rows_in_requested_window": 36
+    },
+    "stock_market_daily": {
+      "table": "stock_market_daily",
+      "status": "ready",
+      "min_date": "20010102",
+      "max_date": "20260630",
+      "rows": 19938528,
+      "rows_in_requested_window": 84539
+    },
+    "fund_daily": {
+      "table": "fund_daily",
+      "status": "ready",
+      "min_date": "20010102",
+      "max_date": "20260630",
+      "rows": 12105097,
+      "rows_in_requested_window": 135311
+    },
+    "index_market_daily": {
+      "table": "index_market_daily",
+      "status": "ready",
+      "min_date": "20010102",
+      "max_date": "20260630",
+      "rows": 83436,
+      "rows_in_requested_window": 187
+    },
+    "index_member_weight": {
+      "table": "index_member_weight",
+      "status": "ready",
+      "min_date": "20160429",
+      "max_date": "20260630",
+      "rows": 88199,
+      "rows_in_requested_window": 10679
+    },
+    "macro_monthly_cn": {
+      "table": "macro_monthly_cn",
+      "status": "ready",
+      "min_date": "200101",
+      "max_date": "202606",
+      "rows": 306,
+      "rows_in_requested_window": 0
+    }
+  },
+  "index_weight_summary": {
+    "000906.SH": {
+      "min_date": "20250829",
+      "max_date": "20260630",
+      "rows": 8400,
+      "distinct_codes": 891,
+      "rows_in_requested_window": 800,
+      "distinct_codes_in_requested_window": 800
+    },
+    "932000.CSI": {
+      "min_date": "20260331",
+      "max_date": "20260630",
+      "rows": 7000,
+      "distinct_codes": 2237,
+      "rows_in_requested_window": 2000,
+      "distinct_codes_in_requested_window": 2000
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "status": "passed",
+  "errors": [],
+  "catalog_rows": 367,
+  "catalog_counts": {
+    "宏观": 87,
+    "全球市场": 64,
+    "申万行业": 77,
+    "商品": 38,
+    "个股": 62,
+    "新闻事件": 39
+  },
+  "notebook": {
+    "cells": 14,
+    "markdown": 7,
+    "code": 7,
+    "outputs": 0,
+    "executed": 0
+  },
+  "free_api_probe": {
+    "total": 43,
+    "ok": 42,
+    "failed": 1
+  },
+  "credential_literal_hits": 0,
+  "required_files": {
+    "app.py": "37e3815361ba2b543b41c0f17623a91f2e102e38a4ce2849a6baf069882199c0",
+    "pipeline.py": "3d1ebc17ee5a405ebc0ed382094e3a3157746e7c7bf5f226061ba34df93a72ac",
+    "notebooks/update_dashboard.ipynb": "bcf338c2194ba7a309d92b4479d0646e23e227d0b2f173c943046ae83dae7b02",
+    "templates/index.html": "6e17318afa06b4e67d7d5b434273e1d7ea9eba807feee1ef6b41c0a2dea03357",
+    "static/css/dashboard.css": "c223fc58db678fe64bed3dac5392df53440f147d6b334dddeff01d0b8adac2c6",
+    "static/js/dashboard.js": "8b05ba9a6b965e48f961b8c73942cb5e10b0b6be068a537d0f2b0da12b014c07",
+    "static/js/plotly-loader.js": "0ff24468b142a519871be41ee0654ff8807b1734665e33edb859b327c739b568",
+    "static/favicon.svg": "13f5237653337bf1e285de0d7db3a6a6fb9b9384c6694e98036889b2181d240d",
+    "static/vendor/plotly.min.js": "122e3be346d66616944d0b83eaaf7242581508c3c1cfa0995a17af0d83eff770",
+    "data/indicator_catalog.seed.json": "6e029497c61349c5851e26aff031a11ef1ab2009f6140a30a42783949149e41a",
+    "deploy/run_service.ps1": "dba8f2fd93e34acf6171e89f1f0b9eae5ce399534303b333ee69af3e2de1bb75",
+    "deploy/run_update.ps1": "ad1fdafc22558cfbea63defb414dc44e4a8c970690c68609b741f1adad401d39",
+    "deploy/healthcheck.ps1": "787179c092ab63ca345dcdf7395879e69246f148b6482ded9aab01c93a0ab059",
+    "deploy/install_tasks.ps1": "7d1b45b521aeae989e8584b86f8b6a2fb18965d44a00961f3191ec08d8fb3564",
+    "deploy/install_release.ps1": "ea0a8a70c72ca4659adb6334462c24d0e18c2ba010f1380b02be69efca2585b9",
+    "deploy/execute_notebook.py": "87dabfe71e2d4e784fa8ecbfb54fdfc6ee4f21ec18defd686961a3fd998e66b8",
+    "deploy/verify_http.py": "89fa380bdfa47173aba68f7b800d1c5f8c8394a5c1f12e2cd2ebaefc0399e865",
+    "tools/probe_free_endpoints.py": "aa12483276b1791656845e85fea05838cc684a0f166404340f6343a7bb405e3f",
+    "README.md": "c08ab0db41b558c45fd2d8d1c06e1bad5ebbef0688ec7f71d45987ff84efbc86",
+    "requirements.txt": "f5ca24296615b6378a86fbebcca619438f4fae7b58abc184afc63327820c9c15",
+    "requirements-data.txt": "8ebb1d3aaa70cebcc5e081f67ecaa21ec6ccb182f54bdaac27e825dc6ddf139f",
+    "requirements-web.txt": "d27f0eebb9f735f929f1699091c1c5e119c83f6a24dfe9231c0e52bb50d885c4",
+    "requirements-dev.txt": "91a516e9112ded154b4f25aeab72767a6a541d258f4443d53aa7b38108389404",
+    "tests/test_app.py": "116fc27ceb21a9594886af34016169cfcebc86e26a7d2540f1e8f56cce648e1d",
+    "tests/test_pipeline.py": "6bef9123120464980f2070c02ccb89e80a0b9b96be493f417eae1d00e6227e8b",
+    "tests/test_contract_integration.py": "6ec5b129426b5c9679fd508fd7ef0f6ce1eeb6b81a1e2417b99de2f27f8f9031"
+  }
+}

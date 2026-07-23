@@ -1,0 +1,60 @@
+{
+  "updated_at": "2026-07-23",
+  "features": [
+    {
+      "id": "repository-layout",
+      "status": "passed",
+      "verification": "agent uses board/database/environment/framework/model/output/skill; one ignored 1.7MB source backup remains under copy/ and contains no database"
+    },
+    {
+      "id": "research-workspace-navigation",
+      "status": "passed",
+      "verification": "8 primary groups, 27 secondary pages and exhaustive 49 legacy-view mappings are present; no core visualization or child panel was removed"
+    },
+    {
+      "id": "module-skills",
+      "status": "passed",
+      "verification": "8 primary skills contain SKILL.md, agents/openai.yaml and references/module-map.md and all pass official quick_validate.py"
+    },
+    {
+      "id": "cache-and-transfer-r16-3",
+      "status": "passed",
+      "verification": "serialized navigation, route-parameter cache identity, K-line/factor prewarm and server caches, gzip, ETag and conditional 304 passed locally and in production"
+    },
+    {
+      "id": "unified-ui",
+      "status": "passed",
+      "verification": "green/blue/red semantics, Arial/KaiTi typography, 14px HTML and 11px chart minimums, unified cards and zero horizontal overflow passed the browser matrix"
+    },
+    {
+      "id": "public-browser-matrix-r16-3",
+      "status": "passed",
+      "verification": "27/27 pages and 51/51 in-page functions passed real public clicks; console errors 0, page errors 0; route-with-all-sections median 475ms, P95 4.42s, max 5.13s"
+    },
+    {
+      "id": "kline-cohort-wyckoff-r16-3",
+      "status": "passed",
+      "verification": "K-line 9.0 cohort/Wyckoff model and all K-line learning sections are live; public health/session/stocks/dates/history checks pass and the public section matrix completes in about 0.53s"
+    },
+    {
+      "id": "credential-migration",
+      "status": "passed",
+      "verification": "the requested administrator login works in a real public browser while existing content and factor task state remain unchanged; credentials are excluded from source"
+    },
+    {
+      "id": "public-deployment-r16-3",
+      "status": "passed",
+      "verification": "SHA-256 release validation, isolated 18072 preflight, rollback-protected scheduled-task switch and 12 public API checks passed for 2026.07.23-research-workspace-r16.3"
+    },
+    {
+      "id": "workspace-cleanup",
+      "status": "passed",
+      "verification": "14 root Word/Excel documents and 5 project Word documents remain on disk; Office/PDF artifacts are ignored by Git; the 11.9GB database and copy backup are preserved; only named render caches and generator/audit intermediates were removed"
+    },
+    {
+      "id": "github-publication",
+      "status": "in_progress",
+      "verification": "GitHub CLI browser authorization completed successfully for tequilal1920-netizen and the GitHub-specific credential helper is configured without exposing the token; the sanitized 389-file 37.26MiB parentless snapshot passed the final audit and is ready for the first push and public verification"
+    }
+  ]
+}

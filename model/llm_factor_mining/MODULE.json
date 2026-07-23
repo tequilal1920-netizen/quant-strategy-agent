@@ -1,0 +1,9 @@
+{
+    "nav_title":  "LLM因子挖掘组件",
+    "slug":  "llm-factor-mining",
+    "role":  "component",
+    "local_path":  "model/llm_factor_mining",
+    "skill_path":  "skill/factor-laboratory",
+    "github_url":  "https://github.com/tequilal1920-netizen/quant-strategy-agent/tree/main/model/llm_factor_mining",
+    "github_status":  "ready_to_publish"
+}

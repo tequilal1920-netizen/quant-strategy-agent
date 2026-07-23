@@ -1,0 +1,9 @@
+{
+    "nav_title":  "指数增强组件",
+    "slug":  "index-enhancement",
+    "role":  "component",
+    "local_path":  "model/index_enhancement",
+    "skill_path":  "skill/factor-laboratory",
+    "github_url":  "https://github.com/tequilal1920-netizen/quant-strategy-agent/tree/main/model/index_enhancement",
+    "github_status":  "ready_to_publish"
+}

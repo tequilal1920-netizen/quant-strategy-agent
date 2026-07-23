@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NotebookManifest",
+  "type": "object",
+  "required": [
+    "run_id",
+    "notebook_path",
+    "style_reference",
+    "execution_status",
+    "outputs_preserved"
+  ],
+  "properties": {
+    "run_id": {"type": "string"},
+    "notebook_path": {"type": "string"},
+    "style_reference": {"type": "string"},
+    "execution_status": {
+      "type": "string",
+      "enum": ["not_run", "passed", "failed", "partially_passed"]
+    },
+    "kernel": {"type": "string"},
+    "data_sources": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "outputs_preserved": {"type": "boolean"},
+    "blocking_errors": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  }
+}
+

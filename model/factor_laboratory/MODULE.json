@@ -1,0 +1,13 @@
+{
+    "nav_title":  "因子实验室",
+    "slug":  "factor-laboratory",
+    "role":  "primary",
+    "local_path":  "model/factor_laboratory",
+    "skill_path":  "skill/factor-laboratory",
+    "github_url":  "https://github.com/tequilal1920-netizen/quant-strategy-agent/tree/main/model/factor_laboratory",
+    "github_status":  "ready_to_publish",
+    "components":  [
+                       "llm_factor_mining",
+                       "index_enhancement"
+                   ]
+}

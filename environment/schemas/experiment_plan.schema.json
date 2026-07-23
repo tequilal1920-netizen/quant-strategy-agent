@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExperimentPlan",
+  "type": "object",
+  "required": [
+    "experiment_id",
+    "hypothesis",
+    "baseline",
+    "change_type",
+    "metrics",
+    "acceptance_rule"
+  ],
+  "properties": {
+    "experiment_id": {"type": "string"},
+    "hypothesis": {"type": "string"},
+    "evidence_refs": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "baseline": {"type": "string"},
+    "change_type": {
+      "type": "string",
+      "enum": ["small_parameter", "medium_submodel", "large_architecture", "bug_fix", "data_fix"]
+    },
+    "proposed_changes": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "metrics": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "acceptance_rule": {"type": "string"},
+    "rollback_rule": {"type": "string"}
+  }
+}
+

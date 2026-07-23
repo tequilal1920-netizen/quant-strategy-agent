@@ -1,0 +1,39 @@
+local_sources:
+  subject_database:
+    path: "G:/subject/main/database/database.db"
+    role: "primary_local_database"
+    allowed_mode: "read_only_until_user_approval"
+  subject_trade_notebook:
+    path: "G:/subject/main/trade/trade.ipynb"
+    role: "notebook_style_reference"
+    allowed_mode: "read_only"
+  subject_factor:
+    path: "G:/subject/main/factor"
+    role: "legacy_factor_reference"
+    allowed_mode: "read_only_until_user_approval"
+  subject_model:
+    path: "G:/subject/main/model"
+    role: "legacy_model_reference"
+    allowed_mode: "read_only_until_user_approval"
+
+api_sources:
+  tushare:
+    credential_env: "TUSHARE_TOKEN"
+    default_mode: "cached_incremental"
+  akshare:
+    credential_env: null
+    default_mode: "sample_probe_then_cached"
+  baostock:
+    credential_env: null
+    default_mode: "sample_probe_then_cached"
+  ifind:
+    credential_env:
+      - "IFIND_PRIMARY_ACCESS_TOKEN"
+      - "IFIND_PRIMARY_REFRESH_TOKEN"
+    default_mode: "manual_approval_for_paid_or_high_quota"
+
+rules:
+  no_full_refresh_without_approval: true
+  cache_all_external_responses: true
+  record_source_api_and_batch_id: true
+

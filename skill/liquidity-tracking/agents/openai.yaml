@@ -1,0 +1,4 @@
+interface:
+  display_name: "资金面跟踪"
+  short_description: "维护七类资金主体的来源、频率、单位、滞后、质量状态与联动输出"
+  default_prompt: "Use $liquidity-tracking to inspect, update, and verify the requested capital-flow segment."

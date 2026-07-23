@@ -1,0 +1,71 @@
+purpose: "Data source policy for penetrate narrative and financial report skills"
+updated_at: "2026-07-04"
+
+secret_policy:
+  store_plaintext_credentials: false
+  accepted_secret_locations:
+    - "process environment variables"
+    - "interactive user-provided values for one run only"
+    - "already-authenticated browser sessions, when explicitly approved"
+  forbidden:
+    - "saving tokens, passwords, cookies, or refresh tokens in repo files"
+    - "running bulk paid-interface refreshes without a concrete symbol/date scope"
+
+priority_order:
+  1_public_or_local:
+    role: "first pass and cross-check"
+    sources:
+      - "company filings and exchange announcements"
+      - "akshare"
+      - "baostock"
+      - "tushare, when token is available for the current run"
+      - "local files uploaded by the user"
+      - "G:/subject/main/database/database.db, read-only when relevant"
+    default_mode: "single-symbol or small-batch query, cache evidence"
+  2_paid_low_frequency:
+    role: "gap fill and authoritative verification"
+    sources:
+      - "Wind SQL bridge"
+      - "iFind Quant API"
+      - "CSMAR"
+      - "PPMData"
+      - "CNKI"
+    default_mode: "manual approval or explicit user request; avoid high-frequency pulls"
+  3_research_context:
+    role: "industry, TAM, broker target price, and narrative evidence"
+    sources:
+      - "broker reports"
+      - "industry reports"
+      - "Alpha-style research notes when available"
+      - "official company investor-relations material"
+    default_mode: "quote source, date, and scope"
+
+minimum_inputs:
+  narrative_skill:
+    required:
+      - "company name and stock code"
+      - "current price or market cap"
+      - "total shares, if market cap is not directly supplied"
+      - "E1/E2/E3 net profit forecasts"
+    strongly_recommended:
+      - "5-8 broker target prices"
+      - "TAM, market share, and net margin assumptions"
+      - "latest price date and data source"
+      - "historical price/index comparison window"
+  financial_report_skill:
+    required:
+      - "company name and stock code"
+      - "reporting periods to compare"
+      - "balance sheet"
+      - "income statement"
+    strongly_recommended:
+      - "cash flow statement"
+      - "industry background metrics"
+      - "current price, total shares, and E1/E2/E3 forecasts"
+
+validation_rules:
+  - "market_cap = price * total_shares must be checked and recorded"
+  - "raw yuan amounts must be divided by 1e8 to become hundred-million yuan"
+  - "quarterly data must compare the same quarter unless explicitly stated"
+  - "DCF implied L must be checked by forward pricing back to market cap"
+  - "paid database pulls must record symbol, fields, date range, and reason"

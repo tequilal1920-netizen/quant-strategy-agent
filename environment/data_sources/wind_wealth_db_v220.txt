@@ -1,0 +1,1757 @@
+               ——中国金融数据及解决方案首席服务商
+
+
+
+
+                                      FILESync
+
+
+
+
+           Wind 资讯财富管理数据库
+
+
+
+
+上海万得信息技术股份有限公司
+Shanghai Wind Information Co., Ltd.
+地 址: 上海市浦东新区福山路 33 号建工大厦 9 楼
+邮编 Zip: 200120
+电话 Tel: (8621) 6888 2280
+传真 Fax: (8621) 6888 2281
+Email: DFSupport@wind.com.cn
+http://www.wind.com.cn
+                        文档变更记录表
+  版本       修改时间                    修改内容
+1.0    2010-12-31   新增文档
+1.1    2012-3-19    修改文档:增加 14 个产品
+1.2    2012-3-29    修改文档：
+                    1.增加《中国共同基金基本资料》前端代码和后端代码；《中
+                    国券商理财基本资料》业务代码
+1.3    2012-6-1     修改文档：
+                    1. 增加《中国分级基金》
+                    2. 增加《中国联接基金》
+                    3. 增加《中国货币市场基金收益》
+1.4    2012-6-18    修改文档：
+                    1．增加《中国共同基金分红》
+1.5    2012-7-12    修改文档：
+                    1．增加《中国共同基金份额拆分与折算》
+1.6    2012-7-25    修改文档：
+                    1.增加《中国货币市场基金份额结转方式》   ，
+                    2.增加《中国货币市场基金份额结转方式》公告日期
+1.7    2012-8-21    修改文档:
+                    1. 增加《中国券商集合理财分红》
+                    2. 增加《ETF 每周申购赎回》
+1.8    2012-11-12   修改文档:
+                    1． 增加《中国信托基金基本信息说明》
+                    2． 增加《中国信托产品受托人基本信息》
+                    3． 《中国私募基金基金经理》增加字段
+                    4． 《中国共同基金份额》增加字段
+                    5． 《中国共同基金基本资料》增加字段
+1.9    2012-11-23   修改文档:
+                    1. 增加《中国共同基金业绩表现》
+2.0    2012-12-13   修改文档:
+                    1. 《中国共同基金重大事件》新增字段
+2.1    2012-12-28   修改文档:
+                    1. 《中国共同基金业绩表现》 新增字段
+                    2. 《中国共同基金重大事件》修改 s_event_content 字段长
+                       度
+2.2    2013-3-11    修改文档:
+                    1.《中国共同基金基金份额拆分与折算》新增: 拆分折算场内
+                    除权日
+2.3    2013-3-27    修改文档:
+                    1. 增加《中国基金指数业绩表现》
+2.4    2013-5-20    修改文档:
+                    1.《中国联接基金》修改表结构
+2.5    2013-8-1     修改文档:
+                    1.迁移 ETF 指数到量化研究中
+2.6    2013-8-30    修改文档:
+                    1. 调整模块
+                    2. 新增《中国银行理财产品基本资料》
+                    3. 新增《中国银行理财产品收益率曲线》
+2.7    2013-9-12    修改文档:
+
+
+                       精于数据 一直进步                       I
+                    1．《中国共同基金基金份额拆分与折算》和
+                    2.《中国共同基金份额》新增字段
+2.8    2013-10-10   修改文档:
+                    1．新增《中国共同基金 Wind 基金评级》
+2.9    2013-12-27   修改文档:
+                    1．新增《中国银行理财产品基本资料》
+2.10   2014-02-21   修改文档:
+                    1．《中国共同基金业绩比较基准行情》字段修改
+2.11   2014-05-16   修改文档:
+                    1.《中国共同基金分红》新增字段
+2.12   2014-06-13   修改文档:
+                    1.《中国共同基金发行》新增字段
+                    2.《中国共同基金申购赎回情况》新增字段
+2.13   2014-06-27   修改文档:
+                    1.《中国封闭式基金日行情》新增字段
+2.14   2014-07-11   修改文档:
+                    1. 新增《中国共同基金暂停申购赎回》
+                    2. 新增《中国共同基金业绩比较基准配置》
+2.15   2014-07-23   修改文档:
+                    1. 新增《中国共同基金转型》
+2.16   2014-08-11   修改文档:
+                    1、新增《开放式基金费率表》
+2.17   2014-08-21   修改文档:
+                    1、《中国共同基金基本资料》新增字段
+2.18   2014-09-26   修改文档:
+                    1.《中国券商理财基本资料》新增字段
+                    2.《中国券商理财基金经理》新增字段
+                    3.《中国券商理财净值》新增字段
+                    4.《中国共同基金基本资料》新增字段
+                    5.《中国共同基金基金经理》新增字段
+                    6.《中国私募基金基本资料》新增字段
+                    7．新增《中国共同基金报告期净值表现》
+                    8. 新增《QFII 基础信息》
+                    9.新增《QFII 额度变动》
+                    10.新增《私募基金业绩表现》
+2.19   2014-10-10   修改文档:
+                    1.《中国银行理财产品基本资料》新增字段
+                    2.《中国券商理财基本资料》新增字段
+                    3.《中国共同基金基本资料》新增字段
+2.20   2014-11-10   修改文档:
+                    1.《中国券商理财基本资料》新增字段
+       2014-11-27   修改文档：
+                    《中国共同基金业绩表现》新增字段
+
+
+
+
+                      精于数据 一直进步              II
+                                                                    目        录
+
+1     基本信息 ........................................................................................................................................... 1
+2     数据文件 ........................................................................................................................................... 1
+    2.1      数据文件 ..................................................................................................................... 1
+    2.2      如何获取数据 .............................................................................................................. 1
+    2.3      TXT 数据文件结构 ...................................................................................................... 1
+    2.4      快照文件 ..................................................................................................................... 2
+    2.5      历史数据文件 .............................................................................................................. 2
+    2.6      增量数据文件 .............................................................................................................. 2
+3     目录结构 ........................................................................................................................................... 2
+4     数据字典 ........................................................................................................................................... 1
+    4.1      中国共同基金基本资料-CHINAMUTUALFUNDDESCRIPTION ........................................... 1
+    4.2      中国共同基金基金经理-CHINAMUTUALFUNDMANAGER ................................................ 2
+    4.3      中国分级基金-CHINAGRADINGFUND ............................................................................ 2
+    4.4      中国联接基金-CHINAFEEDERFUND .............................................................................. 2
+    4.5      中国货币市场基金份额结转方式-CMONEYMARKETFSCARRYOVERM .......................... 2
+    4.6      中国共同基金被动型基金跟踪指数-CHINAMUTUALFUNDTRACKINGINDEX .................... 3
+    4.7      中国 WIND 基金分类-CHINAMUTUALFUNDSECTOR ......................................................... 3
+    4.8      中国开放式基金费率表-CMFSUBREDFEE ................................................................... 3
+    4.9      中国共同基金暂停申购赎回-CHINAMUTUALFUNDSUSPENDPCHREDM .......................... 4
+    4.10         中国共同基金业绩比较基准配置-CHINAMUTUALFUNDBENCHMARK ......................... 4
+    4.11         中国共同基金发行-CHINAMUTUALFUNDISSUE.......................................................... 4
+    4.12         中国共同基金重大事件-CHINAFUNDMAJOREVENT ................................................... 5
+    4.13         中国共同基金分红- CHINAMFDIVIDEND ................................................................... 5
+    4.14         中国共同基金基金份额拆分与折算-CMFUNDSPLIT ................................................. 6
+    4.15         中国共同基金转型-CHINAMUTUALFUNDTRANSFORMATION........................................ 6
+    4.16         中国共同基金份额-CHINAMUTUALFUNDSHARE ........................................................ 7
+    4.17         中国共同基金净值-CHINAMUTUALFUNDNAV ........................................................... 7
+    4.18         中国货币市场基金收益-CMONEYMARKETFINCOME ................................................. 8
+    4.19         中国封闭式基金日行情-CHINACLOSEDFUNDEODPRICE .......................................... 8
+    4.20         中国共同基金业绩比较基准行情-CHINAMUTUALFUNDBENCHMARKEOD .................. 8
+    4.21         中国共同基金申购赎回情况-CHINAMUTUALFUNDPCHREDM .................................... 8
+    4.22         中国共同基金场内流通份额-CHINAMUTUALFUNDFLOATSHARE ................................ 9
+    4.23         中国 WIND 基金仓位估算-CHINAMUTUALFUNDPOSESTIMATION .................................. 9
+    4.24         中国共同基金席位交易-CHINAMUTUALFUNDSEATTRADING ...................................... 9
+    4.25         中国共同基金报告期净值表现-CHINAMUTUALFUNDREPNAVPER ........................... 10
+    4.26         中国共同基金业绩表现*-CHINAMFPERFORMANCE ................................................ 10
+    4.27         中国基金指数业绩表现*-FINDEXPERFORMANCE .................................................... 12
+    4.28         中国共同基金投资组合---资产配置-CHINAMUTUALFUNDASSETPORTFOLIO .......... 12
+    4.29         中国共同基金投资组合---行业配置- CHINAMUTUALFUNDINDPORTFOLIO .............. 14
+    4.30         中国共同基金投资组合-持股配置-CHINAMUTUALFUNDSTOCKPORTFOLIO ............. 14
+    4.31         中国共同基金投资组合-持券配置-CHINAMUTUALFUNDBONDPORTFOLIO ............... 15
+
+
+                                                            精于数据 一直进步                                                                               III
+    4.32         中国共同基金 WIND 基金评级-CMFUNDW INDRATING .............................................. 15
+    4.33         中国券商理财基本资料-CHINAINHOUSEFUNDDESCRIPTION.................................... 15
+    4.34         中国券商理财基金经理-CHINAINHOUSEFUNDMANAGER ......................................... 16
+    4.35         中国券商理财板块-CHINAINHOUSEFUNDSECTOR ................................................... 17
+    4.36         中国券商理财份额-CHINAINHOUSEFUNDSHARE ..................................................... 17
+    4.37         中国券商理财净值-CHINAINHOUSEFUNDNAV ........................................................ 17
+    4.38         中国券商集合理财分红- CHINAINHOUSEFUNDDIVIDEND ......................................... 17
+    4.39         中国私募基金基本资料-CHINAHEDGEFUNDDESCRIPTION....................................... 18
+    4.40         中国私募基金基金经理-CHINAHEDGEFUNDMANAGER ............................................ 18
+    4.41         中国私募基金板块-CHINAHEDGEFUNDSECTOR ...................................................... 19
+    4.42         中国私募基金业绩表现*-CHINAHEDGEFUNDPERFORMANCE ................................... 19
+    4.43         中国私募基金净值-CHINAHEDGEFUNDNAV ........................................................... 20
+    4.44         中国银行理财产品基本资料-CHINABWMDESC...................................................... 21
+    4.45         中国银行理财产品收益率曲线- CHINABWMCURVE ............................................... 22
+    4.46     QFII 基本资料-QFIIDESCRIPTION ............................................................................... 23
+    4.47     QFII 额度变动-QFIIQUOTACHANGE ........................................................................... 23
+附 1： 基金事件类型代码表 .................................................................................................................... 23
+5     公司介绍 ........................................................................................................................................... 1
+
+
+
+
+                                                            精于数据 一直进步                                                                               IV
+1   基本信息
+  Wind 资讯财富管理数据库提供中国境内最全面的公募基金、券商集合理财、私募基金
+等集合理财产品等数据，为市场研究和分析人员提供多维度的决策依据。
+
+  产品以模块为单位订阅，每个模块包含一定数量描述证券市场某一个方面内容的字段,
+更新数据与历史数据分开。具体模块可以参见本文第 3 部分《目录结构》。
+
+
+2   数据文件
+2.1 数据文件
+
+
+  财富管理数据库使用 UTF-8 编码的 xml 与 txt 文件传输数据，客户在任何可使用该类型
+文件的平台上都能正常的读取，并可以根据需要导入数据库中使用。
+
+
+
+2.2 如何获取数据
+
+
+   每位用户都会获得一个帐号用户名和密码，用户可以使用该用户名和密码登陆 Wind
+FTP 服务器下载数据。用户可以使用任何标准的 FTP 客户端连接 Wind 的服务器并下载所
+需的数据文件。
+
+    Wind FTP 服务器启用了 IP 地址限制功能，用户在使用前需提供接入 IP 地址或子网。
+
+  Wind 提供的 A 股量化研究数据库的所有数据文件都使用 gzip 压缩，用户需要使用相应
+的工具解压缩后方能使用。
+
+
+
+2.3 TXT 数据文件结构
+
+
+  TXT 文件第一行为标题行，包括了该文件中所有字段的助记符，每一个助记符后都有
+一个”|”符号作为结束。数据从第二行开始，每一个字段值后都跟有一个”|”作为结束，当前记
+录结束后，下一条记录从下一行开始。记录中数据值的顺序和标题行中的助记符顺序相同。
+一个包含 m 条记录，每条记录 n 个字段的文件格式如下：
+
+
+
+    <Field Mnemonic1>|<Field Mnemonic2>|…<Field Mnemonicn>|
+
+    <Value1,1>|<Value1,2>|…<Value1,n>|
+
+    …
+
+    <Valuem,1>|<Valuem,2>|…<Valuem,n>|
+
+    日期使用<yyyymmdd>形式。
+
+    每条记录的第一个字段均为 OBJECT_ID，该字段使用 GUID 唯一标识每一条记录。当
+
+
+                             精于数据 一直进步                        1
+  需要更新或更正历史记录时，将通过 OBJECT_ID 确定对象记录。
+
+
+
+  2.4 快照文件
+
+
+    快照全量为数据模块描述的所有对象当前品种最新的数据记录。如中国共同基金份额模
+  块的快照文件包含最新所有中国共同基金的份额数据。
+
+
+
+  2.5 历史数据文件
+
+
+      历史全量为数据模块一段时间内发布的全部数据记录。
+
+
+
+  2.6 增量数据文件
+
+
+    增量数据为某模块一段时间内的更新与修正。数据文件中每条记录除了常规数据字段外，
+  还包括 OPMODE 字段和 OPDATE 字段。
+
+    OPMODE 取值为：0（新记录）、1（更新/更正）、2（删除），描述对数据库需要进行
+  的操作。对于 0 和 1，记录内容即为最新值；对于 2，所有字段内容为空。
+
+      OPDATE 是记录操作时间，该字段格式为：<yyyy-mm-ddThh:mm:ss+/-hh:mm>。
+
+
+
+
+  3   目录结构
+
+
+    用户使用标准 FTP 客户端登录以后，根据数据订阅情况，可以看到如下全部或部分目
+  录，每一个目录内包含一个模块的数据内容
+
+类别        模块名称                     目录                             时间
+共同基金基础    中国共同基金基本资料               ChinaMutualFundDescription     09:00,10:00
+信息        中国共同基金基金经理               ChinaMutualFundManager         09:00
+          中国分级基金                   ChinaGradingFund               17:30
+          中国联接基金                   ChinaFeederFund                09:00
+          中国货币市场基金份额结转方式           CMoneyMarketFSCarryOverm       09:00
+          中国共同基金被动型基金跟踪指数          ChinaMutualFundTrackingIndex   00:00
+          中国 Wind 基金分类             ChinaMutualFundSector          09:00
+          中国开放式基金费率表               CMFSubredFee                   11:30,17:30
+          中国共同基金暂停申购赎回             ChinaMutualFundSuspendPchR     09:00
+                                   edm
+          中国共同基金业绩比较基准配置           ChinaMutualFundBenchMark       08:35
+共同基金权益    中国共同基金发行                 ChinaMutualFundIssue           00:00
+数据        中国共同基金重大事件               ChinaFundMajorEvent            00:00
+
+                          精于数据 一直进步                                2
+            中国共同基金分红               ChinaMFDividend                 09:00
+            中国共同基金基金份额拆分与折算        CMFundSplit                     09:00
+            中国共同基金转型               ChinaMutualFundtransformation   00:00
+共同基金市场      中国共同基金份额               ChinaMutualFundShare            09:00,18:00
+表现          中国共同基金净值               ChinaMutualFundNAV              00:00,08:30
+            中国货币市场基金收益             CMoneyMarketFIncome             02:15,9:00
+            中国封闭式基金日行情             ChinaClosedFundEODPrice         16:00
+            中国共同基金业绩比较基准行情         ChinaMutualFundBenchmarkEO      08:30,18:00
+                                   D
+            中国共同基金申购赎回情况           ChinaMutualFundPchRedm          00:00
+            中国共同基金场内流通份额           ChinaMutualFundFloatShare       00:00
+            中国 Wind 基金仓位估算         ChinaMutualFundPosEstimation    00:00
+            中国共同基金席位交易             ChinaMutualFundSeatTrading      00:00
+            中国共同基金报告期净值表现          ChinaMutualFundRepNAVPer        00:45
+共同基金市场      中国共同基金业绩表现*            ChinaMFPerformance              09:30,23:30
+衍生数据        中国基金指数业绩表现             FIndexPerformance               04:00
+共同基金 投资     中国共同基金投资组合——资产配置       ChinaMutualFundAssetPortfolio   00:00
+组合          中国共同基金投资组合——行业配置       ChinaMutualFundIndPortfolio     00:00
+            中国共同基金投资组合——持股明细       ChinaMutualFundStockPortfolio   00:00
+            中国共同基金投资组合——持券明细       ChinaMutualFundBondPortfolio    00:00
+共同基金评级      中国共同基金 Wind 基金评级       CMFundWindRating                07:00
+券商理财基础      中国券商理财基本资料             ChinaInHouseFundDescription     09:00
+信息          中国券商理财基金经理             ChinaInhouseFundManager         09:00
+            中国券商理财板块               ChinaInhouseFundSector          09:00
+券商理财市场      中国券商理财份额               ChinaInhouseFundShare           09:00
+表现          中国券商理财净值               ChinaInhouseFundNAV             09:20,11:00
+券商理财权益      中国券商集合理财分红                                             09:00,17:00
+                                   ChinaInhouseFundDividend
+数据
+私募基金基础      中国私募基金基本资料             ChinaHedgeFundDescription       09:00
+信息          中国私募基金基金经理             ChinaHedgeFundManager           09:00
+            中国私募基金板块               ChinaHedgeFundSector            09:00
+私募基金市场      中国私募基金净值                                               10:00,18:00
+                                   ChinaHedgeFundNAV
+表现
+私募基金衍生
+            私募基金业绩表现               ChinaHedgeFundPerformance       00:00
+数据
+银行理财基础      中国银行理财产品基本资料           ChinaBWMDesc                    01:03
+信息          中国银行理财产品收益率曲线          ChinaBWMCurve                   01:03
+            QFII 基本资料              QFIIDescription                 09:00
+QFII 基础信息
+            QFII 额度变动              QFIIQuotaChange                 10:40
+
+
+   注：所有更新时间均为计划时间，实际数据生成时间可能会有数分钟误差。
+
+       说明：带“＊”模块数据为 Wind 自有数据标准。
+
+       根据用户的订阅情况，每一个目录（即模块）都包含如下部分或全部目录
+
+   目录名称                       内容
+   Daily                      每日增量数据
+
+
+                         精于数据 一直进步                                  3
+Weekly                     每周增量数据
+Monthly                    年初起到上月末的增量数据
+Snapshot                   最新快照数据
+
+
+
+   每一个模块的历史数据文件存放在和模块同级的目录，包含如下部分或全部目录
+
+目录名称                       内容
+<module name>-H5Y          过去 5 年历史数据
+<module name>-H10Y         6~10 年历史数据
+<module name>-H10YP        10 年前历史数据
+
+
+
+   用户可以根据授权至相应目录下载所需的文件。
+
+
+
+
+                      精于数据 一直进步           4
+4   数据字典
+
+4.1 中国共同基金基本资料-ChinaMutualFundDescription
+
+字段                               字段类型             字段名称        备注
+OBJECT_ID                        VARCHAR2(100)    对象 ID
+f_info_windcode                  VARCHAR2(40)     Wind 代码
+f_info_front_code                VARCHAR2(40)     前端代码
+f_info_backend_code              VARCHAR2(40)     后端代码
+f_info_fullname                  VARCHAR2(100)    名称
+f_info_name                      VARCHAR2(100)    简称
+f_info_corp_fundmanagementcomp   VARCHAR2(100)    管理人
+f_info_custodianbank             VARCHAR2(100)    托管人
+f_info_firstinvesttype           VARCHAR2(40)     投资类型
+f_info_setupdate                 VARCHAR2(8)      成立日期
+f_info_maturitydate              VARCHAR2(8)      到期日期
+f_issue_totalunit                NUMBER(20,4)     发行份额        单位:亿份
+f_info_managementfeeratio        NUMBER(20,4)     管理费
+f_info_custodianfeeratio         NUMBER(20,4)     托管费
+crny_code                        VARCHAR2(10)     货币代码
+f_info_ptmyear                   NUMBER(20,4)     存续期
+f_issue_oef_startdateinst        VARCHAR2(8)      推广起始日期
+f_issue_oef_dnddateinst          VARCHAR2(8)      推广截止日期
+f_info_parvalue                  NUMBER(20,4)     面值
+f_info_trusttype                 VARCHAR2(40)     信托类别
+f_info_trustee                   VARCHAR2(100)    受托人
+f_pchredm_pchstartdate           VARCHAR2(8)      上市日期/申购首日
+f_info_redmstartdate             VARCHAR2(8)      日常赎回起始日
+f_info_minbuyamount              NUMBER(20,4)     起点金额
+f_info_expectedrateofreturn      NUMBER(20,4)     预期收益率
+f_info_issuingplace              VARCHAR2(100)    发行地
+f_info_benchmark                 VARCHAR2(500)    业绩比较基准
+f_info_status                    NUMBER(9,0)      存续状态
+f_info_restrictedornot           VARCHAR2(20)     限定类型
+f_info_structuredornot           NUMBER(1,0)      是否结构化产品
+f_info_exchmarket                                             SSE:上交所
+                                 VARCHAR2(10)     交易所
+                                                              SZSE:深交所
+f_info_firstinveststyle          VARCHAR2(20)     投资风格
+f_info_issuedate                 VARCHAR2(8)      发行日期
+f_info_type                      VARCHAR2(20)     基金类型
+f_info_isInitial                 NUMBER(5,0)      是否为初始基金
+f_info_pinyin                    VARCHAR2(10)     简称拼音
+f_info_investscope               VARCHAR2(2000)   投资范围
+f_info_investobject              VARCHAR2(500)    投资目标
+f_info_investconception          VARCHAR2(2000)   投资理念
+f_info_decision_basis            VARCHAR2(2000)   决策依据
+                                                              0：否
+is_indexfund                     NUMBER(5,0)      是否指数基金
+                                                              1：是
+
+                                     精于数据 一直进步                           1
+4.2 中国共同基金基金经理-ChinaMutualFundManager
+
+字段                           字段类型             字段名称              备注
+OBJECT_ID                    VARCHAR2(100)    对象 ID
+f_info_windcode              VARCHAR2(40)     Wind 代码
+ann_date                     VARCHAR2(8)      公告日期
+f_info_fundmanager           VARCHAR2(20)     姓名
+f_info_manager_gender        VARCHAR2(10)     性别
+f_info_manager_birthyear     VARCHAR2(10)     出身年份
+f_info_manager_education     VARCHAR2(20)     学历
+f_info_manager_nationality   VARCHAR2(10)     国籍
+f_info_manager_startdate     VARCHAR2(8)      任职日期
+f_info_manager_leavedate     VARCHAR2(8)      离职日期
+f_info_manager_resume        VARCHAR2(2000)   简历
+f_info_fundmanager_id        VARCHAR2(10)     基金经理 ID
+
+
+4.3 中国分级基金-ChinaGradingFund
+
+字段                           字段类型             字段名称               备注
+OBJECT_ID                    VARCHAR2(100)    对象 ID
+s_info_windcode              VARCHAR2(40)     母基金 Wind 代码
+f_info_feeder_windcode       VARCHAR2(40)     子基金 Wind 代码
+f_info_feeder_typecode       NUMBER(9,0)      子基金类型代码
+f_info_feeder_shareratio     NUMBER(20,4)     子基金份额占比
+f_info_term_typecode         NUMBER(9,0)      存续期类型代码
+f_info_period_ifdiv          NUMBER(1,0)      运作期内是否分红
+f_info_term_iftrans          NUMBER(1,0)      存续期内是否有份额配对转换
+f_info_trans_bgndate         VARCHAR2(8)      份额配对转换起始日期
+f_info_trans_enddate         VARCHAR2(8)      份额配对转换截止日期
+f_info_prefer_ifdis          NUMBER(1,0)      优先份额是否参与超额收益分配
+f_info_prefer_ifadd          NUMBER(1,0)      优先份额约定收益是否得到累计
+
+
+4.4 中国联接基金-ChinaFeederFund
+
+字段                           字段类型             字段名称              备注
+OBJECT_ID                    VARCHAR2(100)    对象 ID
+                                                                基金参照基准
+s_info_windcode              VARCHAR2(40)     被联接基金指数 Wind 代码
+                                                                指数代码
+f_info_feeder_windcode       VARCHAR2(40)     联接基金 Wind 代码
+f_info_windcode              VARCHAR2(40)     被联接基金 Wind 代码
+
+4.5 中国货币市场基金份额结转方式-CMoneyMarketFSCarryOverm
+
+字段                           字段类型             字段名称              备注
+OBJECT_ID                    VARCHAR2(100)    对象 ID
+s_info_windcode              VARCHAR2(40)     基金 Wind 代码
+f_info_IncomeSCarryoverm     VARCHAR2(20)     收益分配份额结转方式
+
+                                  精于数据 一直进步                              2
+                                                  收益分配份额结转日期类
+f_info_IncomeSCarryoverdtcode    NUMBER(9,0)
+                                                  型代码
+
+
+4.6 中国共同基金被动型基金跟踪指数-ChinaMutualFundTrackingIndex
+
+字段                               字段类型             字段名称                备注
+OBJECT_ID                        VARCHAR2(100)    对象 ID
+s_info_windcode                  VARCHAR2(40)     Wind 代码
+s_info_indexwindcode             VARCHAR2(40)     跟踪指数 Wind 代码
+entry_dt                         VARCHAR2(8)      生效日期
+remove_dt                        VARCHAR2(8)      失效日期
+
+
+4.7 中国 Wind 基金分类-ChinaMutualFundSector
+
+字段                               字段类型             字段名称                备注
+OBJECT_ID                        VARCHAR2(100)    对象 ID
+f_info_windcode                  VARCHAR2(40)     Wind 代码
+                                                                      请    关   联   :
+                                                                      AShareIndustr
+s_info_sector                    VARCHAR2(40)     所属板块
+                                                                      iesCode 产 品
+                                                                      查看板块名称
+s_info_sectorentrydt             VARCHAR2(8)      起始日期
+s_info_sectorexitdt              VARCHAR2(8)      截止日期
+cur_sign                         VARCHAR2(10)     最新标志
+
+
+4.8 中国开放式基金费率表-CMFSubredFee
+
+字段                              字段类型             字段名称            备注
+OBJECT_ID                       VARCHAR2(38)     对象 ID
+s_info_windcode                 VARCHAR2(40)     Wind 代码
+ann_date                        VARCHAR2(8)      公告日期
+                                                                 602001000：认购费
+                                                                 率 ；602002000：申
+feetypecode                     NUMBER(9,0)      费率类型代码          购费率 ；
+                                                                 602003000：赎回费
+                                                                 率
+chargeway                       VARCHAR2(20)     收费类型            前端；后端
+amountdownlimit                 NUMBER(20,0)     金额下限
+amountuplimit                   NUMBER(20,0)     金额上限
+holdingperiod_downlimit         NUMBER(20,0)     持有年限下限
+holdingperiod_uplimit           NUMBER(20,0)     持有年限上限
+feeratio                        NUMBER(20,0)     费率
+isuplimitfee                    VARCHAR2(1)      是否上限费率          0：否；1：是
+change_dt                       VARCHAR2(8)      变动日期
+supplementary                   VARCHAR2(800)    费率补充说明
+tradingplace                    VARCHAR2(40)     场所
+tradingplacecode                NUMBER(9,0)      场所代码            场内；场外
+holdingperiodunit               VARCHAR2(20)     持有期限单位
+
+                                     精于数据 一直进步                                         3
+4.9 中国共同基金暂停申购赎回-ChinaMutualFundSuspendPchRedm
+
+字段                       字段类型            字段名称         备注
+OBJECT_ID                VARCHAR2(100)   对象 ID
+s_info_windcode          VARCHAR2(40)    Wind 代码
+f_info_suspchstartdt     VARCHAR2(8)     暂停申购起始日期
+f_info_suspchanndt       VARCHAR2(8)     暂停申购公告日期
+f_info_repchdt           VARCHAR2(8)     恢复申购日期
+f_info_repchanndt        VARCHAR2(8)     恢复申购公告日期
+f_info_purchaseuplimit   NUMBER(20,4)    单日申购上限
+f_info_suspchreason      VARCHAR2(800)   暂停申购原因
+f_info_suspchtype        NUMBER(9,0)     暂停申购类型代码
+
+4.10 中国共同基金业绩比较基准配置-ChinaMutualFundBenchMark
+
+字段                       字段类型            字段名称         备注
+OBJECT_ID                VARCHAR2(100)   对象 ID
+s_info_windcode          VARCHAR2(40)    Wind 代码
+s_info_indexwindcode     VARCHAR2(40)    指数 Wind 代码
+s_info_bgndt             VARCHAR2(8)     起始日期
+s_info_enddt             VARCHAR2(8)     截止日期
+s_info_indexweg          NUMBER(20,4)    指数权重
+s_info_operators         VARCHAR(20)     运算符
+s_info_constant          NUMBER(20,4)    常数
+s_info_aftertaxornot     NUMBER(1,0)     是否税后
+cur_sign                 NUMBER(1,0)     是否最新
+ann_dt                   VARCHAR2(8)     公告日期
+s_info_fxcode            VARCHAR2(40)    汇率 Wind 代码
+s_inc_sequence           NUMBER(2,0)     序号
+
+
+
+4.11 中国共同基金发行-ChinaMutualFundIssue
+
+字段                       字段类型            字段名称         备注
+OBJECT_ID                VARCHAR2(100)   对象 ID
+s_info_windcode          VARCHAR2(40)    Wind 代码
+f_info_chinesename       VARCHAR2(100)   基金中文名称
+f_info_englishname       VARCHAR2(100)   基金英文名称
+f_info_shortname         VARCHAR2(40)    基金中文简称
+f_info_mgrcomp           VARCHAR2(100)   基金管理人
+f_info_custodianbank     VARCHAR2(100)   基金托管人
+                                                      1 契约型封闭
+                                                      式
+f_info_type              NUMBER(9,0)     基金类型
+                                                      2 契约型开放
+                                                      式
+                                                      1 股票型
+f_info_investype         NUMBER(9,0)     基金投资类型
+                                                      2 债券型
+
+                             精于数据 一直进步                          4
+                                                        3 混合型
+                                                        4 货币市场型
+                                                        5 保本型
+f_issue_date            VARCHAR2(8)      发行日期
+f_issue_colperiod       VARCHAR2(10)     设立募集期(月)
+f_issue_maxcolshare     NUMBER(20,4)     设立募集目标(亿份)
+                                         净认购份额-成立条件(亿
+                        NUMBER(20,4)
+f_issue_netpchshare                      份)
+f_issue_netpchnum       NUMBER(20,4)     认购户数-成立条件
+f_info_parvalue         NUMBER(20,4)     基金面值
+f_info_ptmyear          NUMBER(20,4)     存续期(年)
+f_info_manafeeratio     NUMBER(20,4)     管理费率(%)
+f_info_custfeeratio     NUMBER(20,4)     托管费率(%)
+f_info_salefeeratio     NUMBER(20,4)     销售费率(%)
+f_info_setupdate        VARCHAR2(8)      基金成立日期
+f_info_maturitydate     VARCHAR2(8)      基金到期日期
+f_issue_shares          NUMBER(20,4)     发行数量(亿份)
+s_fellow_distor         NUMBER(20,4)     总有效申购户数
+f_info_listdate         VARCHAR2(8)      上市日期
+f_pch_startdate         VARCHAR2(8)      申购起始日期
+f_redm_startdate        VARCHAR2(8)      赎回起始日期
+f_issue_startdateind    VARCHAR2(8)      投资者认购起始日期
+f_issue_enddateind      VARCHAR2(8)      投资者认购终止日期
+f_issue_minamtind       NUMBER(20,4)     认购下限(万元)
+f_issue_maxamtind       NUMBER(20,4)     认购上限(万元)
+f_pchredm_pchminamt     NUMBER(20,4)     每次最低申购金额(万元)
+f_pchredm_redmminamt    NUMBER(20,4)     单笔赎回份额下限(份)
+f_pchredm_hugeredmpro   NUMBER(20,4)     巨额赎回认定比例(%)
+crncy_code              VARCHAR2(10)     货币代码
+
+
+4.12 中国共同基金重大事件-ChinaFundMajorEvent
+
+字段                      字段类型             字段名称           备注
+OBJECT_ID               VARCHAR2(100)    对象 ID
+s_info_windcode         VARCHAR2(40)     Wind 代码
+                                                        代码与内容的
+                                                        对应见附表“基
+s_event_categorycode    NUMBER(9,0)      事件类型代码
+                                                        金事件类型代
+                                                        码表”
+s_event_anncedate       VARCHAR2(8)      披露日期
+s_event_hapdate         VARCHAR2(8)      发生日期
+s_event_expdate         VARCHAR2(8)      失效日期
+s_event_content         VARCHAR2(7000)   事件说明
+s_event_templateid      NUMBER(12,0)     模板 ID
+
+
+4.13 中国共同基金分红- ChinaMFDividend
+
+字段                      字段类型             字段名称           备注
+OBJECT_ID               VARCHAR2(100)    对象 ID
+
+                            精于数据 一直进步                             5
+s_info_windcode          VARCHAR2(40)    Wind 代码
+f_e_bch_dt               VARCHAR2(8)     可分配收益基准日
+f_div_progress           VARCHAR2(10)    方案进度
+cash_dvd_per_sh_tax      NUMBER(20,4)    每股派息(元)
+crncy_code               VARCHAR2(10)    货币代码
+Eqy_record_dt            VARCHAR2(8)     权益登记日
+ex_dt                    VARCHAR2(8)     除息日
+f_div_edexdate           VARCHAR2(8)     除息日(场外)
+pay_dt                   VARCHAR2(8)     派息日
+f_div_paydate            VARCHAR2(8)     派息日(场外)
+f_div_impdate            VARCHAR2(8)     分红实施公告日
+f_sh_bch_y               VARCHAR2(8)     份额基准年度
+f_bch_unit               NUMBER(20,4)    基准基金份额(万份)
+f_ e_apr                 NUMBER(20,4)    可分配收益(元)
+f_ex_div_dt              VARCHAR2(8)     净值除权日
+f_e_apr_amount           NUMBER(20,4)    收益分配金额(元)
+                                         红利再投资份额净值基准
+                         VARCHAR2(8)
+f_reinv_bch_dt                           日
+f_reinv_toac_dt          VARCHAR2(8)     红利再投资到账日
+f_reinv_redeem_dt        VARCHAR2(8)     红利再投资可赎回起始日
+ann_date                 VARCHAR2(8)     公告日期
+f_div_object             VARCHAR2(100)   分配对象
+f_div_ipaydt             VARCHAR2(8)     收益支付日
+
+
+4.14 中国共同基金基金份额拆分与折算-CMFundSplit
+
+字段                       字段类型            字段名称            备注
+OBJECT_ID                VARCHAR2(100)   对象 ID
+s_info_windcode          VARCHAR2(40)    Wind 代码
+f_info_splittype         VARCHAR2(40)    类型
+f_info_splitanndate      VARCHAR2(8)     实施公告日期
+f_info_splitannoecdate   VARCHAR2(8)     实施结果公告日期
+f_info_sharetransdate    VARCHAR2(8)     拆分折算日
+f_info_sharekindate      VARCHAR2(8)     基金份额变更登记日
+f_info_splitinc          NUMBER(20,10)   拆分折算比例
+f_info_split_dt          VARCHAR2(8)     拆分折算场内除权日
+concosinc                NUMBER(20,10)   折算成本基金的比例
+conrelinc                NUMBER(20,10)   折算成关联基金的比例
+
+
+4.15 中国共同基金转型-ChinaMutualFundtransformation
+
+字段                       字段类型            字段名称            备注
+OBJECT_ID                VARCHAR2(100)   对象 ID
+PREWINDCODE              VARCHAR2(40)    转型前基金 Wind 代码
+POSTWINDCODE             VARCHAR2(40)    转型后基金 Wind 代码
+f_info_prename           VARCHAR2(40)    转型前基金简称
+f_info_prefullname       VARCHAR2(100)   转型前基金全称
+f_info_precode           VARCHAR2(10)    转型前基金代码
+f_info_postname          VARCHAR2(40)    转型后基金简称
+
+                             精于数据 一直进步                        6
+f_info_postfullname         VARCHAR2(100)     转型后基金全称
+f_info_postcode             VARCHAR2(10)      转型后基金代码
+f_info_postislist           NUMBER（1,0）       基金封转开后是否上市
+f_info_ctosuspenddate       VARCHAR2(8)       封转开停牌起始日期
+f_info_meetinganndate       VARCHAR2(8)       基金转型会议召开公告日
+                                              期
+f_info_meetingdate          VARCHAR2(8)       基金转型会议日期
+f_info_approvalrate         NUMBER（20,4）      基金转型赞成率
+f_info_resumpdate           VARCHAR2(8)       封转开复牌日期
+f_info_cfundredemcode       VARCHAR2(10)      原封闭式基金持有人赎回
+                                              代码
+f_info_cfundenddate         VARCHAR2(8)       封闭式基金终止上市日期
+f_info_cfundendanndate      VARCHAR2(8)       封闭式基金终止上市公告
+                                              日期
+f_info_tanstype             VARCHAR2(40)      转型类别
+f_unit_pch                  VARCHAR2(20)      集中申购份额
+f_unit_splitshare           VARCHAR2(20)      转型拆分份额
+f_infotanstypecode          VARCHAR2(9)       转型类别代码
+
+
+
+4.16 中国共同基金份额-ChinaMutualFundShare
+
+字段                         字段类型             字段名称        备注
+OBJECT_ID                  VARCHAR2(100)    对象 ID
+f_info_windcode            VARCHAR2(40)     Wind 代码
+change_date                VARCHAR2(8)      变动日期
+                                                        先取”基金合计份额”
+f_unit_total               NUMBER(20,4)     基金总份额
+                                                        若为空,则取基金份额”
+f_info_share               NUMBER(20,4)     流通份额        适用于封闭式基金
+fundshare                  NUMBER(20,6)     基金份额
+f_unit_mergedsharesornot   NUMBER(5,0)      是否为合并数据
+changereason               VARCHAR2(10)     份额变动原因
+fundshare_total            NUMBER(20,6)     基金合计份额
+cur_sign                   NUMBER(5,0)      最新标志
+
+4.17 中国共同基金净值-ChinaMutualFundNAV
+
+字段                          字段类型              字段名称           备注
+OBJECT_ID                   VARCHAR2(100)     对象 ID
+f_info_windcode             VARCHAR2(40)      Wind 代码
+ann_date                    VARCHAR2(8)       公告日期
+price_date                  VARCHAR2(8)       截止日期
+f_nav_unit                  NUMBER(20,4)      单位净值
+f_nav_accumulated           NUMBER(20,4)      累计净值
+f_nav_divaccumulated        NUMBER(20,4)      累计分红
+f_nav_adjfactor             NUMBER(20,6)      复权因子
+crncy_code                  VARCHAR2(10)      货币代码
+
+
+
+
+                                 精于数据 一直进步                            7
+4.18 中国货币市场基金收益-CMoneyMarketFIncome
+
+字段                   字段类型            字段名称          备注
+OBJECT_ID            VARCHAR2(100)   对象 ID
+s_info_windcode      VARCHAR2(40)    Wind 代码
+f_info_bgndate       VARCHAR2(8)     起始日期
+f_info_enddate       VARCHAR2(8)     截止日期
+f_info_unityield     NUMBER(20,5)    每万份基金单位收益
+                                     最近七日收益所折算的年
+f_info_yearlyroe     NUMBER(20,4)
+                                     资产收益率
+ann_date             VARCHAR2(8)     公告日期
+
+
+4.19 中国封闭式基金日行情-ChinaClosedFundEODPrice
+
+字段                   字段类型            字段名称          备注
+OBJECT_ID            VARCHAR2(100)   对象 ID
+s_info_windcode      VARCHAR2(40)    Wind 代码
+trade_dt             VARCHAR2(8)     交易日期
+crncy_code           VARCHAR2(10)    货币代码
+s_dq_preclose        NUMBER(20,4)    昨收盘价(元)
+s_dq_open            NUMBER(20,4)    开盘价(元)
+s_dq_high            NUMBER(20,4)    最高价(元)
+s_dq_low             NUMBER(20,4)    最低价(元)
+s_dq_close           NUMBER(20,4)    收盘价(元)
+s_dq_change          NUMBER(20,4)    涨跌(元)
+s_dq_pctchange       NUMBER(20,4)    涨跌幅(%)
+s_dq_volume          NUMBER(20,4)    成交量(手)
+s_dq_amount          NUMBER(20,4)    成交金额(千元)
+s_dq_adjpreclose     NUMBER(20,4)    复权昨收盘价(元)
+s_dq_adjopen         NUMBER(20,4)    复权开盘价(元)
+s_dq_adjhigh         NUMBER(20,4)    复权最高价(元)
+s_dq_adjlow          NUMBER(20,4)    复权最低价(元)
+s_dq_adjclose        NUMBER(20,4)    复权收盘价(元)
+s_dq_adjfactor       NUMBER(20,6)    复权因子
+
+
+4.20 中国共同基金业绩比较基准行情-ChinaMutualFundBenchmarkEOD
+
+字段                   字段类型            字段名称          备注
+OBJECT_ID            VARCHAR2(100)   对象 ID
+s_info_windcode      VARCHAR2(40)    指数 Wind 代码
+trade_dt             VARCHAR2(8)     交易日期
+s_dq_close           NUMBER(20,8)    收盘价
+s_dq_pctchange       NUMBER(20,8)    涨跌幅(%)
+
+
+4.21 中国共同基金申购赎回情况-ChinaMutualFundPchRedm
+
+字段                   字段类型            字段名称          备注
+OBJECT_ID            VARCHAR2(100)   对象 ID
+
+                         精于数据 一直进步                      8
+s_info_windcode        VARCHAR2(40)    Wind 代码
+f_unit_rpstartdate     VARCHAR2(8)     报告期开始日期
+f_unit_rpenddate       VARCHAR2(8)     报告期结束日期
+f_unit_startshares     NUMBER(20,4)    期初基金总份额(份)
+f_unit_purchase        NUMBER(20,4)    本期基金总申购份额(份)
+f_unit_redemption      NUMBER(20,4)    本期基金总赎回份额(份)
+f_unit_endshares       NUMBER(20,4)    期末基金总份额(份)
+
+
+4.22 中国共同基金场内流通份额-ChinaMutualFundFloatShare
+
+字段                     字段类型            字段名称           备注
+OBJECT_ID              VARCHAR2(100)   对象 ID
+s_info_windcode        VARCHAR2(40)    Wind 代码
+trade_dt               VARCHAR2(8)     交易日期
+f_unit_floatshare      NUMBER(20,4)    场内份额(份)
+
+
+4.23 中国 Wind 基金仓位估算-ChinaMutualFundPosEstimation
+
+字段                     字段类型            字段名称           备注
+OBJECT_ID              VARCHAR2(100)   对象 ID
+s_info_windcode        VARCHAR2(40)    基金 Wind 代码
+f_est_date             VARCHAR2(8)     估算日期
+f_est_largecapweg      NUMBER(20,4)    大市值组合权重
+f_est_midcapweg        NUMBER(20,4)    中市值组合权重
+f_est_smallcapweg      NUMBER(20,4)    小市值组合权重
+f_est_position         NUMBER(20,4)    基金仓位
+f_est_nav              NUMBER(20,4)    估算收盘净值(元)
+
+
+4.24 中国共同基金席位交易-ChinaMutualFundSeatTrading
+
+字段                     字段类型            字段名称           备注
+OBJECT_ID              VARCHAR2(100)   对象 ID
+s_info_windcode        VARCHAR2(40)    Wind 代码
+s_info_reportperiod    VARCHAR2(8)     报告期
+s_info_securname       VARCHAR2(100)   证券公司简称
+f_trade_stockam        NUMBER(20,4)    股票交易金额(元)
+f_trade_stockpro       NUMBER(20,4)    股票交易金额占比(%)
+f_trade_bondam         NUMBER(20,4)    债券交易金额(元)
+f_trade_bondpro        NUMBER(20,4)    债券交易金额占比(%)
+f_trade_repoam         NUMBER(20,4)    回购交易金额(元)
+f_trade_repopro        NUMBER(20,4)    回购交易金额占比(%)
+f_trade_sbam           NUMBER(20,4)    股票债券成交金额(元)
+f_trade_sbpro          NUMBER(20,4)    股票债券交易量占比(%)
+f_trade_warrantam      NUMBER(20,4)    权证交易金额(元)
+f_trade_warrantpro     NUMBER(20,4)    权证交易金额占比(%)
+f_trade_fundam         NUMBER(20,4)    基金交易金额(元)
+f_trade_fundpro        NUMBER(20,4)    基金交易金额占比(%)
+f_commissionam         NUMBER(20,4)    交易佣金(元)
+
+                           精于数据 一直进步                       9
+f_commissionpro           NUMBER(20,4)    交易佣金占比(%)
+crncy_code                VARCHAR2(10)    货币代码
+
+
+4.25 中国共同基金报告期净值表现-ChinaMutualFundRepNAVPer
+
+字段                        字段类型            字段名称          备注
+OB_OBJECT_ID              VARCHAR2(38)    对象 ID
+s_info_windcode           VARCHAR2(40)    Wind 代码
+ann_date                  VARCHAR2(8)     公告日期
+f_info_reportperiod       VARCHAR2(8)     报告期
+                                                        0:自成立至今
+                                                        1:过去 1 个月
+                                                        3:过去 3 个月
+                                                        6:过去 6 个月
+                                                        12:过去 1 年
+                                                        24:过去 2 年
+                                                        36:过去 3 年
+period_code               VARCHAR2(10)    期间代码
+                                                        60:过去 5 年
+                                                        61:第一个保本
+                                                        周期
+                                                        62:第二个保本
+                                                        周期
+                                                        63:自第三个保
+                                                        本周期至今
+f_nav_return              NUMBER(20,4)    净值增长率
+f_nav_stddevreturn        NUMBER(20,4)    净值增长率标准差
+f_nav_benchreturn         NUMBER(20,4)    业绩比较基准收益率
+                                          业绩比较基准收益率标准
+f_nav_benchstddev         NUMBER(20,4)
+                                          差
+f_nav_benchdevreturn      NUMBER(20,4)    净值增长率减基准收益率
+                                          净值增长率标准差减基准
+f_nav_stddevnavbench      NUMBER(20,4)
+                                          收益率标准差
+
+
+
+4.26 中国共同基金业绩表现*-ChinaMFPerformance
+
+字段                        字段类型            字段名称          备注
+OBJECT_ID                 VARCHAR2(100)   对象 ID
+s_info_windcode           VARCHAR2(40)    Wind 代码
+trade_dt                  VARCHAR2(8)     交易日期
+f_avgreturn_thisweek      NUMBER(20,6)    收益率(本周以来)
+f_avgreturn_thismonth     NUMBER(20,6)    收益率(本月以来)
+f_avgreturn_thisquarter   NUMBER(20,6)    收益率(本季以来)
+f_avgreturn_week          NUMBER(20,6)    收益率(一周)
+f_avgreturn_month         NUMBER(20,6)    收益率(一个月)
+f_avgreturn_quarter       NUMBER(20,6)    收益率(三个月)
+f_avgreturn_halfyear      NUMBER(20,6)    收益率(六个月)
+f_avgreturn_thisyear      NUMBER(20,6)    收益率(本年以来)
+f_avgreturn_year          NUMBER(20,6)    收益率(一年)
+
+
+                              精于数据 一直进步                         10
+f_avgreturn_twoyea           NUMBER(20,6)   收益率(两年)
+f_avgreturn_threeyear        NUMBER(20,6)   收益率(三年)
+f_avgreturn_fouryear         NUMBER(20,6)   收益率(四年)
+f_avgreturn_fiveyear         NUMBER(20,6)   收益率(五年)
+f_avgreturn_sixyear          NUMBER(20,6)   收益率(六年)
+f_avgreturn_sincefound       NUMBER(20,6)   收益率(成立以来)
+f_annualyeild                NUMBER(20,6)   年化收益率
+f_trackdev_thisday           NUMBER(20,6)   当天跟踪偏离度
+f_sfreturn_thisyear          NUMBER(20,6)   今年以来同类基金收益率
+                                                          显示名次
+                             NUMBER(20,0)
+f_sfrank_thisyear                           今年以来同类排名      如:12
+f_sfreturn_recentquarter     NUMBER(20,6)   最近三月同类基金收益率
+f_sfrank_recentquarter       NUMBER(20,0)   最近三月同类排名
+f_sfreturn_recenthalfyear    NUMBER(20,6)   最近六月同类基金收益率
+f_sfrank_recenthalfyear      NUMBER(20,0)   最近六月同类排名
+f_sfreturn_recentyear        NUMBER(20,6)   最近一年同类基金收益率
+f_sfrank_recentyear          NUMBER(20,0)   最近一年同类排名
+f_sfreturn_recenttwoyear     NUMBER(20,6)   最近两年同类基金收益率
+f_sfrank_recenttwoyear       NUMBER(20,0)   最近两年同类排名
+f_sfreturn_recentthreeyear   NUMBER(20,6)   最近三年同类基金收益率
+f_sfrank_recentthreeyear     NUMBER(20,0)   最近三年同类排名
+f_sfreturn_recentfiveyear    NUMBER(20,6)   最近五年同类基金收益率
+f_sfrank_recentfiveyear      NUMBER(20,0)   最近五年同类排名
+f_sfreturn_sincefound        NUMBER(20,6)   成立以来同类基金收益率
+f_sfrank_sincefound          NUMBER(20,0)   成立以来同类排名
+f_sfannualyeild              NUMBER(20,6)   同类基金年化收益率
+f_sfrank_annualyeild         NUMBER(20,0)   年化收益率同类排名
+f_stdarddev_halfyear         NUMBER(20,6)   标准差(六个月)
+f_stdarddev_year             NUMBER(20,6)   标准差(一年)
+f_stdarddev_twoyear          NUMBER(20,6)   标准差(两年)
+f_stdarddev_threeyear        NUMBER(20,6)   标准差(三年)
+f_stdarddev_fiveyear         NUMBER(20,6)   标准差(五年)
+f_stdarddev_sincefound       NUMBER(20,6)   标准差(成立以来)
+f_sharpratio_halfyear        NUMBER(20,6)   夏普比率(六个月)
+f_sharpratio_year            NUMBER(20,6)   夏普比率(一年)
+f_sharpratio_twoyear         NUMBER(20,6)   夏普比率(两年)
+f_sharpratio_threeyear       NUMBER(20,6)   夏普比率(三年)
+f_sfreturn_recentweek        NUMBER(20,6)   最近一周同类基金收益率
+f_sfrank_recentweek          NUMBER(20,0)   最近一周同类排名
+f_sfreturn_recentmonth       NUMBER(20,6)   最近一月同类基金收益率
+f_sfrank_recentmonth         NUMBER(20,0)   最近一月同类排名
+f_FundType                   VARCHAR2(50)   基金分类
+f_avgreturn_day              NUMBER(20,6)   收益率(当天)
+                                                          显示名次和统
+                             VARCHAR2(50)                 计数
+f_sfrank_thisyeart                          今年以来同类排名      如：12/100
+f_sfrank_recentquartert      VARCHAR2(50)   最近三月同类排名
+f_sfrank_recenthalfyeart     VARCHAR2(50)   最近六月同类排名
+f_sfrank_recentyeart         VARCHAR2(50)   最近一年同类排名
+
+
+                                 精于数据 一直进步                           11
+f_sfrank_recenttwoyeart     VARCHAR2(50)    最近两年同类排名
+f_sfrank_recentthreeyeart   VARCHAR2(50)    最近三年同类排名
+f_sfrank_recentfiveyeart    VARCHAR2(50)    最近五年同类排名
+f_sfrank_sincefoundt        VARCHAR2(50)    成立以来同类排名
+f_sfrank_annualyeildt       VARCHAR2(50)    年化收益率同类排名
+f_sfrank_recentweekt        VARCHAR2(50)    最近一周同类排名
+f_sfrank_recentmontht       VARCHAR2(50)    最近一月同类排名
+f_beta_6m                   NUMBER(20,8)    BETA(6 月)
+f_beta_1y                   NUMBER(20,8)    BETA(1 年)
+f_beta_2y                   NUMBER(20,8)    BETA(2 年)
+f_beta_3y                   NUMBER(20,8)    BETA(3 年)
+f_alpha_6m                  NUMBER(20,8)    ALPHA(6 月)
+f_alpha_1y                  NUMBER(20,8)    ALPHA(1 年)
+f_alpha_2y                  NUMBER(20,8)    ALPHA(2 年)
+f_alpha_3y                  NUMBER(20,8)    ALPHA(3 年)
+
+4.27 中国基金指数业绩表现*-FindexPerformance
+
+字段                          字段类型            字段名称         备注
+OBJECT_ID                   VARCHAR2(100)   对象 ID
+s_info_windcode             VARCHAR2(40)    Wind 代码
+trade_dt                    VARCHAR2(8)     交易日期
+pct_chg_recent1m            NUMBER(20,6)    最近 1 月涨跌幅
+pct_chg_recent3m            NUMBER(20,6)    最近 3 月涨跌幅
+pct_chg_recent6m            NUMBER(20,6)    最近 6 月涨跌幅
+pct_chg_recent1y            NUMBER(20,6)    最近 1 年涨跌幅
+pct_chg_recent2y            NUMBER(20,6)    最近 2 年涨跌幅
+pct_chg_recent3y            NUMBER(20,6)    最近 3 年涨跌幅
+pct_chg_recent4y            NUMBER(20,6)    最近 4 年涨跌幅
+pct_chg_recent5y            NUMBER(20,6)    最近 5 年涨跌幅
+pct_chg_recent6y            NUMBER(20,6)    最近 6 年涨跌幅
+pct_chg_thisweek            NUMBER(20,6)    本周以来涨跌幅
+pct_chg_thismonth           NUMBER(20,6)    本月以来涨跌幅
+pct_chg_thisquarter         NUMBER(20,6)    本季以来涨跌幅
+pct_chg_thisyear            NUMBER(20,6)    本年以来涨跌幅
+si_pct_chg                  NUMBER(20,6)    发布以来涨跌幅
+annualyeild                 NUMBER(20,6)    年化收益率
+std_dev_6m                  NUMBER(20,6)    6 个月标准差
+std_dev_1y                  NUMBER(20,6)    1 年标准差
+std_dev_2y                  NUMBER(20,6)    2 年标准差
+std_dev_3y                  NUMBER(20,6)    3 年标准差
+sharpratio_6m               NUMBER(20,6)    6 个月夏普比率
+sharpratio_1y               NUMBER(20,6)    1 年夏普比率
+sharpratio_2y               NUMBER(20,6)    2 年夏普比率
+sharpratio_3y               NUMBER(20,6)    3 年夏普比率
+
+
+
+4.28 中国共同基金投资组合---资产配置-ChinaMutualFundAssetPortfolio
+
+
+
+                                精于数据 一直进步                     12
+字段                       字段类型            字段名称           备注
+OBJECT_ID                VARCHAR2(100)   对象 ID
+s_info_windcode          VARCHAR2(40)    Wind 代码
+f_prt_enddate            VARCHAR2(8)     截止日期
+crncy_code               VARCHAR2(10)    货币代码
+f_prt_totalasset         NUMBER(20,4)    资产总值(元)
+f_prt_netasset           NUMBER(20,4)    资产净值(元)
+f_prt_stockvalue         NUMBER(20,4)    持有股票市值(元)
+                                         持有股票市值占资产净值
+f_prt_stocktonav         NUMBER(20,4)
+                                         比例(%)
+                                         指数投资持有股票市值
+f_prt_pasvstkvalue       NUMBER(20,4)
+                                         (元)
+                                         指数投资持有股票市值占
+f_prt_pasvstktonav       NUMBER(20,4)
+                                         资产净值比例(%)
+                                         积极投资持有股票市值
+f_prt_posvstkvalue       NUMBER(20,4)
+                                         (元)
+                                         积极投资持有股票市值占
+f_prt_posvstktonav       NUMBER(20,4)
+                                         资产净值比例(%)
+f_prt_govbond            NUMBER(20,4)    持有国债市值(元)
+                                         持有国债市值占资产净值
+f_prt_govbondtonav       NUMBER(20,4)
+                                         比例(%)
+f_prt_cash               NUMBER(20,4)    持有现金(元)
+                                         持有现金占资产净值比例
+f_prt_cashtonav          NUMBER(20,4)
+                                         (%)
+f_prt_govcashvalue       NUMBER(20,4)    持有国债及现金总值(元)
+                                         持有国债及现金占资产净
+f_prt_govcashtonav       NUMBER(20,4)
+                                         值比例(%)
+                                         持有债券市值(不含国
+f_prt_bdvalue_nogov      NUMBER(20,4)
+                                         债)(元)
+                                         持有债券市值(不含国债)
+f_prt_bdtonav_nogov      NUMBER(20,4)
+                                         占资产净值比例(%)
+f_prt_finanbond          NUMBER(20,4)    持有金融债市值(元)
+                                         持有金融债市值占资产净
+f_prt_finanbondtonav     NUMBER(20,4)
+                                         值比例(%)
+f_prt_covertbond         NUMBER(20,4)    持有可转债市值(元)
+                                         持有可转债市值占资产净
+f_prt_covertbondtonav    NUMBER(20,4)
+                                         值比例(%)
+f_prt_corpbond           NUMBER(20,4)    持有企债市值(元)
+                                         持有企债市值占资产净值
+f_prt_corpbondtonav      NUMBER(20,4)
+                                         比例(%)
+f_prt_bondvalue          NUMBER(20,4)    持有债券市值总计(元)
+                                         持有债券市值总计占资产
+f_prt_bondtonav          NUMBER(20,4)
+                                         净值比例(%)
+f_prt_ctrbankbill        NUMBER(20,4)    持有央行票据市值(元)
+                                         持有央行票据市值占资产
+f_prt_ctrbankbilltonav   NUMBER(20,4)
+                                         净值比例(%)
+f_prt_warrantvalue       NUMBER(20,4)    持有权证市值(元)
+                                         持有权证市值占资产净值
+f_prt_warrantonav        NUMBER(20,4)
+                                         比例(%)
+                                         持有资产支持证券市值
+f_prt_absvalue           NUMBER(20,4)
+                                         (元)
+
+
+                             精于数据 一直进步                       13
+                                         持有资产支持证券占资产
+f_prt_absvaluetonav      NUMBER(20,4)
+                                         净值比例(%)
+                                         持有政策性金融债市值
+f_prt_polifinanbdvalue   NUMBER(20,4)
+                                         (元)
+                                         持有政策性金融债市值占
+f_prt_polifinanbdtonav   NUMBER(20,4)
+                                         资产净值比例(%)
+f_prt_fundvalue          NUMBER(20,4)    持有基金市值(元)
+                                         持有基金市值占资产净值
+f_prt_fundtonav          NUMBER(20,4)
+                                         比例(%)
+                                         持有货币市场工具市值
+f_prt_mmvalue            NUMBER(20,4)
+                                         (元)
+                                         持有货币市场工具市值占
+f_prt_mmtonav            NUMBER(20,4)
+                                         资产净值比例(%)
+f_prt_other              NUMBER(20,4)    持有其他资产(元)
+                                         持有其他资产占资产净值
+f_prt_othertonav         NUMBER(20,4)
+                                         比例(%)
+f_prt_debcrebalance      NUMBER(20,4)    借贷方差额(元)
+                                         投资组合平均剩余期限
+f_mmf_avgptm             NUMBER(20,4)
+                                         (天)
+f_mmf_reverserepo        NUMBER(20,4)    买入返售证券(元)
+f_mmf_repo               NUMBER(20,4)    卖出回购证券(元)
+
+
+4.29 中国共同基金投资组合---行业配置- ChinaMutualFundIndPortfolio
+
+字段                       字段类型            字段名称            备注
+OBJECT_ID                VARCHAR2(100)   对象 ID
+s_info_windcode          VARCHAR2(40)    Wind 代码
+f_prt_enddate            VARCHAR2(8)     截止日期
+s_info_csrcinduscode     VARCHAR2(40)    证监会行业编号
+f_prt_indusvalue         NUMBER(20,4)    持有行业市值(元)
+                                         持有行业市值占基金净值
+                         NUMBER(20,4)
+f_prt_industonav                         比例(%)
+                                         积极投资持有行业市值
+f_prt_indposvalue        NUMBER(20,4)
+                                         (元)
+f_prt_indpospro          NUMBER(20,4)    积极投资持有行业比例(%)
+                                         指数投资持有行业市值
+f_prt_indpassivevalue    NUMBER(20,4)
+                                         (元)
+f_prt_indpassivepro      NUMBER(20,4)    指数投资持有行业比例(%)
+
+
+4.30 中国共同基金投资组合-持股配置-ChinaMutualFundStockPortfolio
+
+字段                       字段类型            字段名称            备注
+OBJECT_ID                VARCHAR2(100)   对象 ID
+s_info_windcode          VARCHAR2(40)    基金 Wind 代码
+f_prt_enddate            VARCHAR2(8)     截止日期
+crncy_code               VARCHAR2(10)    货币代码
+s_info_stockwindcode     VARCHAR2(10)    持有股票 Wind 代码
+f_prt_stkvalue           NUMBER(20,4)    持有股票市值(元)
+f_prt_stkquantity        NUMBER(20,4)    持有股票数量（股）
+f_prt_stkvaluetonav      NUMBER(20,4)    持有股票市值占基金净值
+
+                             精于数据 一直进步                        14
+                                                 比例(%)
+                                                 积极投资持有股票市值
+f_prt_posstkvalue                NUMBER(20,4)
+                                                 (元)
+f_prt_posstkquantity             NUMBER(20,4)    积极投资持有股数（股）
+                                                 积极投资持有股票市值占
+f_prt_posstktonav                NUMBER(20,4)
+                                                 净资产比例(%)
+                                                 指数投资持有股票市值
+f_prt_passtkevalue               NUMBER(20,4)
+                                                 (元)
+f_prt_passtkquantity             NUMBER(20,4)    指数投资持有股数（股）
+                                                 指数投资持有股票市值占
+f_prt_passtktonav                NUMBER(20,4)
+                                                 净资产比例(%)
+ann_date                         VARCHAR2(8)     公告日期
+
+
+4.31 中国共同基金投资组合-持券配置-ChinaMutualFundBondPortfolio
+
+字段                               字段类型            字段名称           备注
+OBJECT_ID                        VARCHAR2(100)   对象 ID
+s_info_windcode                  VARCHAR2(40)    基金 Wind 代码
+f_prt_enddate                    VARCHAR2(8)     截止日期
+crncy_code                       VARCHAR2(10)    货币代码
+s_info_bondwindcode              VARCHAR2(10)    持有债券 Wind 代码
+f_prt_bdvalue                    NUMBER(20,4)    持有债券市值(元)
+f_prt_bdquantity                 NUMBER(20,4)    持有债券数量（张）
+                                                 持有债券市值占基金净值
+                                 NUMBER(20,4)
+f_prt_bdvaluetonav                               比例(%)
+
+
+4.32 中国共同基金 Wind 基金评级-CMFundWindRating
+
+字段                               字段类型            字段名称           备注
+OBJECT_ID                        VARCHAR2(100)   对象 ID
+s_info_windcode                  VARCHAR2(40)    Wind 代码
+rptdate                          VARCHAR2(10)    日期             月份
+starlevel                        NUMBER(20,4)    星级
+f_info_type                      VARCHAR2(80)    基金类型
+rating_interval                  VARCHAR2(40)    评级区间
+
+
+
+4.33 中国券商理财基本资料-ChinaInHouseFundDescription
+
+字段                               字段类型            字段名称           备注
+OBJECT_ID                        VARCHAR2(100)   对象 ID
+f_info_windcode                  VARCHAR2(40)    Wind 代码
+f_info_operation_code            VARCHAR2(40)    业务代码
+f_info_fullname                  VARCHAR2(100)   名称
+f_info_name                      VARCHAR2(100)   简称
+f_info_corp_fundmanagementcomp   VARCHAR2(100)   管理人
+f_info_custodianbank             VARCHAR2(100)   托管人
+f_info_firstinvesttype           VARCHAR2(40)    投资类型
+
+
+                                     精于数据 一直进步                       15
+f_info_setupdate               VARCHAR2(8)      成立日期
+f_info_maturitydate            VARCHAR2(8)      到期日期
+f_issue_totalunit              NUMBER(20,4)     发行份额
+f_info_managementfeeratio      NUMBER(20,4)     管理费
+f_info_custodianfeeratio       NUMBER(20,4)     托管费
+crncy_code                     VARCHAR2(10)     货币代码
+f_info_ptmyear                 NUMBER(20,4)     存续期
+f_issue_oef_startdateinst      VARCHAR2(8)      推广起始日期
+f_issue_oef_dnddateinst        VARCHAR2(8)      推广截止日期
+f_info_parvalue                NUMBER(20,4)     面值
+f_info_trusttype               VARCHAR2(40)     信托类别
+f_info_trustee                 VARCHAR2(100)    受托人
+f_pchredm_pchstartdate         VARCHAR2(8)      上市日期/申购首日
+f_info_redmstartdate           VARCHAR2(8)      日常赎回起始日
+f_info_minbuyamount            NUMBER(20,4)     起点金额
+f_info_expectedrateofreturn    NUMBER(20,4)     预期收益率
+f_info_issuingplace            VARCHAR2(100)    发行地
+f_info_benchmark               VARCHAR2(8)      业绩比较基准
+f_info_status                  NUMBER(9,0)      存续状态
+f_info_restrictedornot         VARCHAR2(20)     限定类型
+f_info_structuredornot         NUMBER(1,0)      是否结构化产品
+f_info_setupscale              NUMBER(20,4)     成立规模
+f_info_effsubscrholederno      NUMBER(20,4)     有效认购户数
+f_info_announceweb             VARCHAR2(200)    信息披露网址
+f_info_targetscale             NUMBER(20,4)     目标规模(亿元)
+f_info_mgr_partake             NUMBER(20,4)     管理人参与金额(万元)
+f_info_rewardtag               NUMBER(5,0)      是否提取业绩报酬
+f_info_investobject            VARCHAR2(600)    投资目标
+f_info_corp_fundmanagementid   VARCHAR2(100)    管理人 ID
+
+
+4.34 中国券商理财基金经理-ChinaInhouseFundManager
+
+字段                             字段类型             字段名称          备注
+OBJECT_ID                      VARCHAR2(100)    对象 ID
+f_info_windcode                VARCHAR2(40)     Wind 代码
+ann_date                       VARCHAR2(8)      公告日期
+f_info_fundmanager             VARCHAR2(20)     姓名
+f_info_manager_gender          VARCHAR2(10)     性别
+f_info_manager_birthyear       VARCHAR2(10)     出身年份
+f_info_manager_education       VARCHAR2(20)     学历
+f_info_manager_nationality     VARCHAR2(10)     国籍
+f_info_manager_startdate       VARCHAR2(8)      任职日期
+f_info_manager_leavedate       VARCHAR2(8)      离职日期
+f_info_position                VARCHAR2(20)     职务
+f_info_manager_resume          VARCHAR2(2000)   简历
+f_info_fundmanager_id          VARCHAR2(10)     基金经理 ID
+
+
+
+
+                                   精于数据 一直进步                       16
+4.35 中国券商理财板块-ChinaInhouseFundSector
+
+字段                       字段类型            字段名称            备注
+OBJECT_ID                VARCHAR2(100)   对象 ID
+f_info_windcode          VARCHAR2(40)    Wind 代码
+s_info_sector            VARCHAR2(40)    所属板块
+s_info_sectorentrydt     VARCHAR2(8)     起始日期
+s_info_sectorexitdt      VARCHAR2(8)     截止日期
+cur_sign                 VARCHAR2(10)    最新标志
+
+
+4.36 中国券商理财份额-ChinaInhouseFundShare
+
+字段                       字段类型            字段名称            备注
+OBJECT_ID                VARCHAR2(100)   对象 ID
+f_info_windcode          VARCHAR2(40)    Wind 代码
+change_date              VARCHAR2(8)     变动日期
+f_unit_total             NUMBER(20,4)    基金总份额
+f_unit_totalpurchase     NUMBER(20,4)    总申购份额(含红利再投资)
+f_unit_totalredemption   NUMBER(20,4)    总赎回份额
+
+
+4.37 中国券商理财净值-ChinaInhouseFundNAV
+
+字段                       字段类型            字段名称            备注
+OBJECT_ID                VARCHAR2(100)   对象 ID
+f_info_windcode          VARCHAR2(40)    Wind 代码
+ann_date                 VARCHAR2(8)     公告日期
+price_date               VARCHAR2(8)     截止日期
+f_nav_unit               NUMBER(20,4)    单位净值
+f_nav_accumulated        NUMBER(20,4)    累计净值
+f_nav_divaccumulated     NUMBER(20,4)    累计分红
+f_nav_adjfactor          NUMBER(20,6)    复权因子
+crncy_code               VARCHAR2(10)    货币代码
+f_nav_adjusted           NUMBER(20,8)    复权单位净值
+
+
+4.38 中国券商集合理财分红- ChinaInhouseFundDividend
+
+字段                       字段类型            字段名称            备注
+OBJECT_ID                VARCHAR2(100)   对象 ID
+s_info_windcode          VARCHAR2(40)    Wind 代码
+Eqy_record_dt            VARCHAR2(8)     权益登记日
+ex_dt                    VARCHAR2(8)     除息日
+dvd_payout_dt            VARCHAR2(8)     红利发放日
+f_ten_sp_div             NUMBER(20,4)    每 10 份集合计划分红额
+f_info_splitdate         VARCHAR2(8)     份额拆分日
+f_info_splitinc          NUMBER(20,8)    份额拆分比例
+
+
+
+
+                             精于数据 一直进步                        17
+4.39 中国私募基金基本资料-ChinaHedgeFundDescription
+
+字段                               字段类型            字段名称        备注
+OBJECT_ID                        VARCHAR2(100)   对象 ID
+f_info_windcode                  VARCHAR2(40)    Wind 代码
+f_info_fullname                  VARCHAR2(100)   名称
+f_info_name                      VARCHAR2(100)   简称
+f_info_corp_fundmanagementcomp   VARCHAR2(100)   管理人
+f_info_custodianbank             VARCHAR2(100)   托管人
+f_info_firstinvesttype           VARCHAR2(40)    投资类型
+f_info_setupdate                 VARCHAR2(8)     成立日期
+f_info_maturitydate              VARCHAR2(8)     到期日期
+f_issue_totalunit                NUMBER(20,4)    发行份额
+f_info_managementfeeratio        NUMBER(20,4)    管理费
+f_info_custodianfeeratio         NUMBER(20,4)    托管费
+crncy_code                       VARCHAR2(10)    货币代码
+f_info_ptmyear                   NUMBER(20,4)    存续期
+f_issue_oef_startdateinst        VARCHAR2(8)     推广起始日期
+f_issue_oef_dnddateinst          VARCHAR2(8)     推广截止日期
+f_info_parvalue                  NUMBER(20,4)    面值
+                                                             私募:证券投资
+                                                             信托(广义)
+f_info_trusttype                 VARCHAR2(40)    信托类别        信托:不等于
+                                                             证券投资信
+                                                             托(广义)
+f_info_trustee                   VARCHAR2(100)   受托人
+f_pchredm_pchstartdate           VARCHAR2(8)     上市日期/申购首日
+f_info_redmstartdate             VARCHAR2(8)     日常赎回起始日
+f_info_minbuyamount              NUMBER(20,4)    起点金额
+f_info_expectedrateofreturn      NUMBER(20,4)    预期收益率
+f_info_issuingplace              VARCHAR2(100)   发行地
+f_info_benchmark                 VARCHAR2(8)     业绩比较基准
+f_info_status                    NUMBER(9,0)     存续状态
+f_info_restrictedornot           VARCHAR2(20)    限定类型
+f_info_structuredornot           NUMBER(1,0)     是否结构化产品
+f_info_investscope               VARCHAR2(500)   投资范围
+
+
+4.40 中国私募基金基金经理-ChinaHedgeFundManager
+
+字段                               字段类型            字段名称        备注
+OBJECT_ID                        VARCHAR2(100)   对象 ID
+f_info_windcode                  VARCHAR2(40)    Wind 代码
+ann_date                         VARCHAR2(8)     公告日期
+f_info_fundmanager               VARCHAR2(20)    姓名
+f_info_manager_gender            VARCHAR2(10)    性别
+f_info_manager_birthyear         VARCHAR2(10)    出身年份
+f_info_manager_education         VARCHAR2(20)    学历
+f_info_manager_nationality       VARCHAR2(10)    国籍
+f_info_manager_startdate         VARCHAR2(8)     任职日期
+
+                                     精于数据 一直进步                     18
+f_info_manager_leavedate   VARCHAR2(8)     离职日期
+                                                         623001001 ： 公
+                                                         募派
+                                                         623001002 ： 券
+                                                         商派
+                                                         623001003 ： 媒
+f_info_manager_type        NUMBER(9,0)     所属派系
+                                                         体派
+                                                         623001004 ： 民
+                                                         间派
+                                                         623001005 ： 其
+                                                         他金融机构派
+f_info_manager_id          VARCHAR2(10)    基金经理 ID
+
+
+4.41 中国私募基金板块-ChinaHedgeFundSector
+
+字段                         字段类型            字段名称          备注
+OBJECT_ID                  VARCHAR2(100)   对象 ID
+f_info_windcode            VARCHAR2(40)    Wind 代码
+s_info_sector              VARCHAR2(40)    所属板块
+s_info_sectorentrydt       VARCHAR2(8)     起始日期
+s_info_sectorexitdt        VARCHAR2(8)     截止日期
+cur_sign                   VARCHAR2(10)    最新标志
+
+
+4.42 中国私募基金业绩表现*-ChinaHedgeFundPerformance
+
+字段                         字段类型            字段名称          备注
+OBJECT_ID                  VARCHAR2(100)   对象 ID
+s_info_windcode            VARCHAR2(40)    Wind 代码
+trade_dt                   VARCHAR2(8)     交易日期
+f_avgreturn_thisweek       NUMBER(20,6)    收益率(本周以来)
+f_avgreturn_thismonth      NUMBER(20,6)    收益率(本月以来)
+f_avgreturn_thisquarter    NUMBER(20,6)    收益率(本季以来)
+f_avgreturn_week           NUMBER(20,6)    收益率(一周)
+f_avgreturn_month          NUMBER(20,6)    收益率(一个月)
+f_avgreturn_quarter        NUMBER(20,6)    收益率(三个月)
+f_avgreturn_halfyear       NUMBER(20,6)    收益率(六个月)
+f_avgreturn_thisyear       NUMBER(20,6)    收益率(本年以来)
+f_avgreturn_year           NUMBER(20,6)    收益率(一年)
+f_avgreturn_twoyea         NUMBER(20,6)    收益率(两年)
+f_avgreturn_threeyear      NUMBER(20,6)    收益率(三年)
+f_avgreturn_fouryear       NUMBER(20,6)    收益率(四年)
+f_avgreturn_fiveyear       NUMBER(20,6)    收益率(五年)
+f_avgreturn_sixyear        NUMBER(20,6)    收益率(六年)
+f_avgreturn_sincefound     NUMBER(20,6)    收益率(成立以来)
+f_annualyeild              NUMBER(20,6)    年化收益率
+f_trackdev_thisday         NUMBER(20,6)    当天跟踪偏离度
+f_sfreturn_thisyear        NUMBER(20,6)    今年以来同类基金收益率
+                                                         显示名次
+f_sfrank_thisyear          NUMBER(20,0)    今年以来同类排名
+                                                         如:12
+
+
+                               精于数据 一直进步                             19
+f_sfreturn_recentquarter     NUMBER(20,6)   最近三月同类基金收益率
+f_sfrank_recentquarter       NUMBER(20,0)   最近三月同类排名
+f_sfreturn_recenthalfyear    NUMBER(20,6)   最近六月同类基金收益率
+f_sfrank_recenthalfyear      NUMBER(20,0)   最近六月同类排名
+f_sfreturn_recentyear        NUMBER(20,6)   最近一年同类基金收益率
+f_sfrank_recentyear          NUMBER(20,0)   最近一年同类排名
+f_sfreturn_recenttwoyear     NUMBER(20,6)   最近两年同类基金收益率
+f_sfrank_recenttwoyear       NUMBER(20,0)   最近两年同类排名
+f_sfreturn_recentthreeyear   NUMBER(20,6)   最近三年同类基金收益率
+f_sfrank_recentthreeyear     NUMBER(20,0)   最近三年同类排名
+f_sfreturn_recentfiveyear    NUMBER(20,6)   最近五年同类基金收益率
+f_sfrank_recentfiveyear      NUMBER(20,0)   最近五年同类排名
+f_sfreturn_sincefound        NUMBER(20,6)   成立以来同类基金收益率
+f_sfrank_sincefound          NUMBER(20,0)   成立以来同类排名
+f_sfannualyeild              NUMBER(20,6)   同类基金年化收益率
+f_sfrank_annualyeild         NUMBER(20,0)   年化收益率同类排名
+f_stdarddev_halfyear         NUMBER(20,6)   标准差(六个月)
+f_stdarddev_year             NUMBER(20,6)   标准差(一年)
+f_stdarddev_twoyear          NUMBER(20,6)   标准差(两年)
+f_stdarddev_threeyear        NUMBER(20,6)   标准差(三年)
+f_stdarddev_fiveyear         NUMBER(20,6)   标准差(五年)
+f_stdarddev_sincefound       NUMBER(20,6)   标准差(成立以来)
+f_sharpratio_halfyear        NUMBER(20,6)   夏普比率(六个月)
+f_sharpratio_year            NUMBER(20,6)   夏普比率(一年)
+f_sharpratio_twoyear         NUMBER(20,6)   夏普比率(两年)
+f_sharpratio_threeyear       NUMBER(20,6)   夏普比率(三年)
+f_sfreturn_recentweek        NUMBER(20,6)   最近一周同类基金收益率
+f_sfrank_recentweek          NUMBER(20,0)   最近一周同类排名
+f_sfreturn_recentmonth       NUMBER(20,6)   最近一月同类基金收益率
+f_sfrank_recentmonth         NUMBER(20,0)   最近一月同类排名
+f_FundType                   VARCHAR2(50)   基金分类
+f_avgreturn_day              NUMBER(20,6)   收益率(当天)
+                                                          显示名次和统
+f_sfrank_thisyeart           VARCHAR2(50)   今年以来同类排名      计数
+                                                          如：12/100
+f_sfrank_recentquartert      VARCHAR2(50)   最近三月同类排名
+f_sfrank_recenthalfyeart     VARCHAR2(50)   最近六月同类排名
+f_sfrank_recentyeart         VARCHAR2(50)   最近一年同类排名
+f_sfrank_recenttwoyeart      VARCHAR2(50)   最近两年同类排名
+f_sfrank_recentthreeyeart    VARCHAR2(50)   最近三年同类排名
+f_sfrank_recentfiveyeart     VARCHAR2(50)   最近五年同类排名
+f_sfrank_sincefoundt         VARCHAR2(50)   成立以来同类排名
+f_sfrank_annualyeildt        VARCHAR2(50)   年化收益率同类排名
+f_sfrank_recentweekt         VARCHAR2(50)   最近一周同类排名
+f_sfrank_recentmontht        VARCHAR2(50)   最近一月同类排名
+
+
+4.43 中国私募基金净值-ChinaHedgeFundNAV
+
+字段                           字段类型           字段名称          备注
+
+                                 精于数据 一直进步                       20
+OBJECT_ID              VARCHAR2(100)   对象 ID
+f_info_windcode        VARCHAR2(40)    Wind 代码
+ann_date               VARCHAR2(8)     公告日期
+price_date             VARCHAR2(8)     截止日期
+f_nav_unit             NUMBER(20,4)    单位净值
+f_nav_accumulated      NUMBER(20,4)    累计净值
+f_nav_divaccumulated   NUMBER(20,4)    累计分红
+f_nav_adjfactor        NUMBER(20,6)    复权因子
+crncy_code             VARCHAR2(10)    货币代码
+
+
+4.44 中国银行理财产品基本资料-ChinaBWMDesc
+
+字段                     字段类型            字段名称      备注
+object_id              VARCHAR2(100)   对象 ID
+s_info_windcode        VARCHAR2(40)    Wind 代码
+fullname               VARCHAR2(200)   产品名称
+issuername             VARCHAR2(80)    发行人
+managementcomp         VARCHAR2(200)   管理人
+custodianbank          VARCHAR2(100)   托管人
+issuingplace           VARCHAR2(400)   发售地区
+issueobject            VARCHAR2(40)    发行对象
+purchasechannels       VARCHAR2(40)    购买渠道
+paymenttype            VARCHAR2(80)    付息方式
+returntype             VARCHAR2(40)    收益类型
+                                                 1:股票
+                                                 2:基金
+                                                 3:债券
+                                                 4:信贷资产
+                                                 5:期货
+                                                 6:商品
+                                                 7:金融衍生品
+investfield            VARCHAR2(100)   基础资产
+                                                 8:指数
+                                                 9:利率
+                                                 10:汇率
+                                                 11:信托
+                                                 12:信用
+                                                 13:其他
+                                                 14:票据
+businessmodel          VARCHAR2(40)    业务模式
+                                                 1:股票
+                                                 2:基金
+                                                 3:债券
+                                                 4:信贷资产
+                                                 5:期货
+underlying             VARCHAR2(100)   挂钩标的      6:商品
+                                                 7:金融衍生品
+                                                 8:指数
+                                                 9:利率
+                                                 10:汇率
+                                                 11:信托
+
+
+                           精于数据 一直进步                       21
+                                                        12:信用
+                                                        13:其他
+                                                        14:票据
+purchasernum            NUMBER(20,4)     购买人数
+structure               VARCHAR2(40)     产品结构
+principalratio          NUMBER(5,0)      保本比例
+pledgeisnot             NUMBER(1,0)      是否可质押
+crncy_code              VARCHAR2(40)     币种
+plan_amt_min            NUMBER(20,4)     计划募资金额下限(亿元)
+plan_amt_max            NUMBER(20,4)     计划募资金额上限(亿元)
+entstart_amt            NUMBER(20,4)     委托起始金额
+act_amt                 NUMBER(20,4)     销售规模(亿元)
+salestartdate           VARCHAR2(8)      销售起始日
+saleenddate             VARCHAR2(8)      销售截止日
+incomestartdate         VARCHAR2(8)      收益起始日
+incomeenddate           VARCHAR2(8)      收益到期日
+effincomeenddate        VARCHAR2(8)      收益实际到期日
+commission              NUMBER(20,4)     委托期(天)
+effcommission           NUMBER(20,4)     实际委托期(天)
+expyield_max            NUMBER(20,4)     预期收益率上限
+expyidld_min            NUMBER(20,4)     预期收益率下限
+expyearyield_max        NUMBER(20,4)     预期年化收益率上限
+expyearyield_min        NUMBER(20,4)     预期年化收益率下限
+effyield                NUMBER(20,4)     实际收益率
+effyearyield            NUMBER(20,4)     实际年化收益率
+capyield                NUMBER(20,4)     封顶收益率
+YieldDescription        VARCHAR2(3600)   收益率说明
+DePeDescription         VARCHAR2(2800)   委托期说明
+FeeDescription          VARCHAR2(2000)   费用说明
+ProductIntroduction     VARCHAR2(4000)   产品简介
+ManagementFee           NUMBER(20,4)     管理费率           %
+CustodianFee            NUMBER(20,4)     托管费率           %
+SubscriptionFee         NUMBER(20,4)     认购费率           %
+RedemptionFee           NUMBER(20,4)     赎回费率           %
+PurchaseChannel         VARCHAR2(40)     购买渠道
+f_info_operation_code   VARCHAR2(100)    业务代码
+
+
+4.45 中国银行理财产品收益率曲线- ChinaBWMCurve
+
+字段                      字段类型             字段名称           备注
+object_id               VARCHAR2(100)    对象 ID
+trade_dt                VARCHAR2(8)      日期
+code                    NUMBER(9,0)      理财产品收益率曲线代码
+name                    VARCHAR2(80)     曲线名称
+term                    VARCHAR2(20)     曲线期限
+yield                   NUMBER(20,4)     预期平均年收益率(%)
+issuername              VARCHAR2(80)     发行银行
+crncy_code              VARCHAR2(40)     币种
+
+                            精于数据 一直进步                           22
+ 4.46 QFII 基本资料-QFIIDescription
+
+ 字段                       字段类型               字段名称       备注
+ OB_OBJECT_ID             VARCHAR2(38)       对象 id
+ f_info_compname          VARCHAR2(100)      公司名称       QFII 机构名称
+ f_info_compcode          VARCHAR2(10)       公司 ID      QFII 机构 ID
+ trustee_name             VARCHAR2(100)      托管行名称
+ trustee_id               VARCHAR2(100)      托管行 ID
+ custody_secur_compname   VARCHAR2(100)      托管券商名称
+ custody_secur_compid     VARCHAR2(200)      托管券商 ID
+ approval_date            VARCHAR2(8)        资格获准日期
+ approval_enddate         VARCHAR2(8)        资格终止日期
+ approval_date_first      VARCHAR2(8)        首次额度获准日期
+ approval_date_account    VARCHAR2(8)        帐户获准日期
+ ann_date                 VARCHAR2(8)        信息披露日期
+
+
+ 4.47 QFII 额度变动-QFIIQuotaChange
+
+ 字段                       字段类型               字段名称       备注
+ OB_OBJECT_ID             VARCHAR2(38)       对象 id
+ f_info_compname          VARCHAR2(100)      公司名称
+ f_info_compcode          VARCHAR2(10)       公司 ID
+ invest_amount            NUMBER(20,4)       投资额度       单位:亿
+ change_dt                VARCHAR2(8)        变动日期
+                                                        CNY:人民币
+ crncy_code               VARCHAR2(10)       货币代码
+                                                        USD：美元
+                                                        266000006：
+                                                        QFII
+ type                     NUMBER(9,0)        类型代码
+                                                        266000089：
+                                                        RQFII
+
+
+
+
+附 1： 基金事件类型代码表
+ 事件名称                                   事件类型代码
+ 基金发行公告                                 204030001
+ 基金发行                                   204030002
+ 个人投资者开始认购                              204030003
+ 个人投资者终止认购                              204030004
+ 机构投资者开始认购                              204030005
+ 机构投资者终止认购                              204030006
+ 提前结束募集                                 204030007
+ 开始托管                                   204030008
+ 终止托管                                   204030009
+ 开始网上现金认购                               204030010
+
+                              精于数据 一直进步                              23
+终止网上现金认购            204030011
+开始网下现金认购            204030012
+终止网下现金认购            204030013
+开始网下股票认购            204030014
+终止网下股票认购            204030015
+基金成立公告              204030016
+基金成立                204030017
+基金到期                204030018
+ETF 基金上市公告          204030019
+ETF 基金上市            204030020
+LOF 基金上市            204030021
+封闭式基金上市             204030022
+基金终止上市              204030023
+基金分红预告              204031001
+基金权益登记              204031002
+基金除息                204031003
+基金红利分配              204031004
+分红实施公告              204031005
+净值除权                204031006
+收益支付                204031007
+收益结转基金份额            204031008
+收益结转的基金份额开始赎回       204031009
+基金拆分实施公告            204031010
+基金份额拆分折算            204031011
+基金拆分实施结果公告          204031012
+基金经理变更公告            204032001
+新聘基金经理              204032002
+基金经理离职              204032003
+基金名称变更              204032004
+披露基金定期报告            204032005
+Wind 评级变动           204032006
+晨星评级变动              204032007
+银河评级变动              204032008
+理柏评级变动              204032009
+基金停牌                204033001
+开放日常申购公告            204033002
+开放日常申购              204033003
+开放日常赎回公告            204033004
+开放日常赎回              204033005
+暂停申购公告              204033006
+开始暂停申购              204033007
+恢复申购公告              204033008
+开始恢复申购              204033009
+开始代销                204033010
+终止代销                204033011
+开始定投                204033012
+终止定投                204033013
+
+                精于数据 一直进步       24
+费率优惠开始            204033014
+费率优惠终止            204033015
+基金转型会议召开公告        204034001
+开始封转开停牌           204034002
+基金转型会议            204034003
+基金转型会议决议          204034004
+封转开复牌             204034005
+封闭式基金终止上市公告       204034006
+封闭式基金终止上市         204034007
+集合理财销售起始日期        204041001
+集合理财销售截止日期        204041002
+集合理财成立            204041003
+集合理财到期            204041004
+集合理财分红            204041005
+集合理财份额拆分          204041006
+新聘投资经理/助理         204041007
+投资经理/助理离职         204041008
+
+
+
+
+              精于数据 一直进步       25
+5   公司介绍
+
+  上海万得信息技术股份有限公司（Wind 资讯）是中国大陆领先的金融数据、信息和软
+件服务企业，总部位于上海陆家嘴金融中心，在香港、北京、深圳、成都、沈阳、武汉等地
+设有分支机构和销售服务中心。Wind 资讯服务过的证券、基金、保险、银行、投资公司等
+金融企业超过 1500 家，包括中国排名前 50 名的证券公司、最大的保险公司、最大的证券
+研究所、最早的基金公司以及四大国有商业银行等金融龙头企业。
+
+  在金融财经数据领域，Wind 资讯已建成国内最完整、最准确的以金融证券数据为核心
+的一流大型金融工程和财经数据仓库，数据内容涵盖股票、基金、债券、外汇、保险、期货、
+金融衍生品、现货交易、宏观经济、财经新闻等领域。
+
+  针对专业投资机构、研究机构、个人投资者、金融学术机构、金融监管机构等客户不同
+的需求，Wind 资讯开发了一系列围绕信息检索、数据提取、投资组合管理应用等领域的专
+业分析软件与应用工具。用户可以通过 Wind 资讯金融终端在线使用我们提供的全方位金融
+信息和服务。
+
+  我们同样为金融机构提供个性化的解决方案，包含投资管理、数量化金融研发、在线证
+券电子商务、金融信息整合等产品开发和服务。
+
+
+
+
+                  精于数据 一直进步                 1
+     The World’s Leading Provider of
+   Chinese Financial Data and Solutions
+
+
+
+
+                     上海万得信息技术股份有限公司
+                     Shanghai Wind Information Co., Ltd.
+                     地      址: 上海市浦东新区福山路 33 号
+                     建工大厦 9 楼
+                     邮编 Zip: 200120
+                     电话 Tel: (8621) 6888 2280
+                     传真 Fax: (8621) 6888 2281
+                     Email: DFSupport@wind.com.cn
+                     http://www.wind.com.cn
+
+
+
+
+由于本文档含有具体的与技术、业务相关的专有信息，文中涉及的所有资料必须
+严格保密。贵公司作为我方授权客户，需承诺绝不向第三方透露本文档所有内容。
+

@@ -1,0 +1,64 @@
+tiers:
+  S:
+    name: 用户指定原始材料
+    allowed_use:
+      - 核心复刻依据
+      - 数据字段依据
+      - 参数证据
+    examples:
+      - G:/subject/main/database/database.db
+      - G:/subject/main/trade/trade.ipynb
+      - 用户上传 PDF/docx/ipynb
+  A:
+    name: 权威券商金工与资配报告
+    allowed_use:
+      - 模型结构依据
+      - 策略流程依据
+      - 参数依据
+    examples:
+      - 华泰金工 GPT 因子工厂
+      - 华泰金工 GPT-Kline
+      - 华泰金工 PortfolioNet
+      - 国信 AI 赋能资产配置
+      - 国金大模型赋能投研
+  B:
+    name: 稳定金融数据 API 与官方数据
+    allowed_use:
+      - 行情
+      - 财务
+      - 宏观
+      - 指数和基金
+      - 缺口校验
+    examples:
+      - Tushare
+      - AKShare
+      - BaoStock
+      - iFind
+      - CSMAR
+      - PPMData
+  C:
+    name: 工程参考项目
+    allowed_use:
+      - Agent 架构
+      - RAG/MCP 工作流
+      - 自动实验管理
+    examples:
+      - Microsoft Qlib
+      - Microsoft RD-Agent
+      - Model Context Protocol servers
+      - RAGFlow
+      - MinerU
+      - TradingAgents
+  D:
+    name: 普通网页与新闻媒体
+    allowed_use:
+      - 背景线索
+      - 新闻补充
+      - 非核心验证
+
+rules:
+  no_secret_plaintext: true
+  require_evidence_for_parameters: true
+  require_user_approval_between_agents: true
+  paid_api_default_mode: sample_probe_only
+

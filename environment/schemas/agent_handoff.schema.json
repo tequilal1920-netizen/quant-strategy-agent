@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentHandoff",
+  "type": "object",
+  "required": [
+    "run_id",
+    "from_agent",
+    "to_agent",
+    "status",
+    "artifacts",
+    "user_review_required"
+  ],
+  "properties": {
+    "run_id": {"type": "string"},
+    "from_agent": {"type": "string"},
+    "to_agent": {"type": "string"},
+    "status": {
+      "type": "string",
+      "enum": ["draft", "waiting_user_review", "approved", "rejected", "blocked"]
+    },
+    "summary": {"type": "string"},
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "kind", "description"],
+        "properties": {
+          "path": {"type": "string"},
+          "kind": {"type": "string"},
+          "description": {"type": "string"}
+        }
+      }
+    },
+    "open_questions": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "user_review_required": {"type": "boolean"},
+    "allowed_next_actions": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  }
+}
+
