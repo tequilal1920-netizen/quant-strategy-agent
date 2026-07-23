@@ -30,18 +30,17 @@
 - 重组前 Git 标签：`backup/ui-before-redesign-20260723`
 - 公开仓库目标：`tequilal1920-netizen/quant-strategy-agent`
 
-## GitHub 发布阻塞
+## GitHub 公开发布
 
-- 公开仓库已存在但仍为空；没有远端分支或文件被创建。
-- 已对当前源码和历史执行敏感信息扫描，并构建通过检查的 389 文件、约 37.27MB 的无历史源码快照；Office/PDF、数据库、输出、`copy/` 和真实凭据均未包含，单文件均小于 50MB。
-- 用户已完成 GitHub CLI 浏览器授权，`gh auth status` 通过，登录账号为 `tequilal1920-netizen`；GitHub 专用凭据助手已经配置，授权令牌未被读取、显示或写入项目文件。
-- 最新公开根快照审计为 389 文件、37.26MiB、父提交 0；高置信度密钥、旧账号、意外密码、数据库/Office/PDF/ZIP/输出/`copy/`、50MB 以上文件均为 0。`database/README.md` 仅为空数据库目录说明。
+- 公开仓库 `tequilal1920-netizen/quant-strategy-agent` 已建立默认 `main`，无历史根提交为 `cb7989cbd66325597e57ced2eeea46f1dc1bdcfc`。
+- 远端验收为 389 个 blob；8 个主模型、8 个 Skill 及其 `SKILL.md`、`agents/openai.yaml`、`references/module-map.md` 全部存在，缺失项 0。
+- 数据库、Office/PDF/ZIP、输出、`copy/`、真实凭据和 50MB 以上文件均未发布；禁传远端路径 0。`database/README.md` 仅为空数据库目录说明。
+- GitHub CLI 浏览器授权账号为 `tequilal1920-netizen`；授权令牌未被读取、显示或写入项目文件。
 - 本地与远端部署 ZIP、上传器日志和临时公开仓库已经删除；r15 回滚目录和 r16.3 正式发布目录保留。
 
 ## 剩余动作
 
-- 将已审查的无历史根快照发布到公开仓库并验证 8 个主模型/Skill 路径；公开访问确认前不得把 `MODULE.json` 的 `github_status` 改为 `published`。
-- 发布成功后核验公开仓库与 8 个主模型/Skill 路径，再同步更新本状态文件。
+- 本轮发布无剩余动作；后续新增源码必须重新执行敏感信息、禁传路径、模型/Skill 路径和公网功能回归。
 
 ## 约束
 

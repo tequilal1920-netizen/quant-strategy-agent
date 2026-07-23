@@ -5,7 +5,7 @@
     "local_path":  "model/research_home",
     "skill_path":  "skill/research-home",
     "github_url":  "https://github.com/tequilal1920-netizen/quant-strategy-agent/tree/main/model/research_home",
-    "github_status":  "ready_to_publish",
+    "github_status":  "published",
     "components":  [
                        "data_dashboard",
                        "asset_allocation",

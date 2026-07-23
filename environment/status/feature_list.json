@@ -53,8 +53,8 @@
     },
     {
       "id": "github-publication",
-      "status": "in_progress",
-      "verification": "GitHub CLI browser authorization completed successfully for tequilal1920-netizen and the GitHub-specific credential helper is configured without exposing the token; the sanitized 389-file 37.26MiB parentless snapshot passed the final audit and is ready for the first push and public verification"
+      "status": "passed",
+      "verification": "public main root commit cb7989cbd66325597e57ced2eeea46f1dc1bdcfc contains exactly 389 blobs; the repository is public, default branch is main, all 8 primary models and 8 skills are present, and forbidden published paths are zero"
     }
   ]
 }

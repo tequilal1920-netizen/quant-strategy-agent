@@ -1,6 +1,6 @@
 # 会话交接
 
-当前生产版本为 `2026.07.23-research-workspace-r16.3`，K 线模型为 `9.0-cohort-wyckoff-evolution`。公网统一入口、账号迁移、27 个二级页面、51 个页内功能、8 个一级 Skill 和文件清理均已完成并验证。GitHub CLI 浏览器授权已成功完成，当前正在把无历史、已审查的源码快照发布到公开仓库 `tequilal1920-netizen/quant-strategy-agent`。
+当前生产版本为 `2026.07.23-research-workspace-r16.3`，K 线模型为 `9.0-cohort-wyckoff-evolution`。公网统一入口、账号迁移、27 个二级页面、51 个页内功能、8 个一级 Skill、文件清理和 GitHub 公开发布均已完成并验证。公开仓库为 `tequilal1920-netizen/quant-strategy-agent`，默认分支 `main`。
 
 ## 已验证状态
 
@@ -11,6 +11,7 @@
 - 浏览器：27/27 页面、51/51 页内功能；控制台错误 0、页面错误 0、溢出 0。
 - 回归：统一入口 7/7、资产配置 16/16、组合优化 5/5、行业合同 31 行业/248 字段、全量 Python 编译、3 个 JavaScript 文件和 7 个 PowerShell 脚本解析通过。
 - Skill：8/8 通过官方 `quick_validate.py`。
+- GitHub：公开 `main` 根提交 `cb7989cbd66325597e57ced2eeea46f1dc1bdcfc`；389 个 blob，8 个主模型和 8 个 Skill 全部存在，禁传路径 0。
 - 生产凭据已按用户要求迁移，现有内容和任务状态不变；私密值未写入仓库。
 
 ## 文件约束
@@ -22,8 +23,7 @@
 - 数据库、输出、缓存、私密环境和部署 ZIP 不得提交。
 - 本地与远端部署 ZIP、上传器日志及临时发布仓库均已删除；r15/r16.3 正式发布和回滚目录保留。
 
-## 下一步
+## 后续维护
 
-1. 使用已验证的 GitHub CLI 登录发布无历史源码快照，并验证公开仓库文件结构。
-2. 只发布已通过检查的当前源码快照：389 个文件、37.26MiB、父提交 0，不含 Git 历史、Office/PDF、数据库、输出、`copy/`、ZIP 或真实凭据。
-3. 公开访问仓库与 8 个主模型/Skill 路径验证成功后，才把全部 `MODULE.json` 的 `github_status` 从 `ready_to_publish` 更新为 `published`，并同步更新状态文件。
+1. 新增或修改源码后重新执行敏感信息、禁传路径、模型/Skill 路径和公网功能回归。
+2. 数据库、正式研究文档、`copy/`、输出、缓存和真实凭据继续只保留在本地，不进入公开仓库。
