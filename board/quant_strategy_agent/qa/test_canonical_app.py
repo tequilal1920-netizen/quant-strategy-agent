@@ -47,6 +47,8 @@ class CanonicalAppTest(unittest.TestCase):
         for asset in (
             "ui_unified.css",
             "app.js",
+            "ai_monitor/js/core.js",
+            "ai_monitor/js/shell.js",
             "index_enhancement.js",
             "rotation_module.js",
             "factor_lab.js",
@@ -60,6 +62,13 @@ class CanonicalAppTest(unittest.TestCase):
             "/static/css/app.css",
             "/static/css/ui_unified.css",
             "/static/js/app.js",
+            "/static/ai_monitor/css/native.css",
+            "/static/ai_monitor/js/core.js",
+            "/static/ai_monitor/js/features.js",
+            "/static/ai_monitor/js/weights.js",
+
+            "/static/ai_monitor/js/axis.js",
+            "/static/ai_monitor/js/shell.js",
             "/static/js/index_enhancement.js",
             "/static/js/rotation_module.js",
             "/static/js/factor_lab.js",
@@ -95,6 +104,27 @@ class CanonicalAppTest(unittest.TestCase):
                 )
                 self.assertEqual(conditional.status_code, 304)
 
+    def test_ai_monitor_is_native_shadow_ui(self) -> None:
+        template = (APP_ROOT / "templates" / "index_rotation_factor_lab.html").read_text(encoding="utf-8")
+        app_js = (APP_ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        shell_js = (APP_ROOT / "static" / "ai_monitor" / "js" / "shell.js").read_text(encoding="utf-8")
+        native_css = (APP_ROOT / "static" / "ai_monitor" / "css" / "native.css").read_text(encoding="utf-8")
+        main_py = (APP_ROOT / "main.py").read_text(encoding="utf-8")
+        for asset in ("core.js", "features.js", "weights.js", "boot.js", "axis.js", "shell.js"):
+            self.assertIn(f"ai_monitor/js/{asset}", template)
+        self.assertNotIn("<iframe", app_js)
+        self.assertNotIn("/tech-diffusion/", app_js)
+        self.assertIn("window.AIMonitorUI.mount", app_js)
+        for section_id in ("overview", "industry-map", "industry-series", "stock-attribution"):
+            self.assertIn(f'id="{section_id}"', shell_js)
+        self.assertIn("font-size: 14px", native_css)
+        self.assertIn("font-size: 11px", native_css)
+        self.assertIn("Arial", native_css)
+        self.assertIn('"KaiTi"', native_css)
+        self.assertIn('@app.get("/api/ai-monitor/<path:upstream_path>")', main_py)
+        self.assertIn('"ai_monitor_proxy"', main_py)
+        anonymous = main.app.test_client()
+        self.assertEqual(anonymous.get("/api/ai-monitor/api/snapshot").status_code, 401)
     def test_rotation_stock_labels_are_on_demand(self) -> None:
         snapshot_response = self.client.get(
             "/api/rotation/snapshot",
@@ -150,21 +180,25 @@ class CanonicalAppTest(unittest.TestCase):
                 "allocation:cycle", "allocation:strategy",
                 "liquidity:retail", "liquidity:public", "liquidity:private",
                 "liquidity:foreign", "liquidity:etf", "liquidity:primary", "liquidity:margin",
-                "rotation:home", "rotation:industry", "rotation:style",
-                "rotation:allocation", "rotation:backtest",
+                "rotation:industry", "rotation:style", "rotation:allocation",
                 "factorlab:dashboard", "factorlab:mining", "factorlab:strategy",
                 "technical:learning", "technical:strategy",
                 "portfolio:solve", "portfolio:strategy",
             ],
         )
-        for label in (
-            "01主页", "02行业景气度", "03风格轮动周期", "04配置策略", "05策略回测",
+        for target, label in (
+            ("rotation:industry", "行业景气度"),
+            ("rotation:style", "风格轮动"),
+            ("rotation:allocation", "配置策略"),
         ):
-            self.assertIn(label, template)
+            self.assertIn(f'data-target="{target}">{label}', template)
+        self.assertNotIn('data-target="rotation:home"', template)
+        self.assertNotIn('data-target="rotation:backtest"', template)
         for legacy_prefix in ("index:", "factor:", "kline:"):
             self.assertFalse(any(target.startswith(legacy_prefix) for target in targets))
         for preserved_view in (
             "allocation:home", "allocation:backtest", "liquidity:home",
+            "rotation:home", "rotation:backtest",
             "factor:home", "factor:expression", "factor:report", "factor:score", "factor:memory",
             "index:home", "index:universe", "index:alpha", "index:smartbeta",
             "index:risk", "index:tracking",
@@ -198,7 +232,7 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertEqual(
             set(payload["services"]),
             {
-                "board", "kline", "factor", "allocation", "liquidity",
+                "board", "kline", "factor", "ai_monitor", "allocation", "liquidity",
                 "index_enhancement", "portfolio", "rotation", "factor_lab",
             },
         )

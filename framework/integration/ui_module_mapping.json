@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "release": "2026.07.23-research-workspace-r16.3",
+  "release": "2026.07.24-research-workspace-r17.4",
   "policy": "Every legacy model view remains reachable through one new secondary page and one in-page control; renderers and charts are preserved.",
   "home_sources": ["data:*", "allocation:*", "liquidity:*", "rotation:*", "portfolio:*"],
   "legacy_to_workspace": {
@@ -25,11 +25,11 @@
     "index:smartbeta": {"target": "factorlab:strategy", "section": "smartbeta", "renderer": "index/smartbeta"},
     "index:risk": {"target": "factorlab:strategy", "section": "risk", "renderer": "index/risk"},
     "index:tracking": {"target": "factorlab:strategy", "section": "tracking", "renderer": "index/tracking"},
-    "rotation:home": {"target": "rotation:home", "section": "overview", "renderer": "rotation/home"},
+    "rotation:home": {"target": "rotation:allocation", "section": "overview", "renderer": "rotation/home"},
     "rotation:industry": {"target": "rotation:industry", "section": "industry", "renderer": "rotation/industry"},
     "rotation:style": {"target": "rotation:style", "section": "style", "renderer": "rotation/style"},
     "rotation:allocation": {"target": "rotation:allocation", "section": "weights", "renderer": "rotation/allocation"},
-    "rotation:backtest": {"target": "rotation:backtest", "section": "backtest", "renderer": "rotation/backtest"},
+    "rotation:backtest": {"target": "rotation:allocation", "section": "backtest", "renderer": "rotation/backtest"},
     "liquidity:home": {"target": "liquidity:retail", "section": "overview", "renderer": "liquidity/home"},
     "liquidity:retail": {"target": "liquidity:retail", "section": "retail", "renderer": "liquidity/retail"},
     "liquidity:public": {"target": "liquidity:public", "section": "public", "renderer": "liquidity/public"},

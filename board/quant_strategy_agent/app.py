@@ -122,6 +122,10 @@ SERVICE_BASES: dict[str, list[str]] = {
         os.environ.get("FACTOR_BASE_URL", "http://127.0.0.1:8895/factor-mining").rstrip("/"),
         f"{PUBLIC_HOST}/factor-mining",
     ],
+    "ai_monitor": [
+        os.environ.get("AI_MONITOR_BASE_URL", "http://127.0.0.1:8074/tech-diffusion").rstrip("/"),
+        f"{PUBLIC_HOST}/tech-diffusion",
+    ],
 }
 
 SSL_CONTEXT = ssl._create_unverified_context()
@@ -739,6 +743,41 @@ def proxy_json(
     raise ProxyError(service, 502, "all_upstream_unavailable", {"errors": errors})
 
 
+
+def proxy_form(
+    service: str,
+    path: str,
+    payload: dict[str, Any],
+    *,
+    timeout: int = 30,
+) -> Any:
+    """POST an HTML form while retaining the service session cookies."""
+    if service not in SERVICE_BASES:
+        raise ProxyError(service, 400, "invalid_service")
+    data = urllib.parse.urlencode(payload).encode("utf-8")
+    headers = {
+        "Accept": "text/html,application/json",
+        "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+        "User-Agent": f"QuantStrategyAgent/{APP_VERSION}",
+    }
+    errors: list[str] = []
+    opener = service_session(service).opener
+    for base in SERVICE_BASES[service]:
+        req = urllib.request.Request(join_url(base, path), data=data, method="POST", headers=headers)
+        try:
+            with opener.open(req, timeout=timeout) as resp:
+                return parse_body(resp.read(), resp.headers.get("Content-Type", ""))
+        except urllib.error.HTTPError as exc:
+            raw = exc.read()
+            raise ProxyError(
+                service,
+                exc.code,
+                f"upstream_http_{exc.code}",
+                parse_body(raw, exc.headers.get("Content-Type", "")),
+            ) from exc
+        except Exception as exc:  # noqa: BLE001 - try fallback base before failing
+            errors.append(f"{base}: {exc}")
+    raise ProxyError(service, 502, "all_upstream_unavailable", {"errors": errors})
 
 def proxy_raw(
     service: str,
@@ -1866,7 +1905,17 @@ def ensure_service_login(service: str) -> None:
                 return
             except ProxyError:
                 raise login_error
-
+    elif service == "ai_monitor":
+        proxy_form(
+            "ai_monitor",
+            "/login",
+            {"username": USERNAME, "password": PASSWORD},
+            timeout=12,
+        )
+        current = proxy_json("ai_monitor", "/api/snapshot", auth=True, timeout=20)
+        if not isinstance(current, dict) or "raw" in current:
+            raise ProxyError("ai_monitor", 502, "upstream_login_failed")
+        state.authenticated_at = time.time()
 
 app = create_app()
 
