@@ -22,7 +22,7 @@ import factor_lab_backend
 import rotation_app as rotation
 
 
-APP_VERSION = "2026.07.23-research-workspace-r16.3"
+APP_VERSION = "2026.07.23-research-workspace-r16.6-stylebox"
 legacy.APP_VERSION = APP_VERSION
 rotation.APP_VERSION = APP_VERSION
 

@@ -90,7 +90,7 @@ node --check board\quant_strategy_agent\static\js\app.js
 
 - 统一看板：https://desktop-i22b489.tailf9d7ac.ts.net/quant-agent/
 - AI 监控：https://desktop-i22b489.tailf9d7ac.ts.net/tech-diffusion/
-- 当前生产版本：`2026.07.23-research-workspace-r16.3`
+- 当前生产版本：`2026.07.23-research-workspace-r16.6-stylebox`
 - K 线模型：`9.0-cohort-wyckoff-evolution`
 - 部署与回滚脚本：`environment/deployment/`
 - 公开仓库：https://github.com/tequilal1920-netizen/quant-strategy-agent

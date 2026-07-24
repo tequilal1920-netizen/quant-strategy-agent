@@ -64,6 +64,7 @@ $Checks = @(
   @{ Name = "board"; Url = "/api/board/snapshot"; MaxBytes = 500000 },
   @{ Name = "allocation"; Url = "/api/allocation/snapshot"; MaxBytes = 2000000 },
   @{ Name = "rotation"; Url = "/api/rotation/snapshot"; MaxBytes = 3000000 },
+  @{ Name = "style_labels"; Url = "/api/rotation/style-labels?limit=120"; MaxBytes = 200000 },
   @{ Name = "factor_lab"; Url = "/api/factor-lab/health"; MaxBytes = 10000 },
   @{ Name = "kline_health"; Url = "/api/kline/health"; MaxBytes = 10000 },
   @{ Name = "kline_session"; Url = "/api/kline/session"; MaxBytes = 10000 },
@@ -92,6 +93,10 @@ foreach ($Check in $Checks) {
   }
 }
 
+$StyleLabelsPayload = Invoke-RestMethod -Uri ($BaseUrl + "/api/rotation/style-labels?limit=120") -WebSession $Session -TimeoutSec 20
+if ($StyleLabelsPayload.status -ne "ok" -or $StyleLabelsPayload.total -ne 5229 -or $StyleLabelsPayload.rows.Count -ne 120) {
+  throw "Public style-label pagination validation failed."
+}
 $KlineHealthPayload = Invoke-RestMethod -Uri ($BaseUrl + "/api/kline/health") -WebSession $Session -TimeoutSec 20
 $KlineSessionPayload = Invoke-RestMethod -Uri ($BaseUrl + "/api/kline/session") -WebSession $Session -TimeoutSec 20
 if ($KlineHealthPayload.model_version -ne $ExpectedKlineModel) {

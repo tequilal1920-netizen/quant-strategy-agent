@@ -2929,7 +2929,7 @@
     data:{title:'数据看板',views:{macro:'宏观',global_markets:'全球市场',sw_industries:'行业',commodities:'大宗商品',stock:'个股',news_events:'新闻事件',ai_monitor:'AI监控'}},
     allocation:{title:'资产配置',views:{cycle:'周期跟踪',strategy:'配置策略'}},
     liquidity:{title:'资金面跟踪',views:{retail:'散户',public:'公募',private:'私募',foreign:'外资',etf:'ETF',primary:'一级市场',margin:'融资资金'}},
-    rotation:{title:'行业景气度',views:{industry:'行业景气度',style:'风格轮动',allocation:'配置策略'}},
+    rotation:{title:'行业景气度',views:{home:'01主页',industry:'02行业景气度',style:'03风格轮动周期',allocation:'04配置策略',backtest:'05策略回测'}},
     factorlab:{title:'因子实验室',views:{dashboard:'因子看板',mining:'因子挖掘',strategy:'配置策略'}},
     technical:{title:'技术分析',views:{learning:'K线学习',strategy:'配置策略'}},
     portfolio:{title:'组合优化',views:{solve:'优化求解',strategy:'配置策略'}}
@@ -2955,9 +2955,11 @@
     'liquidity:etf':{group:'资金面跟踪',title:'ETF',subtitle:'份额申赎、资金流与结构分解',sections:[{id:'etf',label:'ETF',kind:'liquidity',page:'etf'}]},
     'liquidity:primary':{group:'资金面跟踪',title:'一级市场',subtitle:'IPO、定增与可转债融资供给',sections:[{id:'primary',label:'一级市场',kind:'liquidity',page:'primary'}]},
     'liquidity:margin':{group:'资金面跟踪',title:'融资资金',subtitle:'净买入、余额、活跃度与担保结构',sections:[{id:'margin',label:'融资资金',kind:'liquidity',page:'margin'}]},
-    'rotation:industry':{group:'行业景气度',title:'行业景气度',subtitle:'31个申万一级行业专属景气指标',sections:[{id:'industry',label:'行业景气度',kind:'rotation',page:'industry'}]},
-    'rotation:style':{group:'行业景气度',title:'风格轮动',subtitle:'红利、价值、成长、低波与质量',sections:[{id:'style',label:'风格轮动',kind:'rotation',page:'style'}]},
-    'rotation:allocation':{group:'行业景气度',title:'配置策略',subtitle:'综合状态、目标权重与策略回测',sections:[{id:'overview',label:'综合状态',kind:'rotation',page:'home'},{id:'weights',label:'配置权重',kind:'rotation',page:'allocation'},{id:'backtest',label:'策略回测',kind:'rotation',page:'backtest'}]},
+    'rotation:home':{group:'行业景气度',title:'01主页',subtitle:'31个申万一级行业 × 12个季度个股风格箱总览',sections:[{id:'overview',label:'01主页',kind:'rotation',page:'home'}]},
+    'rotation:industry':{group:'行业景气度',title:'02行业景气度',subtitle:'31个申万一级行业专属景气指标',sections:[{id:'industry',label:'02行业景气度',kind:'rotation',page:'industry'}]},
+    'rotation:style':{group:'行业景气度',title:'03风格轮动周期',subtitle:'大/中/小盘 × 成长/均衡/价值/红利 · 季度个股标签',sections:[{id:'style',label:'03风格轮动周期',kind:'rotation',page:'style'}]},
+    'rotation:allocation':{group:'行业景气度',title:'04配置策略',subtitle:'行业Top10（月/周）× 风格Top3（季度）',sections:[{id:'weights',label:'04配置策略',kind:'rotation',page:'allocation'}]},
+    'rotation:backtest':{group:'行业景气度',title:'05策略回测',subtitle:'训练集、验证集、测试集与同频等权基准',sections:[{id:'backtest',label:'05策略回测',kind:'rotation',page:'backtest'}]},
     'factorlab:dashboard':{group:'因子实验室',title:'因子看板',subtitle:'因子状态、联合检验与历史任务',sections:[{id:'overview',label:'实验室总览',kind:'factorlab',page:'home'},{id:'dashboard',label:'因子看板',kind:'factorlab',page:'dashboard'},{id:'testing',label:'联合检验',kind:'factorlab',page:'testing'},{id:'history',label:'历史任务',kind:'factorlab',page:'history'}]},
     'factorlab:mining':{group:'因子实验室',title:'因子挖掘',subtitle:'实验挖掘与LLM假设—表达—检验—记忆闭环',sections:[{id:'laboratory',label:'实验挖掘',kind:'factorlab',page:'mining'},{id:'llm-home',label:'LLM挖掘',kind:'factor',page:'home'},{id:'expression',label:'因子表达式',kind:'factor',page:'expression'},{id:'report',label:'检验结果',kind:'factor',page:'report'},{id:'score',label:'综合打分',kind:'factor',page:'score'},{id:'memory',label:'历史记忆',kind:'factor',page:'memory'}]},
     'factorlab:strategy':{group:'因子实验室',title:'配置策略',subtitle:'因子策略与指数增强完整配置链',sections:[{id:'factor-strategy',label:'因子策略',kind:'factorlab',page:'strategy'},{id:'index-home',label:'增强总览',kind:'index',page:'home'},{id:'universe',label:'资产池',kind:'index',page:'universe'},{id:'alpha',label:'Alpha模型',kind:'index',page:'alpha'},{id:'smartbeta',label:'SmartBeta',kind:'index',page:'smartbeta'},{id:'risk',label:'风险模型',kind:'index',page:'risk'},{id:'tracking',label:'组合跟踪',kind:'index',page:'tracking'}]},
@@ -2969,7 +2971,6 @@
   const LEGACY_ROUTE_ALIAS={
     'allocation:home':['allocation:strategy','overview'],'allocation:backtest':['allocation:strategy','backtest'],
     'liquidity:home':['liquidity:retail','overview'],
-    'rotation:home':['rotation:allocation','overview'],'rotation:backtest':['rotation:allocation','backtest'],
     'portfolio:home':['portfolio:strategy','overview'],'portfolio:pool':['portfolio:strategy','pool'],'portfolio:risk':['portfolio:strategy','risk'],'portfolio:backtest':['portfolio:strategy','backtest'],
     'index:home':['factorlab:strategy','index-home'],'index:universe':['factorlab:strategy','universe'],'index:alpha':['factorlab:strategy','alpha'],'index:smartbeta':['factorlab:strategy','smartbeta'],'index:risk':['factorlab:strategy','risk'],'index:tracking':['factorlab:strategy','tracking'],
     'factorlab:home':['factorlab:dashboard','overview'],'factorlab:testing':['factorlab:dashboard','testing'],'factorlab:history':['factorlab:dashboard','history'],
@@ -3056,8 +3057,8 @@
     const globalRows=arr(table('global_markets','global_market_matrix').rows),industryRows=arr(table('sw_industries','sw_l1_full_snapshot').rows),commodityRows=arr(table('commodities','commodity_market_matrix').rows),stockRows=arr(table('stock','stock_watchlist').rows),newsRows=arr(table('news_events','news_feed').rows).slice().sort(function(a,b){return String(b.published_at).localeCompare(String(a.published_at));});
     const globalTop=workspaceTopBy(globalRows,'ret_5d'),industryTop=workspaceTopBy(industryRows,'ret_5d'),commodityTop=workspaceTopBy(commodityRows,'ret_20d'),stockTop=workspaceTopBy(stockRows,'ret_20d'),latestNews=newsRows[0]||{};
     const profile={conservative:'conservative',balanced:'balanced',aggressive:'equity_preferred'}[S.workspace.risk],assetWeights=allocation&&allocation.allocations?allocWeights(allocation,'recommended',profile):{};
-    const monthly=obj(obj(rotation.industry).frequencies).monthly||{},weekly=obj(obj(rotation.industry).frequencies).weekly||{},styleWeekly=obj(obj(rotation.style).frequencies).weekly||{};
-    const monthlyHolding=arr(monthly.holdings).slice(-1)[0]||{},weeklyHolding=arr(weekly.holdings).slice(-1)[0]||{},styleHolding=arr(styleWeekly.holdings).slice(-1)[0]||{};
+    const monthly=obj(obj(rotation.industry).frequencies).monthly||{},weekly=obj(obj(rotation.industry).frequencies).weekly||{},styleQuarterly=obj(obj(rotation.style).frequencies).quarterly||{};
+    const monthlyHolding=arr(monthly.holdings).slice(-1)[0]||{},weeklyHolding=arr(weekly.holdings).slice(-1)[0]||{},styleHolding=arr(styleQuarterly.holdings).slice(-1)[0]||{};
     const finalWeights=arr(obj(portfolio.home).current_weights).slice().sort(function(a,b){return Number(b.weight)-Number(a.weight);});
     const liqPages=obj(liquidity.pages),liqText=['retail','public','private','foreign','etf','primary','margin'].map(function(key){return obj(liqPages[key]).conclusion;}).filter(Boolean).slice(0,3).join('；');
     const assetRows=[{name:'权益',weight:Number(assetWeights.equity||0)},{name:'债券',weight:Number(assetWeights.bond||0)},{name:'商品',weight:Number(assetWeights.commodity||0)},{name:'现金',weight:Number(assetWeights.cash||0)}];
@@ -3070,7 +3071,7 @@
       '<p><strong>个股与事件：</strong>观察池20日相对领先为 <b class="brief-red">'+esc(stockTop.name||stockTop.code||'--')+' '+signed(stockTop.ret_20d||0)+'%</b>；最新事件为“'+esc(latestNews.title||'暂无')+'”，来源 '+esc(latestNews.source||'--')+'。</p>'+
       '<p><strong>资金风险提示：</strong>'+esc(liqText||'资金面快照已加载；请在七类资金页逐项复核。')+'</p></section>'+
       '<section class="horizon-grid"><article><header><span>日度</span><strong>组合优化执行篮子</strong></header><p>以资金状态和个股事件作为风险门，最终采用优化器当前可行权重；仅展示非零头寸。</p><div class="weight-chips">'+workspaceWeightChips(finalWeights,'name','weight')+'</div></article>'+
-      '<article><header><span>周度</span><strong>行业与风格联动</strong></header><p>行业Top10与风格Top2分别按现有周度模型输出，不把测试集用于选模。</p><h4>行业</h4><div class="weight-chips">'+workspaceWeightChips(weekIndustries,'name','weight')+'</div><h4>风格</h4><div class="weight-chips">'+workspaceWeightChips(styleRows,'name','weight')+'</div></article>'+
+      '<article><header><span>周度 / 季度</span><strong>行业与风格联动</strong></header><p>行业Top10按周度模型输出，风格Top3按季度模型输出；测试集只报告、不参与选模，季度信息不回填周度历史。</p><h4>行业</h4><div class="weight-chips">'+workspaceWeightChips(weekIndustries,'name','weight')+'</div><h4>风格</h4><div class="weight-chips">'+workspaceWeightChips(styleRows,'name','weight')+'</div></article>'+
       '<article><header><span>月度</span><strong>大类资产与行业权重</strong></header><p>大类资产采用当前风险偏好档位；行业采用月度景气模型最新持仓。</p><h4>大类资产</h4><div class="weight-chips">'+workspaceWeightChips(assetRows,'name','weight')+'</div><h4>行业</h4><div class="weight-chips">'+workspaceWeightChips(monthIndustries,'name','weight')+'</div></article></section>'+
       '<section class="research-linkage"><h2>联动顺序</h2><div><span>01 数据看板</span><span>02 资产配置</span><span>03 资金面</span><span>04 行业与风格</span><span>05 个股选择</span><span>06 组合优化</span></div></section></div>');
   }

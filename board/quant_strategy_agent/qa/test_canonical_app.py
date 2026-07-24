@@ -95,6 +95,48 @@ class CanonicalAppTest(unittest.TestCase):
                 )
                 self.assertEqual(conditional.status_code, 304)
 
+    def test_rotation_stock_labels_are_on_demand(self) -> None:
+        snapshot_response = self.client.get(
+            "/api/rotation/snapshot",
+            headers={"Accept-Encoding": "gzip"},
+        )
+        self.assertEqual(snapshot_response.status_code, 200)
+        snapshot_bytes = self.decoded(snapshot_response)
+        self.assertLess(len(snapshot_bytes), 3_000_000)
+        snapshot = json.loads(snapshot_bytes.decode("utf-8"))
+        self.assertNotIn("stock_labels", snapshot["style"])
+        self.assertEqual(
+            snapshot["style"]["stock_labels_endpoint"],
+            "/api/rotation/style-labels",
+        )
+
+        labels_response = self.client.get(
+            "/api/rotation/style-labels",
+            query_string={"limit": 120},
+        )
+        self.assertEqual(labels_response.status_code, 200)
+        labels = labels_response.get_json()
+        self.assertEqual(labels["status"], "ok")
+        self.assertEqual(labels["total"], 5229)
+        self.assertEqual(len(labels["rows"]), 120)
+        self.assertEqual(len({row["code"] for row in labels["rows"]}), 120)
+
+        first_cell = snapshot["style"]["cells"][0]["cell"]
+        filtered_response = self.client.get(
+            "/api/rotation/style-labels",
+            query_string={"cell": first_cell, "limit": 5},
+        )
+        self.assertEqual(filtered_response.status_code, 200)
+        filtered = filtered_response.get_json()
+        self.assertLessEqual(len(filtered["rows"]), 5)
+        self.assertTrue(all(row["cell"] == first_cell for row in filtered["rows"]))
+        self.assertEqual(
+            self.client.get(
+                "/api/rotation/style-labels",
+                query_string={"cell": "不存在的风格箱"},
+            ).status_code,
+            400,
+        )
     def test_all_nav_targets_have_one_router(self) -> None:
         template = (APP_ROOT / "templates" / "index_rotation_factor_lab.html").read_text(encoding="utf-8")
         app_js = (APP_ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
@@ -108,12 +150,17 @@ class CanonicalAppTest(unittest.TestCase):
                 "allocation:cycle", "allocation:strategy",
                 "liquidity:retail", "liquidity:public", "liquidity:private",
                 "liquidity:foreign", "liquidity:etf", "liquidity:primary", "liquidity:margin",
-                "rotation:industry", "rotation:style", "rotation:allocation",
+                "rotation:home", "rotation:industry", "rotation:style",
+                "rotation:allocation", "rotation:backtest",
                 "factorlab:dashboard", "factorlab:mining", "factorlab:strategy",
                 "technical:learning", "technical:strategy",
                 "portfolio:solve", "portfolio:strategy",
             ],
         )
+        for label in (
+            "01主页", "02行业景气度", "03风格轮动周期", "04配置策略", "05策略回测",
+        ):
+            self.assertIn(label, template)
         for legacy_prefix in ("index:", "factor:", "kline:"):
             self.assertFalse(any(target.startswith(legacy_prefix) for target in targets))
         for preserved_view in (
