@@ -36,25 +36,40 @@ def _load_json(path: Path) -> dict[str, Any]:
 def _snapshot_contract(payload: dict[str, Any]) -> dict[str, Any]:
     industries = payload.get("high_frequency", {}).get("industries", [])
     field_count = sum(len(row.get("indicators", [])) for row in industries)
-    summary = payload.get("high_frequency", {}).get("summary", {})
-    expected_field_count = int(summary.get("field_count") or field_count)
-    live_field_count = int(summary.get("live_field_count") or 0)
-    min_live_per_industry = int(summary.get("min_live_per_industry") or 0)
     frequencies = payload.get("industry", {}).get("frequencies", {})
     style_frequencies = payload.get("style", {}).get("frequencies", {})
     errors: list[str] = []
+    forbidden = (
+        "营业收入", "营收", "利润", "净利润", "ROE", "ROA", "毛利率", "负债率",
+        "动量", "趋势", "换手", "拥挤", "估值", "市盈率", "市净率",
+    )
+
+    if payload.get("schema_version") != "4.0":
+        errors.append("schema_version_not_4")
     if len(industries) != 31:
         errors.append("industry_count_not_31")
-    if field_count < 94:
-        errors.append("field_count_below_94")
-    if field_count != expected_field_count:
-        errors.append("field_count_summary_mismatch")
-    if live_field_count < field_count:
-        errors.append("live_field_count_incomplete")
-    if min_live_per_industry < 6:
-        errors.append("min_live_per_industry_below_6")
+    if field_count != 248:
+        errors.append("field_count_not_248")
+    for row in industries:
+        name = str(row.get("industry") or "unknown")
+        indicators = row.get("indicators", [])
+        if len(indicators) != 8:
+            errors.append(f"{name}_field_count_not_8")
+        live = sum(bool(item.get("status") == "live" and item.get("model_eligible")) for item in indicators)
+        if live < 6:
+            errors.append(f"{name}_live_below_6")
+        labels = [str(item.get("name") or "") for item in indicators]
+        if len(set(labels)) != len(labels):
+            errors.append(f"{name}_duplicate_fields")
+        for item in indicators:
+            text = f"{item.get('name', '')}|{item.get('field', '')}"
+            if any(word.lower() in text.lower() for word in forbidden):
+                errors.append(f"{name}_forbidden_field")
+                break
+
+    expected_frequencies = {"industry": {"monthly", "weekly"}, "style": {"quarterly"}}
     for family, rows in (("industry", frequencies), ("style", style_frequencies)):
-        if set(rows) != {"monthly", "weekly"}:
+        if set(rows) != expected_frequencies[family]:
             errors.append(f"{family}_frequency_contract")
         for frequency, model in rows.items():
             if set(model.get("metrics", {})) != {"train", "validation", "test", "all"}:
@@ -63,16 +78,45 @@ def _snapshot_contract(payload: dict[str, Any]) -> dict[str, Any]:
                 if holding.get("signal_date", "") >= holding.get("execution_date", ""):
                     errors.append(f"{family}_{frequency}_timing_contract")
                     break
+                if (
+                    holding.get("status") == "planned"
+                    and holding.get("execution_date", "") <= str(payload.get("as_of") or "")
+                ):
+                    errors.append(f"{family}_{frequency}_stale_planned_status")
+                    break
+
+    style = payload.get("style", {})
+    labels = style.get("stock_labels", [])
+    label_codes = [str(row.get("code") or "") for row in labels]
+    allowed_sizes = {"大盘", "中盘", "小盘"}
+    allowed_styles = {"成长", "均衡", "价值", "红利"}
+    quality = style.get("data_quality", {})
+    if style.get("count") != 12 or len(style.get("cells", [])) != 12:
+        errors.append("style_cell_count_not_12")
+    if len(label_codes) != len(set(label_codes)):
+        errors.append("style_stock_labels_not_unique")
+    if any(row.get("size") not in allowed_sizes or row.get("style") not in allowed_styles for row in labels):
+        errors.append("style_label_outside_3x4_box")
+    if int(quality.get("unclassified_stock_count") or 0) != 0:
+        errors.append("style_unclassified_stock")
+    if int(quality.get("duplicate_label_count") or 0) != 0:
+        errors.append("style_duplicate_stock")
+    if int(quality.get("latest_labelled_stock_count") or 0) != len(labels):
+        errors.append("style_label_count_mismatch")
+
     return {
         "status": "ok" if not errors else "failed",
         "errors": errors,
+        "schema_version": payload.get("schema_version"),
         "industry_count": len(industries),
         "field_count": field_count,
-        "live_field_count": live_field_count,
-        "min_live_per_industry": min_live_per_industry,
+        "live_field_count": sum(int(row.get("live_indicators", 0)) for row in industries),
+        "min_live_per_industry": min((int(row.get("live_indicators", 0)) for row in industries), default=0),
+        "style_cell_count": int(style.get("count") or 0),
+        "style_labelled_stock_count": len(labels),
+        "style_frequency": "quarterly",
         "as_of": payload.get("as_of"),
     }
-
 
 def rotation_index():
     return render_template(
@@ -103,10 +147,64 @@ def rotation_snapshot():
         contract = _snapshot_contract(payload)
         if contract["status"] != "ok":
             return jsonify({"status": "failed", "quality": contract}), 503
-        return jsonify(payload)
+        public_payload = dict(payload)
+        public_style = dict(payload.get("style", {}))
+        public_style.pop("stock_labels", None)
+        public_style["stock_labels_endpoint"] = "/api/rotation/style-labels"
+        public_payload["style"] = public_style
+        return jsonify(public_payload)
     except Exception as exc:  # noqa: BLE001
         return jsonify({"status": "failed", "message": str(exc)}), 503
 
+
+@app.get("/api/rotation/style-labels")
+def rotation_style_labels():
+    """Return the latest quarterly stock labels on demand."""
+    try:
+        payload = _load_json(ROTATION_SNAPSHOT)
+        contract = _snapshot_contract(payload)
+        if contract["status"] != "ok":
+            return jsonify({"status": "failed", "quality": contract}), 503
+
+        style = payload.get("style", {})
+        labels = style.get("stock_labels", [])
+        allowed_cells = {
+            str(row.get("cell"))
+            for row in style.get("cells", [])
+            if row.get("cell")
+        }
+        cell = str(request.args.get("cell") or "").strip()
+        query = str(request.args.get("q") or "").strip().casefold()[:64]
+        if cell and cell not in allowed_cells:
+            return jsonify({"status": "failed", "message": "unknown_style_cell"}), 400
+
+        rows = labels
+        if cell:
+            rows = [row for row in rows if str(row.get("cell") or "") == cell]
+        if query:
+            rows = [
+                row
+                for row in rows
+                if query in f"{row.get('code', '')} {row.get('name', '')}".casefold()
+            ]
+
+        limit = max(1, min(int(request.args.get("limit") or 120), 200))
+        offset = max(0, int(request.args.get("offset") or 0))
+        total = len(rows)
+        return jsonify({
+            "status": "ok",
+            "as_of": style.get("latest_signal_date") or payload.get("as_of"),
+            "cell": cell or "全部",
+            "query": query,
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "rows": rows[offset:offset + limit],
+        })
+    except (TypeError, ValueError):
+        return jsonify({"status": "failed", "message": "invalid_pagination"}), 400
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"status": "failed", "message": str(exc)}), 503
 
 @app.get("/api/rotation/industry-dashboard")
 def rotation_industry_dashboard():

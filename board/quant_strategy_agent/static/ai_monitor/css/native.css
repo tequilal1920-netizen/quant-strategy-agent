@@ -1,0 +1,295 @@
+:host {
+  display: block;
+  min-width: 0;
+  color: #18212b;
+  font-family: Arial, "KaiTi", "STKaiti", "Kaiti SC", "楷体", sans-serif;
+  font-size: 14px;
+  --red: #b42318;
+  --red-dark: #8f1b13;
+  --yellow: #f5b82e;
+  --blue: #2f75b5;
+  --gray: #667085;
+  --green: #168a47;
+  --orange: #ed7d31;
+  --purple: #7030a0;
+  --ink: #18212b;
+  --muted: #667085;
+  --faint: #98a2b3;
+  --border: #d8e0e7;
+  --grid: #e7ebef;
+  --panel: #ffffff;
+  --qa-font: Arial, "KaiTi", "STKaiti", "Kaiti SC", "楷体", sans-serif;
+  --qa-border: #d8e0e7;
+  --qa-shadow: 0 1px 3px rgba(16, 24, 40, .08);
+  --qa-brand: #b42318;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.ai-monitor-native,
+.ai-monitor-native button,
+.ai-monitor-native input,
+.ai-monitor-native select,
+.ai-monitor-native option,
+.ai-monitor-native textarea {
+  font-family: var(--qa-font) !important;
+}
+
+.ai-monitor-native {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+  color: var(--ink);
+  background: transparent;
+}
+
+.ai-monitor-native :where(
+  div, section, article, header, footer, p, small, em, label, dt, dd, li, time,
+  summary, a, button, input, select, option, textarea, th, td, code, pre, span,
+  strong, b
+) {
+  font-size: 14px !important;
+}
+
+.ai-monitor-native h1 {
+  font-size: 20px !important;
+}
+
+.ai-monitor-native h2,
+.ai-monitor-native .section-header h2 {
+  font-family: var(--qa-font) !important;
+  font-size: 17.6px !important;
+  font-weight: 800 !important;
+}
+
+.ai-monitor-native h3,
+.ai-monitor-native h4,
+.ai-monitor-native .panel-header h3 {
+  font-family: var(--qa-font) !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+}
+
+.ai-monitor-native .js-plotly-plot text,
+.ai-monitor-native .plot-container text,
+.ai-monitor-native .plot-frame text {
+  font-family: var(--qa-font) !important;
+  font-size: 11px !important;
+}
+
+.ai-monitor-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 22px;
+  min-height: 48px;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--red);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--qa-shadow);
+}
+
+.ai-monitor-status > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+}
+
+.ai-monitor-status > span {
+  color: var(--muted);
+}
+
+.ai-monitor-status .status-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(22, 138, 71, .1);
+}
+
+.ai-monitor-status .status-dot.running {
+  background: var(--blue);
+  box-shadow: 0 0 0 4px rgba(47, 117, 181, .1);
+}
+
+.ai-monitor-status .status-dot.failed {
+  background: var(--red);
+  box-shadow: 0 0 0 4px rgba(180, 35, 24, .1);
+}
+
+.primary-controls {
+  position: static !important;
+  top: auto !important;
+  z-index: auto !important;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0 !important;
+  padding: 12px 14px !important;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--qa-shadow);
+}
+
+.control-field,
+.toggle-field,
+.search-field {
+  min-width: 0;
+}
+
+.control-field > span,
+.toggle-field > span,
+.search-field > span {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.control-field select,
+.search-field input {
+  min-height: 36px;
+  border-color: var(--border);
+  border-radius: 5px;
+}
+
+.segmented-control button {
+  min-height: 34px;
+}
+
+.dashboard-section {
+  min-width: 0;
+  scroll-margin-top: 174px;
+}
+
+.section-header {
+  min-height: 44px;
+  padding: 0 2px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-index {
+  color: var(--red);
+  font-family: Arial, sans-serif !important;
+  font-weight: 800;
+}
+
+.chart-panel,
+.table-panel,
+.primary-controls,
+.industry-card,
+.dimension-cell,
+.stock-detail {
+  border-color: var(--border) !important;
+  border-radius: 8px !important;
+  box-shadow: var(--qa-shadow) !important;
+}
+
+.panel-header {
+  min-height: 45px;
+  padding: 10px 14px;
+}
+
+.panel-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.overview-grid > article:first-child,
+.overview-grid > article:nth-child(2),
+.panel-grid .span-2 {
+  grid-column: 1 / -1;
+}
+
+.plot-frame {
+  min-width: 0;
+}
+
+.plot-rank-all,
+.plot-rank {
+  height: 760px;
+}
+
+.industry-score-table {
+  min-width: 1040px;
+}
+
+.data-table,
+.data-table thead,
+.data-table tbody,
+.data-table tr,
+.data-table th,
+.data-table td {
+  font-size: 14px !important;
+}
+
+.data-table th,
+.data-table td {
+  min-height: 40px;
+  padding: 9px 11px;
+}
+
+.weight-control-panel {
+  width: 100% !important;
+  margin: 0 !important;
+  border-radius: 8px !important;
+}
+
+.toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 20;
+}
+
+@media (max-width: 1100px) {
+  .primary-controls {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
+
+  .weight-input-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .weight-input {
+    min-width: 0 !important;
+  }
+
+  .panel-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .panel-grid > article,
+  .panel-grid .span-2 {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 720px) {
+  .weight-input-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .primary-controls {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 10px !important;
+  }
+
+  .ai-monitor-status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .plot-rank-all,
+  .plot-rank {
+    height: 620px;
+  }
+}

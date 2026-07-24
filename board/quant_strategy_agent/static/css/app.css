@@ -1960,11 +1960,8 @@ body.is-authenticated .app-shell .dashboard-main .allocation-definition-card sma
 .research-linkage h2 { margin: 0 0 12px; color: var(--ink); }
 .research-linkage div { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 8px; }
 .research-linkage span { padding: 11px 8px; border-radius: 4px; background: var(--brand-soft); color: var(--brand); text-align: center; font-weight: 800; }
-.ai-monitor-shell { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; box-shadow: var(--shadow); }
-.ai-monitor-shell > header { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
-.ai-monitor-shell > header span { color: var(--muted); font-size: 13px; }
-.ai-monitor-shell > header h2 { margin: 2px 0 0; color: var(--ink); }
-.ai-monitor-shell iframe { display: block; width: 100%; min-height: 760px; border: 0; background: #fff; }
+.ai-monitor-native-host { display: block; width: 100%; min-height: 760px; }
+.ai-monitor-native-host:focus-within { outline: 2px solid rgba(167, 45, 31, .16); outline-offset: 3px; }
 @media (max-width: 1100px) {
   .workspace-global-controls { grid-template-columns: repeat(3, minmax(130px, 1fr)); }
   .workspace-health { grid-column: span 2; }
@@ -1981,5 +1978,5 @@ body.is-authenticated .app-shell .dashboard-main .allocation-definition-card sma
   .research-brief { padding: 18px 16px; }
   .research-brief p { text-indent: 0; }
   .research-linkage div { grid-template-columns: repeat(2, minmax(0,1fr)); }
-  .ai-monitor-shell iframe { min-height: 620px; }
+  .ai-monitor-native-host { min-height: 620px; }
 }

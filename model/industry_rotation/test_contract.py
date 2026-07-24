@@ -67,6 +67,47 @@ for frequency in ("monthly", "weekly"):
 if p["method"]["industry_benchmark"].split("；")[0] != "31行业等权":
     raise AssertionError("benchmark mismatch")
 
+style = p["style"]
+quality = style["data_quality"]
+quarterly = style["frequencies"]["quarterly"]
+expected_cells = {
+    f"{size}{kind}"
+    for size in ("大盘", "中盘", "小盘")
+    for kind in ("成长", "均衡", "价值", "红利")
+}
+actual_cells = {row["cell"] for row in style["cells"]}
+if style["count"] != 12 or quality["cell_count"] != 12 or actual_cells != expected_cells:
+    raise AssertionError(f"style cells invalid: {sorted(actual_cells)}")
+if style["frequency"] != "quarterly" or quarterly["frequency"] != "quarterly":
+    raise AssertionError("style frequency must be quarterly")
+if style["benchmark"] != "12风格箱等权":
+    raise AssertionError("style benchmark mismatch")
+coverage = {
+    quality["latest_eligible_stock_count"],
+    quality["latest_labelled_stock_count"],
+    quality["latest_unique_stock_count"],
+}
+if len(coverage) != 1 or quality["unclassified_stock_count"] != 0 or quality["duplicate_label_count"] != 0:
+    raise AssertionError(f"style label coverage invalid: {quality}")
+if quality["latest_labelled_stock_count"] <= 0 or quality["min_cell_stock_count"] <= 0:
+    raise AssertionError("style universe or a style cell is empty")
+if set(quarterly["metrics"]) != {"train", "validation", "test", "all"}:
+    raise AssertionError("style split metrics incomplete")
+if "验证集" not in quarterly["selection_rule"] or "2022年后仅报告" not in quarterly["selection_rule"]:
+    raise AssertionError("style candidate selection rule is not frozen")
+style_holdings = quarterly["holdings"]
+bad_style_dates = [row for row in style_holdings if row["signal_date"] >= row["execution_date"]]
+bad_style_size = [row for row in style_holdings if len(row["names"]) != 3]
+bad_style_weight = [row for row in style_holdings if abs(row["weight"] - 1 / 3) > 1e-6]
+if bad_style_dates:
+    raise AssertionError(f"quarterly style T/T+1 violation: {bad_style_dates[:3]}")
+if bad_style_size:
+    raise AssertionError(f"quarterly style is not Top3: {bad_style_size[:3]}")
+if bad_style_weight:
+    raise AssertionError(f"quarterly style is not equal weight: {bad_style_weight[:3]}")
+latest_style = style_holdings[-1]
+if latest_style["execution_date"] <= p["as_of"] and latest_style.get("status") != "executed":
+    raise AssertionError(f"stale planned style holding: {latest_style}")
 print(json.dumps({
     "status": "ok",
     "today": today,
@@ -78,4 +119,8 @@ print(json.dumps({
     "max_last_available": max(x["last_available_date"] for x in indicators if x.get("last_available_date")),
     "monthly_test_excess": p["industry"]["frequencies"]["monthly"]["metrics"]["test"]["annual_excess"],
     "weekly_test_excess": p["industry"]["frequencies"]["weekly"]["metrics"]["test"]["annual_excess"],
+    "style_cell_count": style["count"],
+    "style_labelled_stock_count": quality["latest_labelled_stock_count"],
+    "style_selected_candidate": quarterly["selected_candidate"],
+    "style_test_excess": quarterly["metrics"]["test"]["annual_excess"],
 }, ensure_ascii=False, indent=2))

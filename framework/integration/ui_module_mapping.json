@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "release": "2026.07.23-research-workspace-r16.3",
+  "release": "2026.07.24-research-workspace-r17.4",
   "policy": "Every legacy model view remains reachable through one new secondary page and one in-page control; renderers and charts are preserved.",
   "home_sources": ["data:*", "allocation:*", "liquidity:*", "rotation:*", "portfolio:*"],
   "legacy_to_workspace": {

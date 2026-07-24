@@ -1,0 +1,294 @@
+:root {
+  --qa-font: Arial, "KaiTi", "STKaiti", "Kaiti SC", "楷体", sans-serif;
+  --qa-sidebar-width: 244px;
+  --qa-brand: #b42318;
+  --qa-brand-soft: #fff1f0;
+  --qa-border: #d8e0e7;
+  --qa-shadow: 0 1px 3px rgba(16, 24, 40, .08);
+}
+
+body,
+button,
+input,
+select,
+option,
+textarea,
+.app-shell,
+.dashboard-main,
+.section-nav {
+  font-family: var(--qa-font) !important;
+}
+
+body {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--qa-sidebar-width) minmax(0, 1fr);
+}
+
+.sidebar {
+  width: var(--qa-sidebar-width);
+  padding: 0;
+  border-right-color: var(--qa-border);
+}
+
+.brand-block {
+  min-height: 76px;
+  margin: 0 16px;
+  gap: 10px;
+  padding: 0;
+  border-bottom-color: var(--qa-border);
+}
+
+.brand-mark {
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
+  border-radius: 9px;
+  font-size: 20px;
+}
+
+.brand-block strong {
+  color: var(--qa-brand);
+  font-family: var(--qa-font);
+  font-size: 22px !important;
+  font-weight: 800;
+}
+
+.section-nav {
+  gap: 1px;
+  margin: 0;
+  overflow-y: auto;
+  padding: 10px 11px 18px;
+}
+
+.nav-item {
+  min-height: 38px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font-family: var(--qa-font) !important;
+  font-size: 17.6px !important;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.nav-item.is-active {
+  color: var(--qa-brand);
+  background: var(--qa-brand-soft);
+}
+
+.nav-item.is-active::before {
+  left: -11px;
+  width: 3px;
+  height: 26px;
+  border-radius: 0 2px 2px 0;
+  background: var(--qa-brand);
+}
+
+.nav-item i {
+  width: 6px;
+  height: 6px;
+}
+
+.dashboard-main {
+  grid-column: 2;
+  width: min(100%, 1620px);
+  margin: 0 auto;
+  padding: 0 20px 28px;
+}
+
+.page-header {
+  min-height: 52px;
+  background: rgba(243, 245, 247, .96);
+}
+
+.page-header h1,
+.dashboard-main h1 {
+  font-family: var(--qa-font) !important;
+  font-size: 20px !important;
+  font-weight: 800 !important;
+}
+
+.section-header h2,
+.dashboard-main h2 {
+  font-family: var(--qa-font) !important;
+  font-size: 17.6px !important;
+  font-weight: 800 !important;
+}
+
+.panel-header h3,
+.dashboard-main h3,
+.dashboard-main h4 {
+  font-family: var(--qa-font) !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+}
+
+.app-shell .dashboard-main :where(
+  div, section, article, header, footer, p, small, em, label, dt, dd, li, time,
+  summary, a, button, input, select, option, textarea, th, td, code, pre, span,
+  strong, b
+) {
+  font-size: 14px !important;
+}
+
+.js-plotly-plot text,
+.plot-container text,
+.plot-frame text {
+  font-family: var(--qa-font) !important;
+  font-size: 11px !important;
+}
+
+.primary-controls {
+  top: 52px;
+}
+
+.control-field > span,
+.toggle-field > span,
+.search-field > span {
+  color: #667085;
+  font-size: 14px !important;
+}
+
+.chart-panel,
+.table-panel,
+.level2-group,
+.primary-controls {
+  border-color: var(--qa-border);
+  border-radius: 10px;
+  box-shadow: var(--qa-shadow);
+}
+
+.industry-score-table-panel {
+  margin-top: 12px;
+}
+
+.industry-score-table-panel .panel-header {
+  min-height: 46px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--qa-border);
+}
+
+.industry-score-table-panel .panel-header strong {
+  color: #667085;
+  font-family: var(--qa-font);
+  font-weight: 700;
+}
+
+.industry-score-table {
+  min-width: 1040px;
+  table-layout: fixed;
+}
+
+.industry-score-table th,
+.industry-score-table td {
+  height: 42px;
+  padding: 9px 12px;
+  font-size: 14px !important;
+}
+
+.industry-score-table th:first-child,
+.industry-score-table td:first-child {
+  width: 64px;
+  text-align: center;
+}
+
+.industry-score-table th:nth-child(2),
+.industry-score-table td:nth-child(2) {
+  width: 220px;
+  text-align: left;
+}
+
+.industry-score-table th:nth-child(n+3),
+.industry-score-table td:nth-child(n+3) {
+  text-align: right;
+}
+
+.industry-score-table tbody tr {
+  cursor: pointer;
+}
+
+.industry-score-table tbody tr:hover {
+  background: #fff8f7;
+}
+
+.industry-score-table .score-strong {
+  color: #b42318;
+  font-family: Arial, sans-serif;
+  font-weight: 700;
+}
+
+.industry-score-table .score-weak {
+  color: #168a47;
+  font-family: Arial, sans-serif;
+  font-weight: 700;
+}
+
+.industry-score-table .score-neutral,
+.industry-score-table .rank-cell {
+  color: #475467;
+  font-family: Arial, sans-serif;
+}
+
+.industry-score-table .industry-name-cell {
+  color: #18212b;
+  font-weight: 800;
+}
+
+@media (max-width: 780px) {
+  .app-shell {
+    display: block;
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: relative;
+    top: auto;
+    width: 100%;
+    max-height: 42vh;
+    overflow-y: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--qa-border);
+  }
+
+  .brand-block {
+    min-height: 64px;
+  }
+
+  .section-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .nav-item {
+    justify-content: space-between;
+    min-height: 38px;
+    height: 38px;
+    padding: 0 12px;
+    text-align: left;
+  }
+
+  .nav-item i,
+  .nav-item.is-active::before {
+    display: block;
+  }
+
+  .dashboard-main {
+    grid-column: 1;
+    width: 100%;
+    margin: 0;
+    padding: 0 10px 28px;
+  }
+
+  .page-header {
+    position: relative;
+    top: auto;
+  }
+
+  .primary-controls {
+    position: static;
+  }
+}

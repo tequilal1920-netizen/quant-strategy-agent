@@ -22,7 +22,7 @@ import factor_lab_backend
 import rotation_app as rotation
 
 
-APP_VERSION = "2026.07.23-research-workspace-r16.3"
+APP_VERSION = "2026.07.24-research-workspace-r17.4-ai-monitor-rotation-ui"
 legacy.APP_VERSION = APP_VERSION
 rotation.APP_VERSION = APP_VERSION
 
@@ -82,6 +82,7 @@ def _service_payload() -> dict[str, Any]:
         "board": lambda: legacy.safe_proxy("board", "/healthz"),
         "kline": lambda: legacy.safe_proxy("kline", "/health"),
         "factor": lambda: legacy.safe_proxy("factor", "/api/status"),
+        "ai_monitor": lambda: legacy.safe_proxy("ai_monitor", "/healthz"),
         "allocation": legacy.allocation_health_payload,
         "liquidity": legacy.liquidity_health_payload,
         "index_enhancement": legacy.index_enhancement_health_payload,
@@ -121,6 +122,45 @@ def services() -> Response:
 
 app.view_functions["services"] = services
 
+@app.get("/api/ai-monitor/<path:upstream_path>")
+def ai_monitor_proxy(upstream_path: str) -> Response:
+    """Expose the authenticated technology-diffusion JSON API in this app."""
+    clean_path = upstream_path.strip("/")
+    if not clean_path.startswith("api/") or ".." in clean_path.split("/"):
+        return jsonify({"status": "failed", "message": "invalid_ai_monitor_path"}), 400
+    query = request.args.to_dict(flat=False)
+    encoded_query = legacy.urllib.parse.urlencode(query, doseq=True)
+    cache_key = f"ai-monitor:{clean_path}?{encoded_query}"
+    upstream_api_path = "/" + "/".join(
+        legacy.urllib.parse.quote(segment, safe="") for segment in clean_path.split("/")
+    )
+    ttl = 90 if clean_path in {"api/snapshot", "api/dynamic-series"} else 300
+
+    def load() -> Any:
+        legacy.ensure_service_login("ai_monitor")
+        payload = legacy.proxy_json(
+            "ai_monitor",
+            upstream_api_path,
+            query=query,
+            auth=True,
+            timeout=35,
+        )
+        if isinstance(payload, dict) and "raw" in payload:
+            legacy.service_session("ai_monitor").authenticated_at = 0.0
+            legacy.ensure_service_login("ai_monitor")
+            payload = legacy.proxy_json(
+                "ai_monitor",
+                upstream_api_path,
+                query=query,
+                auth=True,
+                timeout=35,
+            )
+        if isinstance(payload, dict) and "raw" in payload:
+            raise legacy.ProxyError("ai_monitor", 502, "upstream_returned_html")
+        return payload
+
+    return jsonify(legacy.cached_data(cache_key, ttl, load))
+
 _CACHEABLE_API_ENDPOINTS = {
     "allocation_snapshot",
     "liquidity_snapshot",
@@ -145,6 +185,7 @@ _CACHEABLE_API_ENDPOINTS = {
     "factor_status",
     "factor_history",
     "factor_history_detail",
+    "ai_monitor_proxy",
 }
 
 
