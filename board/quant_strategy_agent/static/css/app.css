@@ -1915,27 +1915,11 @@ body.is-authenticated .app-shell .dashboard-main .allocation-definition-card sma
   position: sticky;
   top: 0;
   z-index: 18;
-  padding: 8px 0 10px;
+  padding: 4px 0 8px;
   background: rgba(246, 248, 250, .96);
   backdrop-filter: blur(10px);
 }
-.workspace-global-controls {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(138px, .72fr)) minmax(190px, 1fr) auto;
-  align-items: end;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: #fff;
-  box-shadow: var(--shadow);
-}
-.workspace-global-controls label { display: grid; gap: 5px; color: var(--muted); font-size: 13px; font-weight: 700; }
-.workspace-global-controls select { min-height: 36px; padding: 6px 30px 6px 10px; border: 1px solid var(--border); border-radius: 5px; background: #fff; color: var(--ink); }
-.workspace-health { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 7px 10px; color: var(--ink); }
-.workspace-health .status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(22,138,71,.10); }
-.workspace-health .status-dot.failed { background: var(--brand); box-shadow: 0 0 0 4px rgba(180,35,24,.10); }
-.workspace-section-nav { display: flex; flex-wrap: wrap; gap: 7px; padding: 9px 4px 0; }
+.workspace-section-nav { display: flex; flex-wrap: wrap; gap: 7px; padding: 4px; }
 .workspace-section-nav button { min-height: 34px; padding: 6px 13px; border: 1px solid var(--border); border-radius: 18px; background: #fff; color: var(--muted); font-weight: 800; cursor: pointer; }
 .workspace-section-nav button:hover { border-color: var(--brand); color: var(--brand); }
 .workspace-section-nav button.is-active { border-color: var(--brand); background: var(--brand); color: #fff; }
@@ -1963,16 +1947,12 @@ body.is-authenticated .app-shell .dashboard-main .allocation-definition-card sma
 .ai-monitor-native-host { display: block; width: 100%; min-height: 760px; }
 .ai-monitor-native-host:focus-within { outline: 2px solid rgba(167, 45, 31, .16); outline-offset: 3px; }
 @media (max-width: 1100px) {
-  .workspace-global-controls { grid-template-columns: repeat(3, minmax(130px, 1fr)); }
-  .workspace-health { grid-column: span 2; }
   .horizon-grid { grid-template-columns: minmax(0, 1fr); }
   .horizon-grid p { min-height: 0; }
   .research-linkage div { grid-template-columns: repeat(3, minmax(0,1fr)); }
 }
 @media (max-width: 720px) {
   .workspace-controls { top: 0; }
-  .workspace-global-controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 10px; }
-  .workspace-global-controls label:nth-child(3), .workspace-health, .workspace-global-controls .ghost-button { grid-column: 1 / -1; }
   .workspace-section-nav { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
   .workspace-section-nav button { flex: 0 0 auto; }
   .research-brief { padding: 18px 16px; }

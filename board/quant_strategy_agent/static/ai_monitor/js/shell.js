@@ -27,7 +27,7 @@
     return `${styles}
       <div class="ai-monitor-native">
         <section class="ai-monitor-status" aria-label="AI监控数据状态">
-          <div><span class="status-dot ok" aria-hidden="true"></span><strong>科技扩散数据更新正常</strong></div>
+          <div><span id="ai-monitor-status-dot" class="status-dot running" aria-hidden="true"></span><strong id="ai-monitor-status-text">正在加载科技扩散数据</strong></div>
           <span>最新交易日 <b id="latest-date">载入中</b></span>
           <span>五维扩散 · 申万三级行业 · 个股归因</span>
         </section>

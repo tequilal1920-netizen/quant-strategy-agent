@@ -24,6 +24,7 @@
     stockQuery: "",
   };
   const cache = new Map();
+  const pending = new Map();
   const $ = (selector) => domRoot.querySelector(selector);
   const $$ = (selector) => Array.from(domRoot.querySelectorAll(selector));
   const finite = (value) => Number.isFinite(Number(value));
@@ -36,11 +37,39 @@
   function endpoint(path) { return `${basePath}${path}`; }
   async function fetchJSON(path) {
     if (cache.has(path)) return cache.get(path);
-    const response = await fetch(endpoint(path), { headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const payload = await response.json();
-    cache.set(path, payload);
-    return payload;
+    if (pending.has(path)) return pending.get(path);
+    const task = (async () => {
+      let lastError = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const response = await fetch(endpoint(path), { headers: { Accept: "application/json" } });
+          if (!response.ok) {
+            const error = new Error(`HTTP ${response.status}`);
+            error.status = response.status;
+            throw error;
+          }
+          const payload = await response.json();
+          cache.set(path, payload);
+          return payload;
+        } catch (error) {
+          lastError = error;
+          const retryable = !error.status || error.status >= 500;
+          if (!retryable || attempt === 1) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+      }
+      throw lastError;
+    })();
+    pending.set(path, task);
+    try { return await task; }
+    finally { pending.delete(path); }
+  }
+
+  function setStatus(kind, message) {
+    const dot = $("#ai-monitor-status-dot");
+    const label = $("#ai-monitor-status-text");
+    if (dot) dot.className = `status-dot ${kind}`;
+    if (label) label.textContent = message;
   }
 
   function showToast(message) {
@@ -149,8 +178,17 @@
 
   async function loadLevel1Series() {
     const names = (state.snapshot.industry_tree || []).map((item) => item.name);
-    const payloads = await Promise.all(names.map((name) => fetchJSON(`/api/level1/${encodeURIComponent(name)}`)));
-    names.forEach((name, index) => state.level1Payloads.set(name, payloads[index]));
+    const results = await Promise.allSettled(names.map((name) => fetchJSON(`/api/level1/${encodeURIComponent(name)}`)));
+    let failures = 0;
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled") state.level1Payloads.set(names[index], result.value);
+      else failures += 1;
+    });
+    if (failures) {
+      setStatus("failed", `部分行业时序加载失败（${failures}项）`);
+      showToast(`有 ${failures} 个一级行业时序暂未加载，其余图表可正常使用。`);
+    }
+    return failures;
   }
 
   function scoreColor(value) {
@@ -428,11 +466,20 @@
       state.snapshot = await fetchJSON("/api/snapshot");
       state.selectedLevel1 = state.snapshot.industry_tree?.[0]?.name || "电子";
       $("#latest-date").textContent = state.snapshot.meta?.latest_trade_dt || "-";
+      setStatus("ok", "科技扩散数据更新正常");
       populateControls(); bindControls();
-      await loadLevel1Series();
       renderMarketCharts(); renderIndustryMap();
+      const level1Task = loadLevel1Series().then((failures) => {
+        renderMarketCharts();
+        if (!failures) setStatus("ok", "科技扩散数据更新正常");
+      }).catch((error) => {
+        setStatus("failed", "行业时序加载失败");
+        showToast(`行业时序加载失败：${error.message}`);
+      });
       await loadSelectedGroup();
+      void level1Task;
     } catch (error) {
+      setStatus("failed", "科技扩散数据加载失败");
       showToast(`看板加载失败：${error.message}`);
       throw error;
     }
@@ -451,6 +498,7 @@
 
   function invalidate() {
     cache.clear();
+    pending.clear();
     state.snapshot = null;
     state.groupPayload = null;
     state.level1Payloads = new Map();

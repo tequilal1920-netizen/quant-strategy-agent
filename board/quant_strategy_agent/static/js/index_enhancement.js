@@ -5,8 +5,10 @@
   const BASE=String(BOOT.basePath||'').replace(/\/$/,'');
   const COLORS=['#c00000','#ffc000','#2f75b5','#808080','#ed7d31','#7030a0','#00b050','#5b9bd5','#a5a5a5','#ff0000'];
   const TITLES={home:['主页',''],universe:['资产池',''],alpha:['Alpha模型',''],smartbeta:['SmartBeta模型',''],risk:['风险模型',''],tracking:['组合跟踪','']};
-  const STATE={snapshot:null,page:'home',universe:'CSI2000_ENH',model:null,seq:0,industryTop:16,tableRows:40,alphaMetric:'rank_ic',alphaSplit:'all',alphaTop:20,smartSort:'score',smartCount:7,riskRange:'all',riskTail:.95,riskStress:'all',trackingRange:'all',costBps:10};
+  const STATE={snapshot:null,page:'home',universe:'CSI800_ENH',model:null,seq:0,industryTop:16,tableRows:40,alphaMetric:'rank_ic',alphaSplit:'all',alphaTop:20,smartSort:'score',smartCount:7,riskRange:'all',riskTail:.95,riskStress:'all',trackingRange:'all',costBps:10};
   const MODEL_NAMES={
+    index_active_risk_optimizer_v12:'主动风险优化（影子）',
+    index_active_risk_reliability_v13:'IC可靠性缩放（未入选）',
     csi800_cashflow_quality_agent_v11:'现金流质量',csi800_regime_barbell_agent_v11:'状态配置',csi800_walkforward_ic_agent_v10:'滚动IC',
     industry_rotation:'行业轮动',portfolio_optimizer:'组合优化',portfolio_optimizer_agent_v4:'组合优化',
     stock_factor_ai_blend_v5:'AI因子组合',stock_factor_ai_composite:'AI因子综合',stock_factor_ai_factory:'AI因子',stock_factor_ai_factory_v4:'AI因子',
@@ -42,17 +44,25 @@
   function universe(snapshot){return obj(snapshot.universes)[STATE.universe]||{};}
   function bundle(snapshot){return obj(obj(snapshot.nav)[STATE.universe]);}
   function models(snapshot){return arr(bundle(snapshot).series);}
+  function championAudit(snapshot){return obj(obj(snapshot.champion_audit)[STATE.universe]);}
   function metric(snapshot,model=STATE.model){return arr(bundle(snapshot).leaderboard).find(x=>x.model===model)||{};}
   function series(snapshot,model=STATE.model){return models(snapshot).find(x=>x.model===model)||models(snapshot)[0]||{};}
-  function ensureModel(snapshot){const list=models(snapshot);if(STATE.model&&list.some(x=>x.model===STATE.model))return;const pass=arr(bundle(snapshot).leaderboard).filter(x=>x.target_pass===1).sort((a,b)=>(b.sharpe||-99)-(a.sharpe||-99));STATE.model=(pass[0]&&pass[0].model)||(list[0]&&list[0].model)||null;}
+  function ensureModel(snapshot){
+    const list=models(snapshot);if(STATE.model&&list.some(x=>x.model===STATE.model))return;
+    const audit=championAudit(snapshot);
+    if(audit.champion&&list.some(x=>x.model===audit.champion)){STATE.model=audit.champion;return;}
+    const pass=arr(bundle(snapshot).leaderboard).filter(x=>x.target_pass===1).sort((a,b)=>(b.sharpe||-99)-(a.sharpe||-99));
+    STATE.model=(pass[0]&&pass[0].model)||(list[0]&&list[0].model)||null;
+  }
 
   function control(id,label,options,value){return `<label class="ix-control"><span>${esc(label)}</span><select id="${id}">${options.map(x=>`<option value="${esc(x.value)}" ${String(x.value)===String(value)?'selected':''}>${esc(x.label)}</option>`).join('')}</select></label>`;}
   function toolbar(snapshot,opts={}){
-    ensureModel(snapshot);const u=universe(snapshot),html=[control('ix-universe','增强基准',[{value:'CSI800_ENH',label:'中证800增强'},{value:'CSI2000_ENH',label:'中证2000增强'}],STATE.universe)];
+    ensureModel(snapshot);const u=universe(snapshot),audit=championAudit(snapshot),html=[control('ix-universe','增强基准',[{value:'CSI800_ENH',label:'中证800增强'},{value:'CSI2000_ENH',label:'中证2000增强'}],STATE.universe)];
     if(opts.model!==false)html.push(control('ix-model','正式模型',models(snapshot).map(x=>({value:x.model,label:modelName(x.model)})),STATE.model));
     arr(opts.controls).forEach(x=>html.push(control(x.id,x.label,x.options,x.value)));
     if(opts.search)html.push(`<label class="ix-control"><span>成分检索</span><input id="ix-search" class="ix2-table-search" placeholder="代码 / 名称 / 行业"></label>`);
-    html.push(`<div class="ix-proof">${dateText(u.as_of)} · 权重和 ${fmt(u.weight_sum,4)}% · 正式回测</div>`);
+    const proof=audit.champion?'训练/验证选模 · 封存测试只报告':'短样本诊断 · 未完成训练/验证选模';
+    html.push(`<div class="ix-proof">${dateText(u.as_of)} · 权重和 ${fmt(u.weight_sum,4)}% · ${proof}</div>`);
     return `<div class="ix-toolbar">${html.join('')}</div>`;
   }
   function bindToolbar(snapshot,opts={}){
@@ -77,13 +87,14 @@
   function annual(s){const o={};arr(s.dates).forEach((d,i)=>{const y=String(d).slice(0,4);o[y]=(o[y]||1)*(1+(num(s.returns[i])||0));});return Object.entries(o).map(([year,v])=>({year,value:v-1}));}
   function monthlyMatrix(s){const years=[...new Set(arr(s.dates).map(d=>String(d).slice(0,4)))],months=['01','02','03','04','05','06','07','08','09','10','11','12'],map={};arr(s.dates).forEach((d,i)=>map[String(d).slice(0,7)]=(num(s.returns[i])||0)*100);return {years,months,z:years.map(y=>months.map(m=>map[`${y}-${m}`]??null))};}
   function leaderboard(snapshot,limit=14){return arr(bundle(snapshot).leaderboard).slice().sort((a,b)=>(b.target_pass-a.target_pass)||(b.sharpe-a.sharpe)).slice(0,limit);}
-  const resultColumns=[{key:'model',label:'模型',render:v=>esc(modelName(v))},{key:'periods',label:'月数'},{key:'annual_return',label:'年化',render:v=>pct(v)},{key:'excess_annual_return',label:'超额',render:v=>pct(v)},{key:'sharpe',label:'夏普',render:v=>fmt(v,2)},{key:'information_ratio',label:'IR',render:v=>fmt(v,2)},{key:'max_drawdown',label:'回撤',render:v=>pct(v)},{key:'target_pass',label:'状态',render:v=>v?'<span class="ix-pass">通过</span>':'<span class="ix-fail">未通过</span>'}];
+  const resultColumns=[{key:'model',label:'模型',render:v=>esc(modelName(v))},{key:'periods',label:'月数'},{key:'annual_return',label:'年化',render:v=>pct(v)},{key:'excess_annual_return',label:'超额',render:v=>pct(v)},{key:'sharpe',label:'夏普',render:v=>fmt(v,2)},{key:'information_ratio',label:'IR',render:v=>fmt(v,2)},{key:'max_drawdown',label:'回撤',render:v=>pct(v)},{key:'target_pass',label:'历史目标门',render:v=>v?'<span class="ix-pass">达到</span>':'<span class="ix-fail">未达到</span>'}];
 
   async function home(snapshot){ensureModel(snapshot);const u=universe(snapshot),m=metric(snapshot),b=bundle(snapshot),nav=cid('h-nav'),risk=cid('h-risk'),score=cid('h-score'),dd=cid('h-dd');
-    const pass=arr(b.leaderboard).filter(x=>x.target_pass===1),best=(pass.slice().sort((a,c)=>(c.sharpe||-99)-(a.sharpe||-99))[0]||m);
-    conclusion(`<strong>${esc(u.label)}</strong>当前正式核心为<strong>${esc(modelName(best.model))}</strong>：年化${pct(best.annual_return)}、夏普${fmt(best.sharpe,2)}、IR ${fmt(best.information_ratio,2)}、最大回撤${pct(best.max_drawdown)}。`);
-    root(toolbar(snapshot)+conclusions([{label:'模型结论',value:`${modelName(best.model)}通过目标门；其他复杂模型按正式结果保留或淘汰`},{label:'收益结论',value:`${best.periods}个月，年化${pct(best.annual_return)}，年化超额${pct(best.excess_annual_return)}`},{label:'风险结论',value:`最大回撤${pct(best.max_drawdown)}，IR ${fmt(best.information_ratio,2)}；短样本不跨基准比较`}])+kpis([{label:'最终投资池',value:`${u.summary.investable_count}只`,note:`基准${u.summary.benchmark_count}只`},{label:'通过模型',value:`${pass.length}个`,note:`正式模型${b.leaderboard.length}个`},{label:'最佳夏普',value:fmt(best.sharpe,2),note:`${best.periods}个月`},{label:'最佳年化超额',value:pct(best.excess_annual_return),note:`IR ${fmt(best.information_ratio,2)}`}])+subnav([{id:'h-performance',label:'组合表现'},{id:'h-compare',label:'模型比较'},{id:'h-status',label:'模型状态'}])+section('h-performance','PERFORMANCE','组合表现')+`<div class="ix2-chart-grid">${panel(nav,'正式净值','通过目标门模型与基准',true,'正式回测')}${panel(dd,'模型最大回撤','越接近0越好',false,'正式回测')}</div>`+section('h-compare','COMPARE','模型比较')+`<div class="ix2-chart-grid">${panel(risk,'风险收益','年化波动×年化收益',false,'正式回测')}${panel(score,'夏普与IR','同一投资池比较',false,'正式回测')}</div>`+section('h-status','STATUS','模型状态')+table('正式模型','只显示最相关的14个正式结果。',leaderboard(snapshot),resultColumns));
-    bindToolbar(snapshot);bindSubnav();drawNav(nav,snapshot,pass.map(x=>x.model),3);
+    const audit=championAudit(snapshot),governed=Boolean(audit.champion),pass=arr(b.leaderboard).filter(x=>x.target_pass===1),best=governed?(metric(snapshot,audit.champion)||m):(pass.slice().sort((a,c)=>(c.sharpe||-99)-(a.sharpe||-99))[0]||m),badge=governed?'治理回测':'短样本诊断';
+    conclusion(governed?`<strong>${esc(u.label)}</strong>训练与验证选出的治理冠军为<strong>${esc(modelName(best.model))}</strong>；封存测试结果仅报告。`:`<strong>${esc(u.label)}</strong>尚无具备可比训练与验证分段的冠军；下列结果只作短样本诊断。`);
+    const decision=governed?`${modelName(best.model)}仅由训练与验证选出；测试期不参与再次选模`:'未完成训练与验证选模；历史目标门不代表策略晋升';
+    root(toolbar(snapshot)+conclusions([{label:'模型结论',value:decision},{label:'收益结论',value:`${best.periods}个月历史记录，年化${pct(best.annual_return)}，年化超额${pct(best.excess_annual_return)}`},{label:'风险结论',value:`最大回撤${pct(best.max_drawdown)}，IR ${fmt(best.information_ratio,2)}；${governed?'封存测试只报告':'短样本不得外推'}`}])+kpis([{label:'最终投资池',value:`${u.summary.investable_count}只`,note:`基准${u.summary.benchmark_count}只`},{label:'历史目标门',value:`${pass.length}个`,note:`历史模型${b.leaderboard.length}个`},{label:'历史夏普',value:fmt(best.sharpe,2),note:`${best.periods}个月`},{label:'历史年化超额',value:pct(best.excess_annual_return),note:`IR ${fmt(best.information_ratio,2)}`}])+subnav([{id:'h-performance',label:'组合表现'},{id:'h-compare',label:'模型比较'},{id:'h-status',label:'模型状态'}])+section('h-performance','PERFORMANCE','组合表现')+`<div class="ix2-chart-grid">${panel(nav,'历史净值',governed?'治理冠军与基准':'短样本记录与基准',true,badge)}${panel(dd,'模型最大回撤','越接近0越好',false,badge)}</div>`+section('h-compare','COMPARE','模型比较')+`<div class="ix2-chart-grid">${panel(risk,'风险收益','年化波动×年化收益',false,badge)}${panel(score,'夏普与IR','同一投资池比较',false,badge)}</div>`+section('h-status','STATUS','模型状态')+table('历史回测模型','仅展示训练与验证选出的最优记录；完整比较仍保留在上方图表。',best&&best.model?[best]:[],resultColumns));
+    bindToolbar(snapshot);bindSubnav();drawNav(nav,snapshot,governed?[best.model]:pass.map(x=>x.model),governed?1:3);
     const rows=leaderboard(snapshot);plot(dd,[{type:'bar',x:rows.map(x=>modelName(x.model)),y:rows.map(x=>x.max_drawdown*100),marker:{color:rows.map(x=>x.target_pass?'#c00000':'#2f75b5')}}],{showlegend:false,xaxis:{tickangle:-28,showgrid:false},yaxis:{ticksuffix:'%',gridcolor:'#edf0f3'}});
     plot(risk,[{type:'scatter',mode:'markers',x:rows.map(x=>x.annual_volatility*100),y:rows.map(x=>x.annual_return*100),text:rows.map(x=>modelName(x.model)),marker:{size:rows.map(x=>x.target_pass?13:8),color:rows.map(x=>x.target_pass?'#c00000':'#2f75b5')},hovertemplate:'%{text}<br>波动%{x:.2f}%<br>收益%{y:.2f}%<extra></extra>'}],{showlegend:false,xaxis:{title:'年化波动(%)',showgrid:false},yaxis:{title:'年化收益(%)',gridcolor:'#edf0f3'}});
     plot(score,[{type:'bar',name:'夏普',x:rows.map(x=>modelName(x.model)),y:rows.map(x=>x.sharpe),marker:{color:'#c00000'}},{type:'bar',name:'IR',x:rows.map(x=>modelName(x.model)),y:rows.map(x=>x.information_ratio),marker:{color:'#2f75b5'}}],{barmode:'group',xaxis:{tickangle:-28,showgrid:false}});

@@ -275,6 +275,49 @@
       rows.map(row => '<tr>' + columns.map(c => { const value = row && row[c[0]]; const numeric = typeof value === 'number'; return '<td class="' + (numeric ? 'num' : '') + '">' + esc(numeric ? num(value, c[2] ?? 4) : (value ?? '—')) + '</td>'; }).join('') + '</tr>').join('') +
       '</tbody></table></div></div>';
   }
+  function championHtml(champion) {
+    if (!champion || champion.status !== 'ok') {
+      return '<div class="fl2-empty">暂无通过因果审计并冻结的策略冠军</div>';
+    }
+    const splits = champion.splits || [];
+    const split = name => splits.find(row => row.split === name) || {};
+    const train = split('train'), valid = split('valid'), test = split('test');
+    const summary = champion.gate_summary || {};
+    const items = [
+      ['验证 Sharpe', num(valid.sharpe, 3), '仅训练与验证参与选择', Number(valid.sharpe) > 0],
+      ['测试 Sharpe', num(test.sharpe, 3), '测试集仅报告', Number(test.sharpe) >= .5],
+      ['测试 RankIC', signed(test.rank_ic, 4), 'Spearman', Math.abs(Number(test.rank_ic)) >= .03],
+      ['测试年化收益', pct(test.annual_return, 2), '成本后', Number(test.annual_return) > 0],
+      ['测试最大回撤', pct(test.max_drawdown, 2), '成本后', Number(test.max_drawdown) >= -.25],
+      ['门禁通过', Number(summary.passed || 0) + ' / ' + Number(summary.total || 0), '换手预算需继续优化', Boolean(summary.all_passed)]
+    ];
+    const cards = '<div class="fl2-kpis">' + items.map(item =>
+      '<div class="fl2-kpi ' + (item[3] ? 'good' : 'bad') + '"><small>' + esc(item[0]) + '</small><strong>' +
+      esc(item[1]) + '</strong><em>' + esc(item[2]) + '</em></div>'
+    ).join('') + '</div>';
+    const splitRows = splits.map(row => ({
+      split: ({ train: '训练', valid: '验证', test: '测试' })[row.split] || row.split,
+      rank_ic: signed(row.rank_ic, 4),
+      icir: num(row.icir, 3),
+      sharpe: num(row.sharpe, 3),
+      annual_return: pct(row.annual_return, 2),
+      annual_volatility: pct(row.annual_volatility, 2),
+      max_drawdown: pct(row.max_drawdown, 2),
+      turnover: num(row.turnover, 3)
+    }));
+    const decision = '<div class="fl2-conclusion"><div><small>当前冻结冠军</small><strong>' +
+      esc(champion.selected_candidate) + '</strong></div><div><small>选择纪律</small><strong>训练集与验证集选择，测试集仅作一次性报告</strong></div>' +
+      '<div><small>晋升结论</small><strong>' + esc(champion.promotion_decision || '') + '</strong></div></div>';
+    const candidates = table('结构候选归因', champion.candidate_diagnostics || [], [
+      ['candidate', '候选'], ['train_sharpe', '训练 Sharpe', 3], ['valid_sharpe', '验证 Sharpe', 3],
+      ['test_sharpe', '测试 Sharpe', 3], ['valid_turnover', '验证换手', 3], ['decision', '决策']
+    ]);
+    return decision + cards + table('训练、验证与测试', splitRows, [
+      ['split', '样本'], ['rank_ic', 'RankIC'], ['icir', 'ICIR'], ['sharpe', 'Sharpe'],
+      ['annual_return', '年化收益'], ['annual_volatility', '年化波动'], ['max_drawdown', '最大回撤'], ['turnover', '换手']
+    ]) + candidates + gateGrid({ gates: champion.gates || [] });
+  }
+
 
   function analyticsHtml(run, prefix) {
     const result = run.result || {}, diagnostics = result.diagnostics || {}, m = metric(run);
@@ -482,8 +525,11 @@
     setHeader('strategy'); await loadBase();
     let selected = state.selected && state.selected.engine === 'strategy' ? state.selected : state.runs.find(x => x.engine === 'strategy');
     selected = await hydrate(selected); if (selected) state.selected = selected;
+    const champion = state.bootstrap && state.bootstrap.champion;
+    const frozen = championHtml(champion);
+    const latest = selected && selected.result ? conclusions(selected) + kpis(selected) + analyticsHtml(selected, 'strategy') : '';
     root(section('参数', primaryToolbar('strategy', true) + '<div style="height:12px"></div>' + parameterGroups('strategy') + '<div class="fl2-actions"><button class="fl2-button primary" id="fl2-start">运行策略</button></div>') +
-      section('任务状态', runPanel(selected)) + (selected && selected.result ? section('结果', conclusions(selected) + kpis(selected) + analyticsHtml(selected, 'strategy')) : ''));
+      section('任务状态', runPanel(selected)) + section('结果', frozen + latest));
     bindConfig('strategy', true); bindRunActions(); if (selected && selected.result) drawAnalytics(selected, 'strategy');
   }
 

@@ -1,0 +1,162 @@
+{
+  "schema_version": "factor-champion/1.0",
+  "status": "ok",
+  "engine_version": "factor-lab/3.2-inverse-volatility-rank-execution",
+  "verified_at": "2026-07-26T08:37:11+00:00",
+  "selected_model": "adaptive_icir_12m_neutral",
+  "selected_execution_policy": "continuous_rank_volatility_budget",
+  "selected_candidate": "adaptive_icir_12m_neutral::continuous_rank_volatility_budget",
+  "selection_basis": "train_and_validation_only",
+  "test_usage": "report_only",
+  "candidate_count": 39,
+  "selection_quality": "passed",
+  "promotion_status": "research_only",
+  "promotion_decision": "保留为当前验证冠军。测试集仅用于一次性报告。换手门禁未通过，因此不标记为生产可交易版本。",
+  "evidence": {
+    "local_path": "output/model_improvement/factor_strategy_inverse_vol_v32_20260726.json",
+    "sha256": "368982063836FED707A9F6C70DFE96E516432422DEF5EB9DC0FA08FEEF24652B"
+  },
+  "splits": [
+    {
+      "split": "train",
+      "rank_ic": 0.024887580131134696,
+      "icir": 2.288920311327793,
+      "hit_rate": 0.5751295336787565,
+      "annual_return": 0.04294824719961454,
+      "annual_volatility": 0.101832192429836,
+      "sharpe": 0.46376760616364826,
+      "max_drawdown": -0.1270240698817413,
+      "turnover": 0.8679490454552372
+    },
+    {
+      "split": "valid",
+      "rank_ic": 0.03361417473351964,
+      "icir": 3.0651944920439513,
+      "hit_rate": 0.6369426751592356,
+      "annual_return": 0.1125401357050475,
+      "annual_volatility": 0.09914178497479768,
+      "sharpe": 1.1258799248439653,
+      "max_drawdown": -0.09272401198902513,
+      "turnover": 0.8460060690828684
+    },
+    {
+      "split": "test",
+      "rank_ic": 0.049758395124577665,
+      "icir": 4.84483007463359,
+      "hit_rate": 0.6910828025477707,
+      "annual_return": 0.27449364775884155,
+      "annual_volatility": 0.1005792724820469,
+      "sharpe": 2.4657836700650093,
+      "max_drawdown": -0.028151793434887717,
+      "turnover": 0.7644280933459542
+    }
+  ],
+  "gates": [
+    {
+      "gate": "point_in_time",
+      "label": "点时数据与冻结切分",
+      "observed": 1.0,
+      "threshold": 1.0,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "coverage",
+      "label": "测试期覆盖率",
+      "observed": 1.0,
+      "threshold": 0.8,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "rank_ic",
+      "label": "测试期绝对 RankIC",
+      "observed": 0.049758395124577665,
+      "threshold": 0.03,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "hit_rate",
+      "label": "测试期 IC 命中率",
+      "observed": 0.6910828025477707,
+      "threshold": 0.53,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "oos_decay",
+      "label": "验证到测试衰减",
+      "observed": 1.4802801353608486,
+      "threshold": 0.75,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "net_sharpe",
+      "label": "成本后测试 Sharpe",
+      "observed": 2.4657836700650093,
+      "threshold": 0.5,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "drawdown",
+      "label": "最大回撤不差于 -25%",
+      "observed": -0.028151793434887717,
+      "threshold": -0.25,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "turnover",
+      "label": "换手预算",
+      "observed": 0.7644280933459542,
+      "threshold": 0.65,
+      "comparison": "le",
+      "passed": false
+    },
+    {
+      "gate": "dsr",
+      "label": "多重试验修正 DSR",
+      "observed": 1.0,
+      "threshold": 0.6,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "trial_ledger",
+      "label": "试验台账完整",
+      "observed": 39.0,
+      "threshold": 1.0,
+      "comparison": "ge",
+      "passed": true
+    }
+  ],
+  "candidate_diagnostics": [
+    {
+      "candidate": "连续排序与因果波动预算",
+      "train_sharpe": 0.46376760616364826,
+      "valid_sharpe": 1.1258799248439653,
+      "test_sharpe": 2.4657836700650093,
+      "valid_turnover": 0.8460060690828684,
+      "decision": "入选"
+    },
+    {
+      "candidate": "逆波动率连续排序",
+      "train_sharpe": 0.5006697148301037,
+      "valid_sharpe": 0.9981718624171172,
+      "test_sharpe": 2.5250935180436915,
+      "valid_turnover": 0.874009286326704,
+      "decision": "验证夏普下降，拒绝"
+    },
+    {
+      "candidate": "自适应成本感知连续排序",
+      "train_sharpe": 1.2888845021385253,
+      "valid_sharpe": 0.41594153070825396,
+      "test_sharpe": 2.595503411761189,
+      "valid_turnover": 0.2740079694820406,
+      "decision": "验证稳定性不足，拒绝"
+    }
+  ]
+}

@@ -3,7 +3,7 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const BASE = ((window.APP_BOOT||{}).basePath||"").replace(/\/$/,"");
-  const S = {active:"data:macro", services:null, snapshot:null, seriesCache:{}, globalSupp:null, sw:null, cmdty:null, stockCode:null, stockOverride:null, kline:{health:null,history:[],stocks:[],dates:[],job:null,selectedJob:null}, factor:{status:null,history:null,detail:null,job:null,selectedJob:null}};
+  const S = {active:"data:macro", services:null, snapshot:null, seriesCache:{}, globalSupp:null, sw:null, cmdty:null, stockCode:null, stockOverride:null, kline:{health:null,history:[],historyLoaded:false,historyAudit:null,stocks:[],dates:[],job:null,selectedJob:null}, factor:{status:null,history:null,detail:null,job:null,selectedJob:null}};
   let seq = 0;
   const TXT = {
     core:"\u6838\u5fc3\u7ed3\u8bba", loading:"\u6b63\u5728\u8f7d\u5165", noData:"\u6682\u65e0\u8db3\u591f\u8fde\u7eed\u6570\u636e", update:"\u66f4\u65b0", reset:"\u6062\u590d", open:"\u6253\u5f00",
@@ -133,7 +133,59 @@
   function newsItem(r){ return `<a class="news-item" href="${esc(r.url||'#')}" target="_blank" rel="noreferrer"><time>${esc(r.published_at||'')}</time><strong>${esc(r.title||'')}</strong><small>${esc(r.source||r.event_type||'')}</small></a>`; } function count(rows,key){ return rows.reduce((a,r)=>{const k=r[key]||'NA'; a[k]=(a[k]||0)+1; return a;},{}); }
 
   async function renderKline(v){ const h=HEAD['kline:'+v]||HEAD['kline:home']; header(h[0],h[1],'K\u7ebf\u8bb0\u5fc6\u5b66\u4e60'); $('as-of').textContent='\u670d\u52a1'; $('generated-at').textContent='\u6309\u9700\u751f\u6210'; if(v==='home')return await klineHome(); if(v==='learn')return await klineLearn(); if(v==='backtest')return await klineBacktest(); if(v==='history')return await klineHistory(); }
-  async function needKline(){ try{ const tasks=[];if(!S.kline.health)tasks.push(api('/api/kline/health').then(function(value){S.kline.health=value;}));if(!S.kline.history.length)tasks.push(api('/api/kline/history?limit=80').then(function(value){S.kline.history=arr(value.history);}));await Promise.all(tasks); }catch(e){conclusion('K\u7ebf\u670d\u52a1\u6682\u4e0d\u53ef\u7528\uff1a'+esc(e.message));} }
+  function klineHistoryEvidence(row,detail){
+    const summary=obj(obj(detail).summary),metrics=obj(summary.backtest_metrics||obj(summary.backtest_panel).metrics);
+    const train=obj(metrics.train),valid=obj(metrics.valid||metrics.validation),guard=obj(summary.no_degradation_guard);
+    const status=String(obj(row).status||obj(detail).status||'').toLowerCase();
+    const accepted=guard.accepted_final===true||String(guard.accepted_final||'').toLowerCase()==='true';
+    const trainSharpe=Number(train.sharpe),validSharpe=Number(valid.sharpe);
+    const trainReturn=Number(train.annual_return),validReturn=Number(valid.annual_return);
+    const trainSignals=Number(train.signal_trigger_count),validSignals=Number(valid.signal_trigger_count);
+    const eligible=['done','completed'].includes(status)&&
+      guard.decision_basis==='train_valid_only_no_test_usage'&&accepted&&
+      !/revert|rollback|\u56de\u6eda/i.test(String(guard.effective_result_after_guard||''))&&
+      [trainSharpe,validSharpe,trainReturn,validReturn,trainSignals,validSignals].every(Number.isFinite)&&
+      trainSharpe>0&&validSharpe>0&&trainReturn>0&&validReturn>0&&trainSignals>0&&validSignals>0;
+    return {
+      row:obj(row),detail:obj(detail),eligible,
+      score:[
+        Math.min(trainSharpe,validSharpe),
+        validSharpe,
+        Math.min(trainReturn,validReturn),
+        -Math.abs(trainSharpe-validSharpe),
+        Date.parse(obj(row).created_at||0)||0
+      ]
+    };
+  }
+  function compareKlineHistory(a,b){
+    for(let i=0;i<a.score.length;i+=1){if(a.score[i]!==b.score[i])return b.score[i]-a.score[i];}
+    return String(b.row.job_id||'').localeCompare(String(a.row.job_id||''));
+  }
+  async function loadBestKlineHistory(){
+    const payload=await api('/api/kline/history?limit=80');
+    const rows=arr(payload.history),completed=rows.filter(function(row){return ['done','completed'].includes(String(row.status||'').toLowerCase());});
+    const details=[];
+    for(let i=0;i<completed.length;i+=8){
+      const batch=await Promise.all(completed.slice(i,i+8).map(function(row){
+        return api('/api/kline/jobs/'+encodeURIComponent(row.job_id)).catch(function(){return null;});
+      }));
+      details.push.apply(details,batch);
+    }
+    const evidence=completed.map(function(row,index){return klineHistoryEvidence(row,details[index]);});
+    const eligible=evidence.filter(function(item){return item.eligible;}).sort(compareKlineHistory);
+    const best=eligible[0]||null;
+    S.kline.history=best?[best.row]:[];
+    S.kline.historyAudit={
+      candidate_count:rows.length,
+      eligible_count:eligible.length,
+      selection_basis:'train_validation_conservative_sharpe',
+      selection_uses_test:false,
+      best_job_id:best?best.row.job_id:null
+    };
+    if(best&&!S.kline.job&&!S.kline.selectedJob)S.kline.selectedJob=best.detail;
+    S.kline.historyLoaded=true;
+  }
+  async function needKline(){ try{ const tasks=[];if(!S.kline.health)tasks.push(api('/api/kline/health').then(function(value){S.kline.health=value;}));if(!S.kline.historyLoaded)tasks.push(loadBestKlineHistory());await Promise.all(tasks); }catch(e){conclusion('K\u7ebf\u670d\u52a1\u6682\u4e0d\u53ef\u7528\uff1a'+esc(e.message));} }
   function currentKlineJob(){ return S.kline.job||S.kline.selectedJob||S.kline.history[0]||{}; }
   async function loadKlineJob(id){ if(!id)return null; const j=await api('/api/kline/jobs/'+encodeURIComponent(id)); S.kline.job=j; S.kline.selectedJob=j; return j; }
   function klineControls(){ return `<section class="control-card"><div class="control-grid"><label style="grid-column:span 2;">\u80a1\u7968\u641c\u7d22<input id="kq" value="000001"></label><button id="ks" class="ghost-button" type="button">${TXT.search}</button><label style="grid-column:span 2;">\u80a1\u7968<select id="kst"></select></label><label>\u622a\u6b62\u65e5\u671f<select id="kd"><option value="latest">\u6700\u65b0\u53ef\u7528</option></select></label><label>\u5206\u6790\u6df1\u5ea6<select id="kdepth"><option value="fast">\u5feb\u901f\uff1a\u672c\u5730\u8bb0\u5fc6</option><option value="standard">\u6807\u51c6\uff1aGPT\u590d\u6838</option><option value="deep">\u6df1\u5ea6\uff1a\u89c4\u5219\u6539\u5199</option></select></label><label>\u6301\u6709\u7a97\u53e3<select id="kh"><option value="20">20\u65e5</option><option value="10">10\u65e5</option><option value="30">30\u65e5</option><option value="60">60\u65e5</option></select></label><label>\u4ed3\u4f4d\u6863\u4f4d<select id="kp"><option value="balanced">\u5e73\u8861 30/50/100</option><option value="conservative">\u4fdd\u5b88 20/40/80</option><option value="aggressive">\u79ef\u6781 50/80/100</option></select></label><button id="kstart" class="action-button" type="button">\u5f00\u59cb\u5b66\u4e60</button></div></section>`; }
@@ -2935,7 +2987,7 @@
     portfolio:{title:'组合优化',views:{solve:'优化求解',strategy:'配置策略'}}
   });
 
-  S.workspace=S.workspace||{frequency:'daily',risk:'balanced',section:{}};
+  S.workspace=S.workspace||{section:{}};
   let workspaceControlQueue=Promise.resolve(),workspaceControlPending=0;
   const WORKSPACE_CONFIG={
     'home:overview':{group:'主页',title:'每日策略总览',subtitle:'数据点评与资产配置—资金—行业—个股—组合联动输出',sections:[{id:'overview',label:'综合研判',kind:'home'}]},
@@ -2982,10 +3034,6 @@
     const wanted=S.workspace.section[S.active];
     return config.sections.find(function(item){return item.id===wanted;})||config.sections[0];
   }
-  function workspaceStatusText(){
-    const services=(S.services&&S.services.services)||{},bad=Object.keys(services).filter(function(key){return st(services[key].status||services[key].snapshot_status)==='failed';});
-    return bad.length?'存在 '+bad.length+' 项服务异常':'全部数据链路正常';
-  }
   function workspaceQueueAction(route,action){
     workspaceControlPending+=1;
     const mark=function(){const host=$('workspace-controls');if(host)host.setAttribute('aria-busy','true');};
@@ -3003,28 +3051,9 @@
   }
   function workspaceRenderControls(config){
     const host=$('workspace-controls');if(!host)return;
-    const selected=workspaceSection(config),asOf=(S.snapshot&&S.snapshot.as_of)||'最新可用';
-    host.innerHTML='<div class="workspace-global-controls"><label>更新频率<select id="workspace-frequency"><option value="daily">日度</option><option value="weekly">周度</option><option value="monthly">月度</option></select></label>'+
-      '<label>风险偏好<select id="workspace-risk"><option value="conservative">稳健</option><option value="balanced">平衡</option><option value="aggressive">进取</option></select></label>'+
-      '<label>数据日期<select id="workspace-asof"><option value="latest">'+esc(asOf)+'</option></select></label>'+
-      '<div class="workspace-health"><span class="status-dot '+(workspaceStatusText().includes('异常')?'failed':'ok')+'"></span><strong>'+esc(workspaceStatusText())+'</strong></div>'+
-      '<button id="workspace-refresh" class="ghost-button" type="button">刷新快照</button></div>'+
-      '<nav class="workspace-section-nav" aria-label="当前板块功能">'+config.sections.map(function(item){return '<button type="button" data-workspace-section="'+esc(item.id)+'" class="'+(item.id===selected.id?'is-active':'')+'">'+esc(item.label)+'</button>';}).join('')+'</nav>';
-    $('workspace-frequency').value=S.workspace.frequency;$('workspace-risk').value=S.workspace.risk;
-    $('workspace-frequency').onchange=function(){const route=S.active,value=this.value;workspaceQueueAction(route,async function(){S.workspace.frequency=value;if(window.IndustryRotation&&window.IndustryRotation.state)window.IndustryRotation.state.frequency=value==='monthly'?'monthly':'weekly';invalidateView(route);await render(true);});};
-    $('workspace-risk').onchange=function(){const route=S.active,value=this.value;workspaceQueueAction(route,async function(){S.workspace.risk=value;S.allocation.riskProfile={conservative:'conservative',balanced:'balanced',aggressive:'equity_preferred'}[value];invalidateView(route);await render(true);});};
+    const selected=workspaceSection(config);
+    host.innerHTML='<nav class="workspace-section-nav" aria-label="当前板块功能">'+config.sections.map(function(item){return '<button type="button" data-workspace-section="'+esc(item.id)+'" class="'+(item.id===selected.id?'is-active':'')+'">'+esc(item.label)+'</button>';}).join('')+'</nav>';
     host.querySelectorAll('[data-workspace-section]').forEach(function(button){button.onclick=function(){const route=S.active,sectionId=this.dataset.workspaceSection;if(route==='data:ai_monitor'){workspaceQueueAction(route,async function(){S.workspace.section[route]=sectionId;host.querySelectorAll('[data-workspace-section]').forEach(function(item){item.classList.toggle('is-active',item.dataset.workspaceSection===sectionId);});if(window.AIMonitorUI)window.AIMonitorUI.scrollTo(sectionId);});return;}if(sectionId===workspaceSection(config).id)return;workspaceQueueAction(route,async function(){S.workspace.section[route]=sectionId;invalidateView(route);await render(true);window.scrollTo({top:0,left:0,behavior:'auto'});});};});
-    $('workspace-refresh').onclick=workspaceRefresh;
-  }
-  async function workspaceRefresh(){
-    const button=$('workspace-refresh');if(button){button.disabled=true;button.textContent='刷新中…';}
-    S.snapshot=null;S.services=null;S.seriesCache={};S.globalSupp=null;S.sw=null;S.cmdty=null;S.stockOverride=null;
-    if(S.allocation)S.allocation.snapshot=null;if(S.portfolio)S.portfolio.snapshot=null;if(S.liquidity)S.liquidity.snapshot=null;
-    if(window.IndexEnhancement&&window.IndexEnhancement.state)window.IndexEnhancement.state.snapshot=null;
-    if(window.AIMonitorUI)window.AIMonitorUI.invalidate();
-    if(window.IndustryRotation&&window.IndustryRotation.state){window.IndustryRotation.state.snapshot=null;window.IndustryRotation.state.tracking=null;}
-    Array.from(VIEW_CACHE.keys()).forEach(dropView);displayedView=null;
-    await Promise.allSettled([loadServices(),loadSnapshot()]);await render(true);
   }
   function workspaceRestoreHeading(config){
     setText('page-eyebrow',config.group+' > '+config.title+' >');setText('page-title',config.title);setText('page-subtitle',config.subtitle||'');
@@ -3035,11 +3064,6 @@
     document.querySelectorAll('.nav-item').forEach(function(item){item.classList.toggle('is-active',item.dataset.target===S.active);});
     const active=document.querySelector('.nav-item.is-active');if(active&&active.closest('.nav-group')){const group=active.closest('.nav-group'),toggle=group.querySelector('.nav-group-toggle'),children=group.querySelector('.nav-children');if(toggle)toggle.setAttribute('aria-expanded','true');if(children)children.hidden=false;}
   }
-  function workspaceApplySharedParameters(){
-    const risk={conservative:'conservative',balanced:'balanced',aggressive:'aggressive'}[S.workspace.risk];
-    if($('kp'))$('kp').value=risk;if($('alloc-risk'))$('alloc-risk').value=S.allocation.riskProfile;
-  }
-
   async function workspaceAiMonitor(){
     header('AI监控','五维技术扩散、申万三级行业图谱、行业时序与个股归因','数据看板');
     conclusion('科技扩散监控已原生接入统一看板：数据通过当前账号会话安全代理并短时缓存，保留综合总览、三级行业图谱、行业时序和个股归因的全部图表及联动控件。');
@@ -3062,7 +3086,7 @@
     const value=function(i){return results[i].status==='fulfilled'?results[i].value:{};},allocation=value(0),liquidity=value(1),portfolio=value(2),rotation=value(3);
     const globalRows=arr(table('global_markets','global_market_matrix').rows),industryRows=arr(table('sw_industries','sw_l1_full_snapshot').rows),commodityRows=arr(table('commodities','commodity_market_matrix').rows),stockRows=arr(table('stock','stock_watchlist').rows),newsRows=arr(table('news_events','news_feed').rows).slice().sort(function(a,b){return String(b.published_at).localeCompare(String(a.published_at));});
     const globalTop=workspaceTopBy(globalRows,'ret_5d'),industryTop=workspaceTopBy(industryRows,'ret_5d'),commodityTop=workspaceTopBy(commodityRows,'ret_20d'),stockTop=workspaceTopBy(stockRows,'ret_20d'),latestNews=newsRows[0]||{};
-    const profile={conservative:'conservative',balanced:'balanced',aggressive:'equity_preferred'}[S.workspace.risk],assetWeights=allocation&&allocation.allocations?allocWeights(allocation,'recommended',profile):{};
+    const profile=S.allocation.riskProfile||'equity_preferred',assetWeights=allocation&&allocation.allocations?allocWeights(allocation,'recommended',profile):{};
     const monthly=obj(obj(rotation.industry).frequencies).monthly||{},weekly=obj(obj(rotation.industry).frequencies).weekly||{},styleQuarterly=obj(obj(rotation.style).frequencies).quarterly||{};
     const monthlyHolding=arr(monthly.holdings).slice(-1)[0]||{},weeklyHolding=arr(weekly.holdings).slice(-1)[0]||{},styleHolding=arr(styleQuarterly.holdings).slice(-1)[0]||{};
     const finalWeights=arr(obj(portfolio.home).current_weights).slice().sort(function(a,b){return Number(b.weight)-Number(a.weight);});
@@ -3103,7 +3127,7 @@
     if(alias){S.active=alias[0];S.workspace.section[S.active]=alias[1];}
     const config=workspaceConfig();workspaceSyncNav();workspaceRenderControls(config);
     const section=workspaceSection(config),external=['rotation','factorlab','index'].includes(section.kind);
-    if(!external&&!force&&showCachedView(S.active)){workspaceRestoreHeading(config);workspaceApplySharedParameters();return;}
+    if(!external&&!force&&showCachedView(S.active)){workspaceRestoreHeading(config);return;}
     if(force){
       invalidateView(S.active);
       const loadingHost=$('view-root');
@@ -3111,7 +3135,7 @@
     }
     if(external){displayedView=null;const host=$('view-root');if(host)host.innerHTML='<div class="loading-card">正在载入合并后的功能板块。</div>';}
     try{await workspaceRenderSection(section);}catch(error){console.error('工作区渲染异常',error);conclusion('页面加载失败：'+esc(error.message));root('<div class="loading-card">当前功能暂不可用，请检查服务状态后重试。</div>');}
-    workspaceRestoreHeading(config);workspaceRenderControls(config);workspaceApplySharedParameters();applyNavStatuses();
+    workspaceRestoreHeading(config);workspaceRenderControls(config);applyNavStatuses();
   }
   S.active='home:overview';
   render=renderWorkspace;

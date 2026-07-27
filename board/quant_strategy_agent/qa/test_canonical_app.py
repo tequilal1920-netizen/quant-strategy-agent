@@ -103,7 +103,57 @@ class CanonicalAppTest(unittest.TestCase):
                     headers={"Accept-Encoding": "gzip", "If-None-Match": etag},
                 )
                 self.assertEqual(conditional.status_code, 304)
+    def test_factor_lab_exposes_audited_champion_without_using_test_for_selection(self) -> None:
+        response = self.client.get("/api/factor-lab/bootstrap")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        champion = payload["champion"]
+        self.assertEqual(payload["engine_version"], "factor-lab/3.2-inverse-volatility-rank-execution")
+        self.assertEqual(champion["status"], "ok")
+        self.assertEqual(champion["selection_basis"], "train_and_validation_only")
+        self.assertEqual(champion["test_usage"], "report_only")
+        self.assertEqual(champion["candidate_count"], 39)
+        self.assertEqual(champion["gate_summary"]["passed"], 9)
+        self.assertEqual(champion["gate_summary"]["total"], 10)
+        self.assertFalse(champion["gate_summary"]["all_passed"])
+        metrics = {row["split"]: row for row in champion["splits"]}
+        self.assertAlmostEqual(metrics["valid"]["sharpe"], 1.1258799248439653)
+        self.assertAlmostEqual(metrics["test"]["sharpe"], 2.4657836700650093)
+        self.assertAlmostEqual(metrics["test"]["max_drawdown"], -0.028151793434887717)
+        turnover = next(row for row in champion["gates"] if row["gate"] == "turnover")
+        self.assertFalse(turnover["passed"])
+        js = (APP_ROOT / "static" / "js" / "factor_lab.js").read_text(encoding="utf-8")
+        self.assertIn("function championHtml(champion)", js)
+        self.assertIn("训练集与验证集选择，测试集仅作一次性报告", js)
 
+
+    def test_workspace_controls_are_scoped_and_review_strip_is_absent(self) -> None:
+        template = (APP_ROOT / "templates" / "index_rotation_factor_lab.html").read_text(encoding="utf-8")
+        app_js = (APP_ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        app_css = (APP_ROOT / "static" / "css" / "app.css").read_text(encoding="utf-8")
+        unified_css = (APP_ROOT / "static" / "css" / "ui_unified.css").read_text(encoding="utf-8")
+        main_py = (APP_ROOT / "main.py").read_text(encoding="utf-8")
+        self.assertIn('aria-label="当前板块功能目录"', template)
+        self.assertIn('class="workspace-section-nav"', app_js)
+        self.assertIn("S.workspace=S.workspace||{section:{}};", app_js)
+        for removed in (
+            "model-evidence-strip", "workspace-global-controls", "workspace-frequency",
+            "workspace-risk", "workspace-asof", "workspace-refresh", "loadGovernance",
+            "workspaceApplySharedParameters", "workspaceRenderEvidence",
+        ):
+            self.assertNotIn(removed, template + app_js + app_css + unified_css)
+        self.assertNotIn("/api/model-governance", app_js)
+        self.assertIn('@app.get("/api/model-governance")', main_py)
+
+    def test_ai_monitor_tolerates_partial_level1_failures(self) -> None:
+        core_js = (APP_ROOT / "static" / "ai_monitor" / "js" / "core.js").read_text(encoding="utf-8")
+        shell_js = (APP_ROOT / "static" / "ai_monitor" / "js" / "shell.js").read_text(encoding="utf-8")
+        self.assertIn("const pending = new Map();", core_js)
+        self.assertIn("Promise.allSettled", core_js)
+        self.assertIn("await new Promise((resolve) => setTimeout(resolve, 250));", core_js)
+        self.assertIn("void level1Task;", core_js)
+        self.assertIn('id="ai-monitor-status-dot" class="status-dot running"', shell_js)
+        self.assertIn('id="ai-monitor-status-text"', shell_js)
     def test_ai_monitor_is_native_shadow_ui(self) -> None:
         template = (APP_ROOT / "templates" / "index_rotation_factor_lab.html").read_text(encoding="utf-8")
         app_js = (APP_ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
@@ -263,5 +313,18 @@ class CanonicalAppTest(unittest.TestCase):
                 self.assertIn(destination["target"], app_js)
                 self.assertIn(destination["section"], app_js)
                 self.assertIn(destination["renderer"].split("/")[1], app_js)
+
+    def test_history_views_keep_only_the_governed_best_record(self) -> None:
+        app_js = (APP_ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+        index_js = (
+            APP_ROOT / "static" / "js" / "index_enhancement.js"
+        ).read_text(encoding="utf-8")
+        self.assertIn("function klineHistoryEvidence(row,detail)", app_js)
+        self.assertIn("Math.min(trainSharpe,validSharpe)", app_js)
+        self.assertIn("selection_basis:'train_validation_conservative_sharpe'", app_js)
+        self.assertIn("selection_uses_test:false", app_js)
+        self.assertIn("S.kline.history=best?[best.row]:[];", app_js)
+        self.assertIn("best&&best.model?[best]:[]", index_js)
+        self.assertIn("完整比较仍保留在上方图表", index_js)
 if __name__ == "__main__":
     unittest.main(verbosity=2)

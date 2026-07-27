@@ -31,6 +31,13 @@ ENGINE_PATH = Path(
 STATE_DB = Path(os.environ.get("FACTOR_LAB_STATE_DB", str(PROJECT_ROOT / "database" / "factor_lab_state.sqlite3"))).resolve()
 RUN_ROOT = Path(os.environ.get("FACTOR_LAB_RUN_ROOT", str(PROJECT_ROOT / "output" / "factor_laboratory" / "runs"))).resolve()
 RUN_ROOT.mkdir(parents=True, exist_ok=True)
+CHAMPION_MANIFEST = Path(
+    os.environ.get(
+        "FACTOR_LAB_CHAMPION_MANIFEST",
+        str(PROJECT_ROOT / "model" / "factor_laboratory" / "champion_manifest.json"),
+    )
+).resolve()
+
 STATE_DB.parent.mkdir(parents=True, exist_ok=True)
 PROCESS_LOCK = threading.RLock()
 PROCESSES: dict[str, subprocess.Popen] = {}
@@ -316,6 +323,41 @@ def create_run(payload: dict[str, Any]) -> dict[str, Any]:
     return run_dict(row)
 
 
+def latest_factor_evaluations(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
+    """Return one auditable formal record per factor without metric splicing."""
+
+    rows = conn.execute(
+        """
+        with ranked as (
+          select
+            factor_name,
+            rank_ic,
+            icir,
+            coverage,
+            pass_flag,
+            run_id as evaluation_run_id,
+            universe as evaluation_universe,
+            split_name as evaluation_split,
+            row_number() over (
+              partition by factor_name
+              order by
+                case when universe = 'ALL_A' then 0 else 1 end,
+                case split_name when 'full' then 0 when 'test' then 1
+                     when 'valid' then 2 when 'train' then 3 else 4 end,
+                run_id desc
+            ) as record_rank
+          from factor_test_result
+          where split_name in ('full','test','valid','train')
+        )
+        select factor_name, rank_ic, icir, coverage, pass_flag,
+               evaluation_run_id, evaluation_universe, evaluation_split
+        from ranked
+        where record_rank = 1
+        """
+    )
+    return {row["factor_name"]: dict(row) for row in rows}
+
+
 def catalog_payload(force: bool = False) -> dict[str, Any]:
     if not force and CATALOG_CACHE.get("payload") and time.time() - float(CATALOG_CACHE.get("at") or 0) < 300:
         return CATALOG_CACHE["payload"]
@@ -336,7 +378,7 @@ def catalog_payload(force: bool = False) -> dict[str, Any]:
             conn.row_factory = sqlite3.Row
             watermark = conn.execute("SELECT MAX(trade_date) FROM stock_ohlcv_daily").fetchone()[0]
             factors = [dict(x) for x in conn.execute("SELECT factor_name,COALESCE(factor_group,'未分类') factor_group,COALESCE(source_agent,'local') source_agent,COUNT(*) value_count,MAX(trade_date) last_date FROM factor_value_daily GROUP BY factor_name,factor_group,source_agent ORDER BY last_date DESC,factor_name LIMIT 240")]
-            tests = {x[0]: dict(x) for x in conn.execute("SELECT factor_name,MAX(ABS(rank_ic)) rank_ic,MAX(icir) icir,MAX(coverage) coverage,MAX(pass_flag) pass_flag FROM factor_test_result GROUP BY factor_name")}
+            tests = latest_factor_evaluations(conn)
             conn.close()
             for factor in factors:
                 factor.update(tests.get(factor["factor_name"], {}))
@@ -351,13 +393,64 @@ def catalog_payload(force: bool = False) -> dict[str, Any]:
     return base
 
 
+def champion_payload() -> dict[str, Any]:
+    """Load the compact, audited strategy champion contract for the UI."""
+    unavailable = {
+        "status": "unavailable",
+        "engine_version": "factor-lab/3.2-inverse-volatility-rank-execution",
+        "message": "validated_champion_manifest_unavailable",
+    }
+    try:
+        if not CHAMPION_MANIFEST.exists() or CHAMPION_MANIFEST.stat().st_size > 128_000:
+            return unavailable
+        payload = json.loads(CHAMPION_MANIFEST.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return unavailable
+    required = {
+        "schema_version",
+        "engine_version",
+        "selected_candidate",
+        "selection_basis",
+        "test_usage",
+        "candidate_count",
+        "splits",
+        "gates",
+        "candidate_diagnostics",
+    }
+    if not isinstance(payload, dict) or not required.issubset(payload):
+        return unavailable
+    if payload.get("selection_basis") != "train_and_validation_only":
+        return unavailable
+    if payload.get("test_usage") != "report_only":
+        return unavailable
+    if not isinstance(payload.get("splits"), list) or {
+        row.get("split") for row in payload["splits"] if isinstance(row, dict)
+    } != {"train", "valid", "test"}:
+        return unavailable
+    if not isinstance(payload.get("gates"), list) or not payload["gates"]:
+        return unavailable
+    if not isinstance(payload.get("candidate_diagnostics"), list):
+        return unavailable
+    payload = dict(payload)
+    payload["status"] = "ok"
+    payload["gate_summary"] = {
+        "passed": sum(bool(row.get("passed")) for row in payload["gates"]),
+        "total": len(payload["gates"]),
+        "all_passed": all(bool(row.get("passed")) for row in payload["gates"]),
+    }
+    return payload
+
+
 def bootstrap_payload() -> dict[str, Any]:
     path, python = warehouse_path(), worker_python()
+    champion = champion_payload()
     return {
         "status": "ok" if path.exists() and ENGINE_PATH.exists() and python.exists() else "blocked",
-        "api_version": API_VERSION, "engine_version": "factor-lab/1.0-causal-mixture-ppo",
+        "api_version": API_VERSION,
+        "engine_version": champion.get("engine_version", "factor-lab/3.2-inverse-volatility-rank-execution"),
         "data": {"database_available": path.exists(), "database_hint": "server-side research warehouse", "watermark": catalog_payload().get("watermark"), "point_in_time": True},
         "worker": {"python_available": python.exists(), "isolated_process": True, "max_concurrent": MAX_CONCURRENT},
+        "champion": champion,
         "models": MODEL_PRESETS, "mode_caps": MODE_CAPS,
         "pages": [
             {"id": "home", "label": "01 主页"}, {"id": "dashboard", "label": "02 因子看板"},

@@ -19,15 +19,16 @@ from flask import Response, jsonify, render_template, request, session
 
 import app as legacy
 import factor_lab_backend
+import model_governance_backend
 import rotation_app as rotation
 
 
-APP_VERSION = "2026.07.24-research-workspace-r17.4-ai-monitor-rotation-ui"
+APP_VERSION = "2026.07.27-scoped-controls-ai-resilience-r21.0"
 legacy.APP_VERSION = APP_VERSION
 rotation.APP_VERSION = APP_VERSION
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-factor_lab_backend.API_VERSION = "factor-lab-api/2.1"
+factor_lab_backend.API_VERSION = "factor-lab-api/2.2"
 factor_lab_backend.ENGINE_PATH = (
     PROJECT_ROOT / "model" / "factor_laboratory" / "worker.py"
 )
@@ -122,6 +123,12 @@ def services() -> Response:
 
 app.view_functions["services"] = services
 
+
+@app.get("/api/model-governance")
+def model_governance() -> Response:
+    """Expose the immutable split and promotion evidence used by the UI."""
+    return jsonify(model_governance_backend.build_model_governance())
+
 @app.get("/api/ai-monitor/<path:upstream_path>")
 def ai_monitor_proxy(upstream_path: str) -> Response:
     """Expose the authenticated technology-diffusion JSON API in this app."""
@@ -176,6 +183,7 @@ _CACHEABLE_API_ENDPOINTS = {
     "factor_lab.catalog",
     "factor_lab.dashboard",
     "services",
+    "model_governance",
     "global_market_supplement",
     "kline_health",
     "kline_stocks",
