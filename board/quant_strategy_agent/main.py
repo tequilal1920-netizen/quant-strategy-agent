@@ -23,7 +23,7 @@ import model_governance_backend
 import rotation_app as rotation
 
 
-APP_VERSION = "2026.07.27-scoped-controls-ai-resilience-r21.0"
+APP_VERSION = "2026.07.27-scoped-controls-ai-resilience-r21.1"
 legacy.APP_VERSION = APP_VERSION
 rotation.APP_VERSION = APP_VERSION
 

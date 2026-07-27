@@ -22,6 +22,8 @@
     metric: "diffusion_score_smooth5",
     reliableOnly: true,
     stockQuery: "",
+    level1Failures: 0,
+    groupFailed: false,
   };
   const cache = new Map();
   const pending = new Map();
@@ -70,6 +72,12 @@
     const label = $("#ai-monitor-status-text");
     if (dot) dot.className = `status-dot ${kind}`;
     if (label) label.textContent = message;
+  }
+
+  function updateDataStatus() {
+    if (state.groupFailed) return setStatus("failed", "行业明细加载失败");
+    if (state.level1Failures) return setStatus("failed", `部分行业时序加载失败（${state.level1Failures}项）`);
+    setStatus("ok", "科技扩散数据更新正常");
   }
 
   function showToast(message) {
@@ -184,10 +192,9 @@
       if (result.status === "fulfilled") state.level1Payloads.set(names[index], result.value);
       else failures += 1;
     });
-    if (failures) {
-      setStatus("failed", `部分行业时序加载失败（${failures}项）`);
-      showToast(`有 ${failures} 个一级行业时序暂未加载，其余图表可正常使用。`);
-    }
+    state.level1Failures = failures;
+    updateDataStatus();
+    if (failures) showToast(`有 ${failures} 个一级行业时序暂未加载，其余图表可正常使用。`);
     return failures;
   }
 
@@ -434,8 +441,8 @@
       const path = state.selectedIndustry === "__L1__" ? `/api/level1/${encodeURIComponent(state.selectedLevel1)}` : `/api/industry/${encodeURIComponent(state.selectedIndustry)}`;
       state.groupPayload = await fetchJSON(path);
       const row = latest(state.groupPayload.series || []);
-      renderIndustryHeader(row); renderIndustryCharts(); renderStockAttribution(); renderIndustryMap(); renderRankings();
-    } catch (error) { showToast(`行业数据读取失败：${error.message}`); }
+      state.groupFailed = false; renderIndustryHeader(row); renderIndustryCharts(); renderStockAttribution(); renderIndustryMap(); renderRankings(); updateDataStatus();
+    } catch (error) { state.groupFailed = true; updateDataStatus(); showToast(`行业数据读取失败：${error.message}`); }
   }
 
   function bindControls() {
@@ -466,17 +473,18 @@
       state.snapshot = await fetchJSON("/api/snapshot");
       state.selectedLevel1 = state.snapshot.industry_tree?.[0]?.name || "电子";
       $("#latest-date").textContent = state.snapshot.meta?.latest_trade_dt || "-";
-      setStatus("ok", "科技扩散数据更新正常");
+      updateDataStatus();
       populateControls(); bindControls();
       renderMarketCharts(); renderIndustryMap();
       const level1Task = loadLevel1Series().then((failures) => {
         renderMarketCharts();
-        if (!failures) setStatus("ok", "科技扩散数据更新正常");
+        if (!failures) updateDataStatus();
       }).catch((error) => {
         setStatus("failed", "行业时序加载失败");
         showToast(`行业时序加载失败：${error.message}`);
       });
-      await loadSelectedGroup();
+      const groupTask = loadSelectedGroup();
+      void groupTask;
       void level1Task;
     } catch (error) {
       setStatus("failed", "科技扩散数据加载失败");
@@ -492,6 +500,8 @@
     state.groupPayload = null;
     state.level1Payloads = new Map();
     state.selectedStock = null;
+    state.level1Failures = 0;
+    state.groupFailed = false;
     await init();
     return state;
   }
@@ -503,6 +513,8 @@
     state.groupPayload = null;
     state.level1Payloads = new Map();
     state.selectedStock = null;
+    state.level1Failures = 0;
+    state.groupFailed = false;
   }
 
   window.AIMonitorCore = { mount, invalidate, state };

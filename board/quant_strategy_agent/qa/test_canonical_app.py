@@ -151,6 +151,7 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertIn("const pending = new Map();", core_js)
         self.assertIn("Promise.allSettled", core_js)
         self.assertIn("await new Promise((resolve) => setTimeout(resolve, 250));", core_js)
+        self.assertIn("void groupTask;", core_js)
         self.assertIn("void level1Task;", core_js)
         self.assertIn('id="ai-monitor-status-dot" class="status-dot running"', shell_js)
         self.assertIn('id="ai-monitor-status-text"', shell_js)
