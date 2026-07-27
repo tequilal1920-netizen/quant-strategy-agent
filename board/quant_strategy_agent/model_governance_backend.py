@@ -12,7 +12,7 @@ from typing import Any
 APP_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_DIR.parents[1] if APP_DIR.name == "quant_strategy_agent" else APP_DIR
 EVIDENCE_ROOT = PROJECT_ROOT / "output" / "model_improvement"
-RELEASE = "2026.07.26-active-risk-shadow-r20.2"
+RELEASE = "2026.07.27-scoped-controls-ai-resilience-r21.0"
 
 
 def _read_json(path: Path) -> dict[str, Any]:

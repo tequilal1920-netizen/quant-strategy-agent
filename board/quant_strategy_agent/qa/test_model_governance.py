@@ -14,6 +14,7 @@ import model_governance_backend as governance
 def test_model_governance_keeps_test_report_only() -> None:
     payload = governance.build_model_governance()
     assert payload["status"] == "ok"
+    assert payload["release"] == "2026.07.27-scoped-controls-ai-resilience-r21.0"
     assert payload["summary"]["model_count"] == 9
     assert payload["policy"]["selection"].endswith("sealed test report only")
     assert "test-set retuning" in payload["policy"]["prohibited"]
