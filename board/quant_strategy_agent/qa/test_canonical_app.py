@@ -155,6 +155,15 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertIn("void level1Task;", core_js)
         self.assertIn('id="ai-monitor-status-dot" class="status-dot running"', shell_js)
         self.assertIn('id="ai-monitor-status-text"', shell_js)
+
+    def test_ai_monitor_cache_matches_daily_update_frequency(self) -> None:
+        main_py = (APP_ROOT / "main.py").read_text(encoding="utf-8")
+        self.assertIn('if clean_path == "api/snapshot":', main_py)
+        self.assertIn("ttl = 21_600", main_py)
+        self.assertIn('elif clean_path == "api/dynamic-series":', main_py)
+        self.assertIn("ttl = 900", main_py)
+        self.assertIn("ttl = 1_800", main_py)
+
     def test_ai_monitor_is_native_shadow_ui(self) -> None:
         template = (APP_ROOT / "templates" / "index_rotation_factor_lab.html").read_text(encoding="utf-8")
         app_js = (APP_ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")

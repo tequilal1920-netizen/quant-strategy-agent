@@ -23,7 +23,7 @@ import model_governance_backend
 import rotation_app as rotation
 
 
-APP_VERSION = "2026.07.27-scoped-controls-ai-resilience-r21.1"
+APP_VERSION = "2026.07.27-scoped-controls-ai-cache-r21.2"
 legacy.APP_VERSION = APP_VERSION
 rotation.APP_VERSION = APP_VERSION
 
@@ -141,7 +141,12 @@ def ai_monitor_proxy(upstream_path: str) -> Response:
     upstream_api_path = "/" + "/".join(
         legacy.urllib.parse.quote(segment, safe="") for segment in clean_path.split("/")
     )
-    ttl = 90 if clean_path in {"api/snapshot", "api/dynamic-series"} else 300
+    if clean_path == "api/snapshot":
+        ttl = 21_600
+    elif clean_path == "api/dynamic-series":
+        ttl = 900
+    else:
+        ttl = 1_800
 
     def load() -> Any:
         legacy.ensure_service_login("ai_monitor")
