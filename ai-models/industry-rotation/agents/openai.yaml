@@ -1,0 +1,4 @@
+interface:
+  display_name: "行业景气度"
+  short_description: "查询行业景气排名、高频指标驱动、月周轮动绩效与季度风格箱"
+  default_prompt: "请使用 $industry-rotation 查询景气度最高行业及其高频驱动。"

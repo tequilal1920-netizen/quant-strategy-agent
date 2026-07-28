@@ -1,0 +1,52 @@
+{
+    "schema_version":  "quant-agent-ai-package/1.0",
+    "title":  "行业景气度",
+    "slug":  "industry-rotation",
+    "github_folder_url":  "https://github.com/tequilal1920-netizen/quant-strategy-agent/tree/agent/industry-style-r16-6/ai-models/industry-rotation",
+    "github_branch":  "agent/industry-style-r16-6",
+    "skill_entry":  "SKILL.md",
+    "query_entry":  "scripts/query.py",
+    "model_source":  "source",
+    "bundled_components":  [
+
+                           ],
+    "operations":  [
+                       "ranking",
+                       "drivers",
+                       "style",
+                       "backtest"
+                   ],
+    "question_examples":  [
+                              "哪个行业景气度最高",
+                              "电子行业的高频景气由哪些指标驱动"
+                          ],
+    "shared_runtime":  "../../agent_runtime",
+    "shared_repository_dependencies":  [
+                                           "../../board",
+                                           "../../database",
+                                           "../../framework",
+                                           "../../environment"
+                                       ],
+    "required_environment":  [
+                                 "QUANT_AGENT_SNAPSHOT_ROOT",
+                                 "RESEARCH_WAREHOUSE_DB",
+                                 "FACTOR_STATE_DB",
+                                 "QUANT_AGENT_OUTPUT_ROOT"
+                             ],
+    "remote_model_environment":  [
+                                     "QUANT_AGENT_BASE_URL",
+                                     "QUANT_AGENT_USER",
+                                     "QUANT_AGENT_PASSWORD"
+                                 ],
+    "deployment":  {
+                       "remote_root":  "F:\\apps\\quant_strategy_agent_github_runtime",
+                       "local_service":  "http://127.0.0.1:8091",
+                       "authenticated_service":  "http://127.0.0.1:8076/quant-agent-vnext"
+                   },
+    "inventory":  {
+                      "skill_files":  4,
+                      "source_files":  12,
+                      "component_files":  0,
+                      "total_files":  17
+                  }
+}

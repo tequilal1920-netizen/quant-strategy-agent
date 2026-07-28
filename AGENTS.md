@@ -1,19 +1,19 @@
 # 量化策略 Agent 使用约定
 
-本仓库的正式入口是八个一级模型 Skill。收到研究问题后先根据一级标题选择 `skill/<name>/SKILL.md`，再调用对应 `scripts/query.py`。不要凭记忆重写模型结论。
+本仓库的正式 AI 入口是八个 `ai-models/<name>/` 统一文件夹。每个文件夹同时包含 `SKILL.md`、`PACKAGE.json`、查询脚本、一级模型源码和必要内部组件。收到研究问题后先选择对应文件夹，再调用其中的 `scripts/query.py`。旧 `skill/` 目录仅用于兼容。
 
 ## 路由
 
 | 用户问题 | Skill |
 | --- | --- |
-| 跨模型简报与总配置 | `skill/research-home/SKILL.md` |
-| 宏观、全球市场、行业、商品、个股与事件数据 | `skill/data-dashboard/SKILL.md` |
-| 周期识别与大类资产权重 | `skill/asset-allocation/SKILL.md` |
-| 散户、公募、ETF、融资、一级市场、私募与外资 | `skill/liquidity-tracking/SKILL.md` |
-| 行业景气、行业驱动、月周轮动与风格箱 | `skill/industry-rotation/SKILL.md` |
-| 因子、LLM挖掘、指数增强与SmartBeta | `skill/factor-laboratory/SKILL.md` |
-| K线学习、形态记忆与单股技术任务 | `skill/technical-analysis/SKILL.md` |
-| 已知标的、得分、约束与目标权重 | `skill/portfolio-optimization/SKILL.md` |
+| 跨模型简报与总配置 | `ai-models/research-home/` |
+| 宏观、全球市场、行业、商品、个股与事件数据 | `ai-models/data-dashboard/` |
+| 周期识别与大类资产权重 | `ai-models/asset-allocation/` |
+| 散户、公募、ETF、融资、一级市场、私募与外资 | `ai-models/liquidity-tracking/` |
+| 行业景气、行业驱动、月周轮动与风格箱 | `ai-models/industry-rotation/` |
+| 因子、LLM挖掘、指数增强与SmartBeta | `ai-models/factor-laboratory/` |
+| K线学习、形态记忆与单股技术任务 | `ai-models/technical-analysis/` |
+| 已知标的、得分、约束与目标权重 | `ai-models/portfolio-optimization/` |
 
 ## 数据连接
 
@@ -21,9 +21,9 @@
 
 ```powershell
 $env:QUANT_AGENT_SNAPSHOT_ROOT = "F:\apps\quant_strategy_agent_vnext_r25_4_five_panel_dense\board\quant_strategy_agent_vnext\data"
-$env:RESEARCH_WAREHOUSE_DB = "F:\data\research_warehouse.db"
-$env:FACTOR_STATE_DB = "F:\apps\factor_mining_public_8895\state\factor_lab.sqlite3"
-$env:QUANT_AGENT_OUTPUT_ROOT = "F:\apps\quant_strategy_agent\output"
+$env:RESEARCH_WAREHOUSE_DB = "F:\apps\ai_quant_v2_public_8890\report\database\research_warehouse.db"
+$env:FACTOR_STATE_DB = "F:\apps\quant_strategy_agent_vnext_r25_4_five_panel_dense\database\factor_lab_state.sqlite3"
+$env:QUANT_AGENT_OUTPUT_ROOT = "F:\apps\quant_strategy_agent_vnext_r25_4_five_panel_dense\output"
 python -m agent_runtime doctor
 ```
 

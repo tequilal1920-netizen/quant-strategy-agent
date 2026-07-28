@@ -3,7 +3,7 @@
 
 ## 新 Agent 直接使用
 
-新 Agent 读取仓库根目录 `AGENTS.md`，再按问题读取对应的 `skill/<模型>/SKILL.md`。八个 Skill 都有可执行查询脚本，结果直接来自模型快照、因子冠军清单和治理证据。
+新 Agent 读取仓库根目录 `AGENTS.md`，再把对应的 `ai-models/<模型>/` 文件夹作为完整模型入口。每个文件夹同时包含 Skill、查询脚本、模型源码、必要内部组件和机器可读依赖清单；旧 `skill/` 目录继续保留兼容。
 
 ```powershell
 git clone --branch agent/industry-style-r16-6 https://github.com/tequilal1920-netizen/quant-strategy-agent.git
@@ -24,30 +24,30 @@ python -m agent_runtime doctor
 典型问答对应的真实命令：
 
 ```powershell
-python skill/asset-allocation/scripts/query.py current 画像=平衡
-python skill/industry-rotation/scripts/query.py ranking 频率=高频 数量=10
-python skill/industry-rotation/scripts/query.py drivers 行业=电子 数量=8
-python skill/liquidity-tracking/scripts/query.py page 页面=外资
-python skill/factor-laboratory/scripts/query.py champion
-python skill/technical-analysis/scripts/query.py status
-python skill/portfolio-optimization/scripts/query.py current 最小权重=0.001
-python skill/research-home/scripts/query.py overview
+python ai-models/asset-allocation/scripts/query.py current 画像=平衡
+python ai-models/industry-rotation/scripts/query.py ranking 频率=高频 数量=10
+python ai-models/industry-rotation/scripts/query.py drivers 行业=电子 数量=8
+python ai-models/liquidity-tracking/scripts/query.py page 页面=外资
+python ai-models/factor-laboratory/scripts/query.py champion
+python ai-models/technical-analysis/scripts/query.py status
+python ai-models/portfolio-optimization/scripts/query.py current 最小权重=0.001
+python ai-models/research-home/scripts/query.py overview
 ```
 
 每次输出都包含 `数据截止`、`生成时间`、`数据来源` 和 `结果`。训练与验证负责选模，测试仅报告；研究候选、观察状态和生产可交易状态保持区分。
 
-## 八个一级模型 Skill
+## 八个统一 AI 模型文件夹
 
-| 一级标题 | Skill | 一句话应用 |
+| 一级标题 | 统一文件夹 | 一句话应用 |
 | --- | --- | --- |
-| 主页 | [`research-home`](skill/research-home/SKILL.md) | 汇总七个研究模块的时点结论、治理状态、风险提示和当前组合。 |
-| 数据看板 | [`data-dashboard`](skill/data-dashboard/SKILL.md) | 查询宏观、全球市场、行业、商品、个股和事件快照及数据质量。 |
-| 资产配置 | [`asset-allocation`](skill/asset-allocation/SKILL.md) | 识别多类宏观周期并输出分画像资产权重和风险贡献。 |
-| 资金面跟踪 | [`liquidity-tracking`](skill/liquidity-tracking/SKILL.md) | 查询七类资金主体的最新值、方向、来源和质量状态。 |
-| 行业景气度 | [`industry-rotation`](skill/industry-rotation/SKILL.md) | 查询行业景气排名、高频驱动、月周轮动和季度风格箱。 |
-| 因子实验室 | [`factor-laboratory`](skill/factor-laboratory/SKILL.md) | 查询因子冠军、指数增强、SmartBeta、三段绩效和治理门禁。 |
-| 技术分析 | [`technical-analysis`](skill/technical-analysis/SKILL.md) | 查询K线治理和形态知识，并转接远程单股学习任务。 |
-| 组合优化 | [`portfolio-optimization`](skill/portfolio-optimization/SKILL.md) | 查询求解器、权重、风险贡献、约束余量、压力和回测门禁。 |
+| 主页 | [`research-home`](ai-models/research-home/) | 汇总七个研究模块的时点结论、治理状态、风险提示和当前组合。 |
+| 数据看板 | [`data-dashboard`](ai-models/data-dashboard/) | 查询宏观、全球市场、行业、商品、个股和事件快照及数据质量。 |
+| 资产配置 | [`asset-allocation`](ai-models/asset-allocation/) | 识别多类宏观周期并输出分画像资产权重和风险贡献。 |
+| 资金面跟踪 | [`liquidity-tracking`](ai-models/liquidity-tracking/) | 查询七类资金主体的最新值、方向、来源和质量状态。 |
+| 行业景气度 | [`industry-rotation`](ai-models/industry-rotation/) | 查询行业景气排名、高频驱动、月周轮动和季度风格箱。 |
+| 因子实验室 | [`factor-laboratory`](ai-models/factor-laboratory/) | 查询因子冠军、指数增强、SmartBeta、三段绩效和治理门禁。 |
+| 技术分析 | [`technical-analysis`](ai-models/technical-analysis/) | 查询K线治理和形态知识，并转接远程单股学习任务。 |
+| 组合优化 | [`portfolio-optimization`](ai-models/portfolio-optimization/) | 查询求解器、权重、风险贡献、约束余量、压力和回测门禁。 |
 
 ## 本机接口与远程模型
 
@@ -110,6 +110,7 @@ powershell -ExecutionPolicy Bypass -File environment/deployment/deploy_agent_run
 ## 目录结构
 
 ```text
+ai-models/    八个可直接交给新 AI 的统一模型文件夹
 board/        统一数据看板、服务端与前端资源
 copy/         重组前单一备份（本地保留，Git 忽略）
 database/     本地数据库与说明（数据库文件不提交）
@@ -133,20 +134,20 @@ skill/       八个一级板块对应的本地 Codex Skill
 - 技术分析：K线学习、配置策略
 - 组合优化：优化求解、配置策略
 
-八个一级板块与最终模型/Skill：
+八个一级板块与统一 AI 文件夹：
 
-| 一级板块 | 模型目录 | Skill 目录 |
+| 一级板块 | 统一 AI 文件夹 | 旧兼容目录 |
 | --- | --- | --- |
-| 主页 | `model/research_home` | `skill/research-home` |
-| 数据看板 | `model/data_dashboard` | `skill/data-dashboard` |
-| 资产配置 | `model/asset_allocation` | `skill/asset-allocation` |
-| 资金面跟踪 | `model/liquidity_tracking` | `skill/liquidity-tracking` |
-| 行业景气度 | `model/industry_rotation` | `skill/industry-rotation` |
-| 因子实验室 | `model/factor_laboratory` | `skill/factor-laboratory` |
-| 技术分析 | `model/technical_analysis` | `skill/technical-analysis` |
-| 组合优化 | `model/portfolio_optimization` | `skill/portfolio-optimization` |
+| 主页 | `ai-models/research-home` | `model/research_home`、`skill/research-home` |
+| 数据看板 | `ai-models/data-dashboard` | `model/data_dashboard`、`skill/data-dashboard` |
+| 资产配置 | `ai-models/asset-allocation` | `model/asset_allocation`、`skill/asset-allocation` |
+| 资金面跟踪 | `ai-models/liquidity-tracking` | `model/liquidity_tracking`、`skill/liquidity-tracking` |
+| 行业景气度 | `ai-models/industry-rotation` | `model/industry_rotation`、`skill/industry-rotation` |
+| 因子实验室 | `ai-models/factor-laboratory` | `model/factor_laboratory`、`skill/factor-laboratory` |
+| 技术分析 | `ai-models/technical-analysis` | `model/technical_analysis`、`skill/technical-analysis` |
+| 组合优化 | `ai-models/portfolio-optimization` | `model/portfolio_optimization`、`skill/portfolio-optimization` |
 
-`model/index_enhancement`、`model/llm_factor_mining` 和 `model/kline_memory_learning` 是上述一级模型的内部组件，不再作为左侧一级板块。每个 `MODULE.json` 记录本地路径、Skill 路径、角色和永久 GitHub 地址。
+`ai-models/factor-laboratory/components/` 已包含指数增强与 LLM 因子挖掘源码；`ai-models/technical-analysis/components/` 已包含 K 线学习源码。每个 `PACKAGE.json` 记录查询动作、外部数据库、共享运行层、部署端点、文件数量和永久 GitHub 文件夹地址。
 
 ## 统一看板
 

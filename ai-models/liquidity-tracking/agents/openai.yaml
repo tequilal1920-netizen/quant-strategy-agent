@@ -1,0 +1,4 @@
+interface:
+  display_name: "资金面跟踪"
+  short_description: "查询七类资金主体的最新值、变化方向、数据来源、频率与质量状态"
+  default_prompt: "请使用 $liquidity-tracking 分析当前资金面及其权益影响。"

@@ -1,0 +1,51 @@
+{
+    "schema_version":  "quant-agent-ai-package/1.0",
+    "title":  "数据看板",
+    "slug":  "data-dashboard",
+    "github_folder_url":  "https://github.com/tequilal1920-netizen/quant-strategy-agent/tree/agent/industry-style-r16-6/ai-models/data-dashboard",
+    "github_branch":  "agent/industry-style-r16-6",
+    "skill_entry":  "SKILL.md",
+    "query_entry":  "scripts/query.py",
+    "model_source":  "source",
+    "bundled_components":  [
+
+                           ],
+    "operations":  [
+                       "overview",
+                       "market",
+                       "news"
+                   ],
+    "question_examples":  [
+                              "全球市场最近谁最强谁最弱",
+                              "列出最新市场数据的截止日和异常"
+                          ],
+    "shared_runtime":  "../../agent_runtime",
+    "shared_repository_dependencies":  [
+                                           "../../board",
+                                           "../../database",
+                                           "../../framework",
+                                           "../../environment"
+                                       ],
+    "required_environment":  [
+                                 "QUANT_AGENT_SNAPSHOT_ROOT",
+                                 "RESEARCH_WAREHOUSE_DB",
+                                 "FACTOR_STATE_DB",
+                                 "QUANT_AGENT_OUTPUT_ROOT"
+                             ],
+    "remote_model_environment":  [
+                                     "QUANT_AGENT_BASE_URL",
+                                     "QUANT_AGENT_USER",
+                                     "QUANT_AGENT_PASSWORD"
+                                 ],
+    "deployment":  {
+                       "remote_root":  "F:\\apps\\quant_strategy_agent_github_runtime",
+                       "local_service":  "http://127.0.0.1:8091",
+                       "authenticated_service":  "http://127.0.0.1:8076/quant-agent-vnext"
+                   },
+    "inventory":  {
+                      "skill_files":  4,
+                      "source_files":  8,
+                      "component_files":  0,
+                      "total_files":  13
+                  }
+}

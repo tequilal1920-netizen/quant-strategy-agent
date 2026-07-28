@@ -1,0 +1,181 @@
+version: "3.0"
+model_name: "AI因子挖掘Agent"
+database: "database/research_warehouse.db"
+purpose: "学习AI因子挖掘方法论，系统性生成、搜索、检验、变异和沉淀新因子，而不是复现研报里的单个因子。"
+
+methodology_learning:
+  local_method_tables:
+    - v4_method_card
+    - v4_factor_agent_plan
+    - v3_report_evidence
+  paper_and_report_methods:
+    - Alpha-GPT
+    - Alpha-GPT 2.0
+    - AlphaAgent
+    - LLM-MCTS formulaic alpha mining
+    - FactorEngine
+    - OpenFE
+    - 101 Formulaic Alphas
+    - GPT因子工厂
+    - GPT因子工厂2.0
+  extraction_target:
+    - search_space
+    - search_channel
+    - validation_stack
+    - stop_rule
+    - overfit_guard
+    - failure_feedback
+
+data_spaces:
+  price_volume:
+    tables: [stock_ohlcv_daily, stock_valuation_daily]
+    fields: [qfq_close, pct_chg, vol, amount, turnover_rate, turnover_rate_f, volume_ratio]
+    windows: [1, 5, 20, 60, 120, 252]
+  fundamentals_visible:
+    tables: [financial_report_visible]
+    point_in_time_key: visible_date
+    fields: [roe, roa, gross_margin, netprofit_margin, netprofit_yoy, op_yoy, tr_yoy, debt_to_assets, assets_turn]
+  moneyflow:
+    tables: [stock_moneyflow_daily]
+    fields: [net_mf_amount, buy_lg_amount, sell_lg_amount, buy_elg_amount, sell_elg_amount]
+  event_text:
+    tables: [news_event_daily]
+    fields: [event_count_60, earnings_event_count_60, risk_event_count_60, trading_event_count_60, ai_event_count_60]
+  kline_context:
+    tables: [kline_feature_daily]
+    fields: [kline_feature_mean, kline_feature_count, kline_signal_balance]
+    coverage_policy: "低覆盖时参与审计和候选降权，不伪装为全样本信号。"
+  industry_neutralization:
+    tables: [sw_l1_industry_daily]
+    fields: [industry_name]
+  universe:
+    tables: [index_constituent_period, trade_calendar]
+    universes: [ALL_A, CSI800_ENH, CSI2000_ENH]
+
+factor_dsl:
+  cross_section_operators:
+    - rank
+    - industry_rank
+    - zscore
+    - winsorize
+    - size_industry_neutralize
+  expression_operators:
+    - add
+    - sub
+    - mul
+    - div
+    - neg
+    - clip01
+  representation_operators:
+    - rolling_cross_section_svd
+
+search_channels:
+  llm_hypothesis_generation:
+    implementation: generate_llm_hypotheses
+    mode: "AI Router/OpenAI-compatible API if environment key exists, otherwise local_structured_fallback"
+    api_key_env: AI_ROUTER_API_KEY
+    fallback_key_env: OPENAI_API_KEY
+    base_url_env: AI_ROUTER_BASE_URL
+    model_env: FACTOR_MINING_LLM_MODEL
+    default_model: gpt-5.5
+    reasoning_env: FACTOR_MINING_REASONING_EFFORT
+    default_reasoning_effort: xhigh
+  mcts_tree_search:
+    implementation: generate_mcts_candidates
+    policy: prior_guided_ucb_light
+  genetic_crossover:
+    implementation: generate_genetic_candidates
+    operators: [crossover, low_crowding_guard]
+  openfe_feature_search:
+    implementation: generate_openfe_candidates
+    operators: [rank_multiply_plus_main_effects]
+  deep_representation:
+    implementation: generate_deep_representation_candidates
+    model: rolling_cross_section_svd
+  failure_memory_mutation:
+    implementation: mutate_candidate
+    mutation_rules:
+      - add_low_crowding_turnover_guard
+      - add_fundamental_anchor
+      - subtract_risk_event
+      - add_flow_reversal_probe
+
+validation_stack:
+  static_audit:
+    - missing_field
+    - low_field_coverage
+    - label_leakage
+    - high_complexity
+  preprocessing:
+    - winsorize_by_trade_date
+    - zscore_by_trade_date
+    - size_industry_neutralization
+  single_factor_tests:
+    - RankIC
+    - ICIR
+    - RankIC_t
+    - IC_win_rate
+    - group_spread
+    - group_monotonicity
+    - turnover
+    - coverage
+    - year_split_metrics
+  portfolio_tests:
+    - top_quantile_long_only
+    - top_bottom_long_short
+    - transaction_cost_after_turnover
+    - annual_return
+    - sharpe
+    - max_drawdown
+    - information_ratio
+  reward:
+    positive_terms: [valid_rank_ic, test_rank_ic, group_spread, ic_win_rate, group_monotonicity, cost_adjusted_sharpe, coverage]
+    penalties: [redundancy, turnover, complexity, train_test_decay]
+
+selection_rules:
+  train_rank_ic_min: 0.02
+  valid_rank_ic_min: 0.01
+  test_rank_ic_min: -0.005
+  train_group_spread_min: 0.002
+  valid_group_spread_min: 0.001
+  coverage_min: 0.55
+  max_abs_corr_to_other_factor: 0.85
+  min_group_monotonicity: 0.55
+  max_turnover: 0.92
+  min_test_long_sharpe: 0.10
+
+leakage_guards:
+  - use_visible_date_for_financial_report
+  - use_rebalance_date_features_only
+  - label_is_next_rebalance_return
+  - split_train_valid_test_before_model_selection
+  - llm_never_receives_future_return_or_label
+  - kline_and_event_features_are_rebalance_date_observable_only
+
+persistence:
+  result_tables:
+    - factor_test_result
+    - factor_value_daily
+    - v3_factor_candidate_registry
+    - v3_factor_validation
+  output_files:
+    - outputs/factor_mining_{universe}.json
+    - outputs/factor_leaderboard_{universe}.csv
+    - outputs/methodology_cards_{universe}.json
+
+external_data_sources:
+  public_python_packages:
+    - akshare
+    - baostock
+    - tushare
+  paid_or_quota_limited_sources:
+    ifind:
+      env_required: [IFIND_ACCESS_TOKEN, IFIND_REFRESH_TOKEN]
+      probe_guard: FACTOR_MINING_ENABLE_PAID_PROBES
+      rule: "默认不做批量提取，只允许显式启用后的低频抽样核验。"
+    wind_sql:
+      env_required: [WIND_SQL_UID, WIND_SQL_PWD]
+      probe_guard: FACTOR_MINING_ENABLE_PAID_PROBES
+      rule: "默认不通过 OPENQUERY 批量取数，只用于字段/样本核验。"
+    ppm_csmar_cnki:
+      rule: "仅通过 SHH 远程电脑浏览器使用已登录会话做研究源核验，不把账号密码写入项目。"
