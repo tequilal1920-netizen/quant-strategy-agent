@@ -1,6 +1,6 @@
 # 量化策略 Agent 使用约定
 
-本仓库的正式 AI 入口是八个 `ai-models/<name>/` 统一文件夹。每个文件夹同时包含 `SKILL.md`、`PACKAGE.json`、查询脚本、一级模型源码和必要内部组件。收到研究问题后先选择对应文件夹，再调用其中的 `scripts/query.py`。旧 `skill/` 目录仅用于兼容。
+本仓库的正式 AI 入口是八个 `ai-models/<name>/` 统一文件夹。每个文件夹同时包含 `SKILL.md`、`PACKAGE.json`、查询脚本、独立查询运行层、一级模型源码和必要内部组件。收到研究问题后先选择对应文件夹，再调用其中的 `scripts/query.py`。旧 `skill/` 目录仅用于兼容。
 
 ## 路由
 

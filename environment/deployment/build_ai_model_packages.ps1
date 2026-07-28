@@ -72,6 +72,66 @@ foreach ($Mapping in $Mappings) {
   foreach ($Component in $Mapping.components) {
     $ComponentFiles += Copy-TrackedTree "model/$Component" (Join-Path $Package "components\$Component")
   }
+  $RuntimeFiles = @(Copy-TrackedTree "agent_runtime" (Join-Path $Package "runtime\agent_runtime"))
+  $RuntimeCorePath = Join-Path $Package "runtime\agent_runtime\core.py"
+  $RuntimeCore = Get-Content -Raw -Encoding UTF8 $RuntimeCorePath
+  $LegacyPatternRoot = @"
+        root = (
+            ROOT
+            / "skill"
+            / "technical-analysis"
+            / "references"
+            / "kline-patterns"
+        )
+"@
+  $StandalonePatternRoot = @"
+        configured_root = os.environ.get("QUANT_AGENT_KLINE_PATTERN_ROOT", "").strip()
+        root = (
+            Path(configured_root).expanduser()
+            if configured_root
+            else ROOT / "skill" / "technical-analysis" / "references" / "kline-patterns"
+        )
+"@
+  if (-not $RuntimeCore.Contains($LegacyPatternRoot)) {
+    throw "agent_runtime/core.py pattern root contract changed"
+  }
+  $RuntimeCore = $RuntimeCore.Replace($LegacyPatternRoot, $StandalonePatternRoot)
+  $RuntimeCore = $RuntimeCore -creplace 'path\.relative_to\(ROOT\)', 'path.relative_to(root)'
+  Write-Utf8NoBom $RuntimeCorePath $RuntimeCore
+
+  $QueryPath = Join-Path $Package "scripts\query.py"
+  $QueryScript = @"
+from pathlib import Path
+import os
+import sys
+
+PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+RUNTIME_PARENT = PACKAGE_ROOT / "runtime"
+sys.path.insert(0, str(RUNTIME_PARENT))
+
+if not os.environ.get("QUANT_AGENT_SNAPSHOT_ROOT"):
+    for candidate in (
+        REPOSITORY_ROOT / "board" / "quant_strategy_agent_vnext" / "data",
+        REPOSITORY_ROOT / "board" / "quant_strategy_agent" / "data",
+    ):
+        if candidate.is_dir():
+            os.environ["QUANT_AGENT_SNAPSHOT_ROOT"] = str(candidate)
+            break
+factor_manifest = PACKAGE_ROOT / "source" / "champion_manifest.json"
+if factor_manifest.is_file():
+    os.environ.setdefault("QUANT_AGENT_FACTOR_MANIFEST", str(factor_manifest))
+pattern_root = PACKAGE_ROOT / "references" / "kline-patterns"
+if pattern_root.is_dir():
+    os.environ.setdefault("QUANT_AGENT_KLINE_PATTERN_ROOT", str(pattern_root))
+
+from agent_runtime.cli import main_for_skill
+
+
+if __name__ == "__main__":
+    raise SystemExit(main_for_skill("$($Mapping.slug)"))
+"@
+  Write-Utf8NoBom $QueryPath $QueryScript
 
   $TextFiles = @((Join-Path $Package "SKILL.md"))
   $TextFiles += Get-ChildItem -LiteralPath (Join-Path $Package "references") -File -Recurse -Filter "*.md" -ErrorAction SilentlyContinue |
@@ -101,14 +161,14 @@ foreach ($Mapping in $Mappings) {
     query_entry = "scripts/query.py"
     model_source = "source"
     bundled_components = @($Mapping.components | ForEach-Object { "components/$_" })
+    bundled_runtime = "runtime/agent_runtime"
     operations = @($CatalogModule.operations)
     question_examples = @($CatalogModule.questions)
-    shared_runtime = "../../agent_runtime"
+    standalone_with_environment = $true
     shared_repository_dependencies = @(
-      "../../board",
-      "../../database",
-      "../../framework",
-      "../../environment"
+      "外部模型快照目录",
+      "研究数据库与因子状态库",
+      "远程模型服务及其凭据"
     )
     required_environment = @(
       "QUANT_AGENT_SNAPSHOT_ROOT",
@@ -130,7 +190,8 @@ foreach ($Mapping in $Mappings) {
       skill_files = $SkillFiles.Count
       source_files = $SourceFiles.Count
       component_files = $ComponentFiles.Count
-      total_files = $SkillFiles.Count + $SourceFiles.Count + $ComponentFiles.Count + 1
+      runtime_files = $RuntimeFiles.Count
+      total_files = $SkillFiles.Count + $SourceFiles.Count + $ComponentFiles.Count + $RuntimeFiles.Count + 1
     }
   }
   Write-Utf8NoBom (Join-Path $Package "PACKAGE.json") ($PackageManifest | ConvertTo-Json -Depth 10)

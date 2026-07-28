@@ -3,7 +3,7 @@
 
 ## 新 Agent 直接使用
 
-新 Agent 读取仓库根目录 `AGENTS.md`，再把对应的 `ai-models/<模型>/` 文件夹作为完整模型入口。每个文件夹同时包含 Skill、查询脚本、模型源码、必要内部组件和机器可读依赖清单；旧 `skill/` 目录继续保留兼容。
+新 Agent 读取仓库根目录 `AGENTS.md`，再把对应的 `ai-models/<模型>/` 文件夹作为完整模型入口。每个文件夹同时包含 Skill、查询脚本、独立查询运行层、模型源码、必要内部组件和机器可读依赖清单；旧 `skill/` 目录继续保留兼容。
 
 ```powershell
 git clone --branch agent/industry-style-r16-6 https://github.com/tequilal1920-netizen/quant-strategy-agent.git

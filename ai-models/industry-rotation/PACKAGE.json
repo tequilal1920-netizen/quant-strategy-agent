@@ -10,6 +10,7 @@
     "bundled_components":  [
 
                            ],
+    "bundled_runtime":  "runtime/agent_runtime",
     "operations":  [
                        "ranking",
                        "drivers",
@@ -20,12 +21,11 @@
                               "哪个行业景气度最高",
                               "电子行业的高频景气由哪些指标驱动"
                           ],
-    "shared_runtime":  "../../agent_runtime",
+    "standalone_with_environment":  true,
     "shared_repository_dependencies":  [
-                                           "../../board",
-                                           "../../database",
-                                           "../../framework",
-                                           "../../environment"
+                                           "澶栭儴妯″瀷蹇収鐩綍",
+                                           "鐮旂┒鏁版嵁搴撲笌鍥犲瓙鐘舵€佸簱",
+                                           "杩滅▼妯″瀷鏈嶅姟鍙婂叾鍑嵁"
                                        ],
     "required_environment":  [
                                  "QUANT_AGENT_SNAPSHOT_ROOT",
@@ -47,6 +47,7 @@
                       "skill_files":  4,
                       "source_files":  12,
                       "component_files":  0,
-                      "total_files":  17
+                      "runtime_files":  8,
+                      "total_files":  25
                   }
 }

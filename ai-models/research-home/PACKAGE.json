@@ -10,6 +10,7 @@
     "bundled_components":  [
 
                            ],
+    "bundled_runtime":  "runtime/agent_runtime",
     "operations":  [
                        "overview"
                    ],
@@ -17,12 +18,11 @@
                               "汇总当前宏观周期、行业、因子与组合结论",
                               "现在全系统最重要的配置结论和风险是什么"
                           ],
-    "shared_runtime":  "../../agent_runtime",
+    "standalone_with_environment":  true,
     "shared_repository_dependencies":  [
-                                           "../../board",
-                                           "../../database",
-                                           "../../framework",
-                                           "../../environment"
+                                           "澶栭儴妯″瀷蹇収鐩綍",
+                                           "鐮旂┒鏁版嵁搴撲笌鍥犲瓙鐘舵€佸簱",
+                                           "杩滅▼妯″瀷鏈嶅姟鍙婂叾鍑嵁"
                                        ],
     "required_environment":  [
                                  "QUANT_AGENT_SNAPSHOT_ROOT",
@@ -44,6 +44,7 @@
                       "skill_files":  4,
                       "source_files":  2,
                       "component_files":  0,
-                      "total_files":  7
+                      "runtime_files":  8,
+                      "total_files":  15
                   }
 }

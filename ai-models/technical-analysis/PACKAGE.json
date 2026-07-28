@@ -10,6 +10,7 @@
     "bundled_components":  [
                                "components/kline_memory_learning"
                            ],
+    "bundled_runtime":  "runtime/agent_runtime",
     "operations":  [
                        "status",
                        "patterns"
@@ -18,12 +19,11 @@
                               "K线模型现在是否可用于交易",
                               "查询突破与反转形态的学习资料"
                           ],
-    "shared_runtime":  "../../agent_runtime",
+    "standalone_with_environment":  true,
     "shared_repository_dependencies":  [
-                                           "../../board",
-                                           "../../database",
-                                           "../../framework",
-                                           "../../environment"
+                                           "澶栭儴妯″瀷蹇収鐩綍",
+                                           "鐮旂┒鏁版嵁搴撲笌鍥犲瓙鐘舵€佸簱",
+                                           "杩滅▼妯″瀷鏈嶅姟鍙婂叾鍑嵁"
                                        ],
     "required_environment":  [
                                  "QUANT_AGENT_SNAPSHOT_ROOT",
@@ -45,6 +45,7 @@
                       "skill_files":  131,
                       "source_files":  2,
                       "component_files":  10,
-                      "total_files":  144
+                      "runtime_files":  8,
+                      "total_files":  152
                   }
 }

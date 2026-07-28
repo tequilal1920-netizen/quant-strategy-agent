@@ -10,6 +10,7 @@
     "bundled_components":  [
 
                            ],
+    "bundled_runtime":  "runtime/agent_runtime",
     "operations":  [
                        "overview",
                        "market",
@@ -19,12 +20,11 @@
                               "全球市场最近谁最强谁最弱",
                               "列出最新市场数据的截止日和异常"
                           ],
-    "shared_runtime":  "../../agent_runtime",
+    "standalone_with_environment":  true,
     "shared_repository_dependencies":  [
-                                           "../../board",
-                                           "../../database",
-                                           "../../framework",
-                                           "../../environment"
+                                           "澶栭儴妯″瀷蹇収鐩綍",
+                                           "鐮旂┒鏁版嵁搴撲笌鍥犲瓙鐘舵€佸簱",
+                                           "杩滅▼妯″瀷鏈嶅姟鍙婂叾鍑嵁"
                                        ],
     "required_environment":  [
                                  "QUANT_AGENT_SNAPSHOT_ROOT",
@@ -46,6 +46,7 @@
                       "skill_files":  4,
                       "source_files":  8,
                       "component_files":  0,
-                      "total_files":  13
+                      "runtime_files":  8,
+                      "total_files":  21
                   }
 }

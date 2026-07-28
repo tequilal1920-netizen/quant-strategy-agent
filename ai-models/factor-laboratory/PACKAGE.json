@@ -11,6 +11,7 @@
                                "components/llm_factor_mining",
                                "components/index_enhancement"
                            ],
+    "bundled_runtime":  "runtime/agent_runtime",
     "operations":  [
                        "champion",
                        "index",
@@ -20,12 +21,11 @@
                               "当前因子冠军是什么，训练验证测试效果如何",
                               "中证800指数增强当前模型和治理状态是什么"
                           ],
-    "shared_runtime":  "../../agent_runtime",
+    "standalone_with_environment":  true,
     "shared_repository_dependencies":  [
-                                           "../../board",
-                                           "../../database",
-                                           "../../framework",
-                                           "../../environment"
+                                           "澶栭儴妯″瀷蹇収鐩綍",
+                                           "鐮旂┒鏁版嵁搴撲笌鍥犲瓙鐘舵€佸簱",
+                                           "杩滅▼妯″瀷鏈嶅姟鍙婂叾鍑嵁"
                                        ],
     "required_environment":  [
                                  "QUANT_AGENT_SNAPSHOT_ROOT",
@@ -47,6 +47,7 @@
                       "skill_files":  6,
                       "source_files":  10,
                       "component_files":  13,
-                      "total_files":  30
+                      "runtime_files":  8,
+                      "total_files":  38
                   }
 }
