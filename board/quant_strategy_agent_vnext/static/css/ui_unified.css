@@ -1,0 +1,123 @@
+/* Canonical dashboard UI contract: loaded last by the production template. */
+:root {
+  --ui-font: Arial, "KaiTi", "STKaiti", "Kaiti SC", "楷体", sans-serif;
+  --ui-green: #168a47;
+  --ui-red: #b42318;
+  --ui-blue: #2f75b5;
+  --ui-border: #d8e0e7;
+  --ui-radius: 10px;
+  --ui-shadow: 0 1px 3px rgba(16, 24, 40, .08);
+}
+
+body,
+button,
+input,
+select,
+option,
+textarea,
+.app-shell,
+.dashboard-main,
+.section-nav {
+  font-family: var(--ui-font) !important;
+}
+
+.js-plotly-plot text,
+.plot-container text,
+.rotation-plot text,
+.fm-plot text,
+.plot-frame text {
+  font-family: var(--ui-font) !important;
+  font-size: 11px !important;
+}
+
+.page-heading h1,
+.dashboard-main h1 { font-size: 20px !important; }
+.section-heading h2,
+.dashboard-main h2,
+.fm-section-head h2 { font-size: 17.6px !important; }
+.panel-header h3,
+.dashboard-main h3,
+.dashboard-main h4 { font-size: 14px !important; }
+
+body.is-authenticated .dashboard-main :where(
+  div, section, article, header, footer, p, small, em, label, dt, dd, li, time, summary, a, button,
+  input, select, option, textarea, th, td, code, pre, span, strong, b
+) { font-size: 14px !important; }
+
+.control-card,
+.chart-panel,
+.table-panel,
+.summary-card,
+.kpi-card,
+.workbench-panel,
+.fl2-section,
+.fl2-kpi,
+.fl2-chart,
+.ix-card,
+.rotation-status-card {
+  border-color: var(--ui-border) !important;
+  border-radius: var(--ui-radius) !important;
+  box-shadow: var(--ui-shadow) !important;
+}
+
+/* Status dots have only three product meanings. */
+.nav-item i { background: var(--ui-red) !important; }
+.nav-item[data-status="ok"] i { background: var(--ui-green) !important; }
+.nav-item[data-status="running"] i { background: var(--ui-blue) !important; }
+.nav-item[data-status="failed"] i { background: var(--ui-red) !important; }
+
+.nav-group-toggle::before {
+  position: absolute;
+  right: 34px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ui-red);
+  content: "";
+}
+.nav-group[data-status="ok"] > .nav-group-toggle::before { background: var(--ui-green); }
+.nav-group[data-status="running"] > .nav-group-toggle::before { background: var(--ui-blue); }
+.nav-group[data-status="failed"] > .nav-group-toggle::before { background: var(--ui-red); }
+
+.service-badge.partial::before,
+.service-badge.warning::before,
+.service-badge.failed::before,
+.service-badge.unknown::before { background: var(--ui-red) !important; }
+.service-badge.running::before { background: var(--ui-blue) !important; }
+.service-badge.ok::before { background: var(--ui-green) !important; }
+
+.nav-item.is-loading { cursor: progress; }
+.nav-item.is-loading i { background: var(--ui-blue) !important; }
+
+@media (max-width: 780px) {
+  .app-shell {
+    display: block !important;
+    grid-template-columns: 1fr !important;
+  }
+  .sidebar {
+    position: relative !important;
+    top: auto !important;
+    width: 100% !important;
+    max-height: 42vh;
+    overflow-y: auto !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--ui-border);
+  }
+  .dashboard-main {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .topbar { flex-wrap: wrap; }
+  .panel-grid,
+  .rotation-chart-grid,
+  .liquidity-chart-grid,
+  .fl2-grid { grid-template-columns: 1fr !important; }
+}
+body.is-authenticated .app-shell table,
+body.is-authenticated .app-shell thead,
+body.is-authenticated .app-shell tbody,
+body.is-authenticated .app-shell tfoot,
+body.is-authenticated .app-shell tr {
+  font-family: Arial, "KaiTi", "STKaiti", "Kaiti SC", "楷体", sans-serif !important;
+  font-size: 14px !important;
+}

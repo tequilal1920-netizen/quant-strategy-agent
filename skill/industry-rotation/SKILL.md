@@ -2,8 +2,22 @@
 name: industry-rotation
 description: "用于运行、审计和维护31个申万一级行业的专属景气指标、月周Top10轮动，以及季度股票级3×4风格箱和Top3轮动；当任务涉及行业景气度、风格标签、行业或风格配置策略、跟踪组合、时点审计或回测时使用。"
 ---
-
 # 行业景气度
+
+
+## 直接对话入口
+
+```powershell
+python skill/industry-rotation/scripts/query.py ranking 频率=高频 数量=10
+python skill/industry-rotation/scripts/query.py drivers 行业=电子 数量=8
+python skill/industry-rotation/scripts/query.py ranking 频率=月频 数量=10
+python skill/industry-rotation/scripts/query.py style 数量=12
+python skill/industry-rotation/scripts/query.py backtest
+```
+
+将“哪个行业景气度最高”映射为 `ranking`；将“某行业的高频景气如何驱动”映射为 `drivers`；将“月频或周频轮动是否有效”映射为 `backtest`。驱动回答按贡献绝对值排序，并保留方向、可用日期、来源和可用规则。
+
+高频景气排名、月周策略排名和季度风格箱是三套独立口径。回答时不得混用。
 
 ## 目标
 

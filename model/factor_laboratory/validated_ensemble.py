@@ -17,7 +17,7 @@ import pandas as pd
 import core as engine
 
 
-ENGINE_VERSION = "factor-lab/2.0-validated-ensemble"
+ENGINE_VERSION = "factor-lab/2.1-validated-ensemble-hac"
 
 
 class FeatureTensor(np.ndarray):
@@ -60,7 +60,7 @@ def gate_results(metrics: dict[str, Any], trials: int) -> list[dict[str, Any]]:
         ("oos_decay", abs(engine.finite(test.get("rank_ic"))) / max(abs(engine.finite(valid.get("rank_ic"))), 1e-6), .75, "验证到测试衰减"),
         ("net_sharpe", engine.finite(test.get("sharpe")), .50, "成本后测试 Sharpe"),
         ("drawdown", engine.finite(test.get("max_drawdown")), -.25, "最大回撤不差于 -25%"),
-        ("turnover", 1 - engine.finite(test.get("turnover")), .35, "换手预算"),
+        ("turnover", engine.finite(test.get("turnover")), .65, "换手预算"),
         ("dsr", engine.finite(test.get("dsr_confidence")), .60, "多重试验修正 DSR"),
         ("trial_ledger", float(trials), 1.0, "试验台账完整"),
     ]
@@ -70,7 +70,8 @@ def gate_results(metrics: dict[str, Any], trials: int) -> list[dict[str, Any]]:
             "label": label,
             "observed": engine.finite(value),
             "threshold": engine.finite(threshold),
-            "passed": bool(value >= threshold),
+            "comparison": "le" if key == "turnover" else "ge",
+            "passed": bool(value <= threshold if key == "turnover" else value >= threshold),
         }
         for key, value, threshold, label in rules
     ]
@@ -84,7 +85,13 @@ def _split_dates(panel, split_name: str) -> set[str]:
 def _feature_frame(panel, split_name: str) -> tuple[pd.DataFrame, list[str]]:
     target = f"target_{panel.horizons[0]}"
     cols = ["trade_date", "ts_code", target, *panel.feature_names]
-    work = panel.frame.loc[panel.frame.trade_date.isin(_split_dates(panel, split_name)), cols].copy()
+    optional = ["model_eligible"] if "model_eligible" in panel.frame.columns else []
+    work = panel.frame.loc[
+        panel.frame.trade_date.isin(_split_dates(panel, split_name)),
+        cols + optional,
+    ].copy()
+    if optional:
+        work = work.loc[work["model_eligible"].fillna(False)].copy()
     work = work.dropna(subset=[target]).reset_index(drop=True)
     ranks = work.groupby("trade_date", sort=False)[panel.feature_names].rank(pct=True) - .5
     ranks = ranks.replace([np.inf, -np.inf], np.nan).fillna(0.0)
@@ -256,14 +263,19 @@ def _fit_tabular_ensemble(panel, config: dict[str, Any], neural_frames: dict[str
 
 
 def _period_metrics(rows: list[dict[str, Any]], horizon: int) -> dict[str, float]:
-    sampled = rows[:: max(1, horizon)]
+    sampled = [row for row in rows if row.get("is_rebalance")]
+    if not sampled:
+        sampled = rows[:: max(1, horizon)]
     returns = np.asarray([engine.finite(x.get("net")) for x in sampled], dtype=float)
     if not len(returns):
         return {"return": 0.0, "volatility": 0.0, "sharpe": 0.0, "max_drawdown": 0.0}
-    periods = 252 / max(1, horizon)
-    annual = engine.finite(np.prod(1 + returns) ** (periods / max(1, len(returns))) - 1)
-    vol = engine.finite(np.std(returns, ddof=1) * math.sqrt(periods)) if len(returns) > 1 else 0.0
-    return {"return": annual, "volatility": vol, "sharpe": annual / vol if vol > 1e-12 else 0.0, "max_drawdown": engine.max_drawdown(returns)}
+    periods = 252.0 / max(1, horizon)
+    return {
+        "return": engine.finite(np.prod(1.0 + returns) ** (periods / max(1, len(returns))) - 1.0),
+        "volatility": engine.annualized_volatility(returns, periods),
+        "sharpe": engine.annualized_sharpe(returns, periods),
+        "max_drawdown": engine.max_drawdown(returns),
+    }
 
 
 def _diagnostics(metrics: dict[str, Any], horizon: int, cost_bps: float) -> dict[str, Any]:
@@ -271,7 +283,10 @@ def _diagnostics(metrics: dict[str, Any], horizon: int, cost_bps: float) -> dict
     rows = list(test.get("series") or [])
     nav_net = nav_gross = peak = 1.0
     rolling = []
-    sampled_dates = set(str(x.get("date")) for x in rows[:: max(1, horizon)])
+    sampled_rows = [row for row in rows if row.get("is_rebalance")]
+    if not sampled_rows:
+        sampled_rows = rows[:: max(1, horizon)]
+    sampled_dates = set(str(x.get("date")) for x in sampled_rows)
     sampled_returns: list[float] = []
     for index, row in enumerate(rows):
         if str(row.get("date")) in sampled_dates:
@@ -298,7 +313,9 @@ def _diagnostics(metrics: dict[str, Any], horizon: int, cost_bps: float) -> dict
         values.update({"year": year, "rank_ic": engine.finite(np.mean([engine.finite(x.get("rank_ic")) for x in block])) if block else 0.0})
         yearly.append(values)
     monthly = []
-    sampled = rows[:: max(1, horizon)]
+    sampled = [row for row in rows if row.get("is_rebalance")]
+    if not sampled:
+        sampled = rows[:: max(1, horizon)]
     for month in sorted({str(x.get("date"))[:7] for x in sampled}):
         values = [engine.finite(x.get("net")) for x in sampled if str(x.get("date", "")).startswith(month)]
         monthly.append({"month": month, "return": engine.finite(np.prod(1 + np.asarray(values)) - 1) if values else 0.0})
@@ -339,11 +356,28 @@ def run_lstm_v2(panel, config: dict[str, Any], progress_path):
         return original_backtest(frame, score_col, target_col, cost_bps, horizon)
 
     engine.backtest_cross_section = capture_backtest
+    neural_error = None
     try:
-        neural = _base_run_lstm(panel, config, progress_path)
+        try:
+            neural = _base_run_lstm(panel, config, progress_path)
+        except RuntimeError as exc:
+            if "PyTorch" not in str(exc):
+                raise
+            neural_error = str(exc)
+            neural = {
+                "engine": "lstm",
+                "engine_version": ENGINE_VERSION,
+                "architecture": {
+                    "name": "LSTM",
+                    "components": ["cross_sectional_robust_ensemble"],
+                    "neural_runtime_status": "blocked",
+                },
+                "metrics": {},
+                "search": {"trial_count": 0},
+            }
     finally:
         engine.backtest_cross_section = original_backtest
-    neural_frames = dict(zip(("train", "valid", "test"), captured[-3:])) if len(captured) >= 3 else None
+    neural_frames = dict(zip(("train", "valid", "test"), captured[-3:])) if neural_error is None and len(captured) >= 3 else None
     engine.progress(progress_path, "lstm_robust_ensemble", .82, "LSTM 验证集稳健融合")
     robust = _fit_tabular_ensemble(panel, config, neural_frames)
     trials = int((neural.get("search") or {}).get("trial_count") or 1) + int(robust["selection"]["candidate_count"])
@@ -351,10 +385,16 @@ def run_lstm_v2(panel, config: dict[str, Any], progress_path):
     metrics["test"].update(engine.deflated_sharpe_proxy(metrics["test"].get("sharpe", 0), metrics["test"].get("observations", 0), trials))
     neural["engine_version"] = ENGINE_VERSION
     neural["architecture"]["name"] = "LSTM"
-    neural["architecture"]["components"] = [
-        "LSTM", "causal_convolution", "temporal_attention", "regime_mixture",
-        "uncertainty_head", "cross_sectional_robust_ensemble",
-    ]
+    if neural_error is None:
+        neural["architecture"]["components"] = [
+            "LSTM", "causal_convolution", "temporal_attention", "regime_mixture",
+            "uncertainty_head", "cross_sectional_robust_ensemble",
+        ]
+        neural["architecture"]["neural_runtime_status"] = "ok"
+    else:
+        neural["architecture"]["components"] = ["cross_sectional_robust_ensemble"]
+        neural["architecture"]["neural_runtime_status"] = "blocked"
+        neural["architecture"]["neural_runtime_error"] = neural_error
     neural["neural_metrics"] = neural.get("metrics")
     neural["metrics"] = metrics
     neural["selection"] = robust["selection"]
@@ -367,10 +407,17 @@ def run_lstm_v2(panel, config: dict[str, Any], progress_path):
 def _rl_frames(panel):
     target = f"target_{panel.horizons[0]}"
     cols = ["trade_date", "ts_code", *engine.FEATURES, target]
-    return {
-        name: panel.frame.loc[panel.frame.trade_date.isin(_split_dates(panel, name)), cols].copy().reset_index(drop=True)
-        for name in ("train", "valid", "test")
-    }, target
+    optional = ["model_eligible"] if "model_eligible" in panel.frame.columns else []
+    output = {}
+    for name in ("train", "valid", "test"):
+        work = panel.frame.loc[
+            panel.frame.trade_date.isin(_split_dates(panel, name)),
+            cols + optional,
+        ].copy()
+        if optional:
+            work = work.loc[work["model_eligible"].fillna(False)]
+        output[name] = work.drop(columns=optional).reset_index(drop=True)
+    return output, target
 
 
 def _formula_scores(frame: pd.DataFrame, formulas: list[list[str]], weights: list[float]) -> np.ndarray:
@@ -502,9 +549,16 @@ def run_joint_v2(panel, config: dict[str, Any], progress_path):
             metric = split_scores[split_name][name]
             for key in ("rank_ic", "icir", "hit_rate", "annual_return", "sharpe", "max_drawdown", "turnover"):
                 row[f"{split_name}_{key}"] = engine.finite(metric.get(key))
-        row["stability"] = min(abs(row["train_rank_ic"]), abs(row["valid_rank_ic"]), abs(row["test_rank_ic"]))
+        row["stability"] = min(abs(row["train_rank_ic"]), abs(row["valid_rank_ic"]))
+        row["report_only_test_stability"] = min(
+            row["stability"],
+            abs(row["test_rank_ic"]),
+        )
         rows.append(row)
-    rows.sort(key=lambda x: (abs(x["valid_rank_ic"]), x["stability"]), reverse=True)
+    rows.sort(
+        key=lambda x: (x["stability"], abs(x["valid_rank_ic"]), x["factor"]),
+        reverse=True,
+    )
     best_name = rows[0]["factor"] if rows else panel.feature_names[0]
     metrics = {split_name: split_scores[split_name][best_name] for split_name in ("train", "valid", "test")}
     trials = len(rows)

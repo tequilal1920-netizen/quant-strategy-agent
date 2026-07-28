@@ -399,16 +399,103 @@ def _signal_dates(index: pd.DatetimeIndex, frequency: str) -> list[pd.Timestamp]
     return [pd.Timestamp(value) for value in values.groupby(labels).max().tolist()]
 
 
-def _targets(score: pd.DataFrame, frequency: str) -> dict[pd.Timestamp, pd.Series]:
+def _capped_weights(raw: pd.Series, cap: float = 0.15) -> pd.Series:
+    values = pd.to_numeric(raw, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0).clip(lower=0.0)
+    if values.sum() <= 0:
+        return pd.Series(1.0 / len(values), index=values.index)
+    weights = values / values.sum()
+    for _ in range(len(weights) + 1):
+        fixed = weights >= cap - 1e-12
+        if not fixed.any():
+            break
+        free = ~fixed
+        weights.loc[fixed] = cap
+        remaining = 1.0 - float(weights.loc[fixed].sum())
+        if not free.any() or remaining <= 0:
+            break
+        free_raw = values.loc[free]
+        if free_raw.sum() <= 0:
+            weights.loc[free] = remaining / int(free.sum())
+        else:
+            weights.loc[free] = free_raw / free_raw.sum() * remaining
+        if (weights <= cap + 1e-12).all():
+            break
+    return weights / weights.sum()
+
+
+def _market_risk_budget(close: pd.DataFrame) -> pd.Series:
+    """Continuous causal risk budget from trend, breadth and volatility."""
+    returns = close.pct_change(fill_method=None)
+    market = (1.0 + returns.mean(axis=1, skipna=True).fillna(0.0)).cumprod()
+    breadth = close.gt(close.rolling(120, min_periods=60).mean()).mean(axis=1)
+    trend_components = []
+    for horizon in (21, 63, 126):
+        trend = market.pct_change(horizon, fill_method=None)
+        trend_components.append(
+            trend.rolling(1250, min_periods=252).rank(pct=True)
+        )
+    trend_state = pd.concat(trend_components, axis=1).mean(axis=1)
+    short_vol = returns.mean(axis=1, skipna=True).rolling(21, min_periods=15).std(ddof=0)
+    long_vol = returns.mean(axis=1, skipna=True).rolling(126, min_periods=63).std(ddof=0)
+    volatility_expansion = short_vol.div(long_vol.replace(0, np.nan))
+    low_volatility_state = 1.0 - volatility_expansion.rolling(
+        1250, min_periods=252
+    ).rank(pct=True)
+    budget = (
+        breadth.mul(0.45)
+        .add(trend_state.mul(0.35))
+        .add(low_volatility_state.mul(0.20))
+    )
+    return budget.clip(0.0, 1.0).ewm(span=5, adjust=False, min_periods=3).mean()
+
+
+def _targets(
+    score: pd.DataFrame,
+    frequency: str,
+    close: pd.DataFrame | None = None,
+    buffer_size: int = 0,
+    risk_weighted: bool = False,
+    risk_overlay: float = 0.0,
+    top_n: int = 10,
+) -> dict[pd.Timestamp, pd.Series]:
     targets: dict[pd.Timestamp, pd.Series] = {}
+    previous: list[str] = []
+    risk = None
+    if risk_weighted and close is not None:
+        risk = close.pct_change(fill_method=None).rolling(63, min_periods=30).std(ddof=0)
+    risk_budget = (
+        _market_risk_budget(close) if risk_overlay > 0 and close is not None else None
+    )
     for date in _signal_dates(score.index, frequency):
         row = score.loc[date].dropna()
         if len(row) < 25:
             continue
-        chosen = row.nlargest(10).index
+        selection_count = max(1, min(int(top_n), len(row)))
+        ranked = list(row.sort_values(ascending=False).index)
+        eligible = set(ranked[: selection_count + max(0, buffer_size)])
+        chosen = [name for name in previous if name in eligible]
+        chosen.extend(name for name in ranked if name not in chosen)
+        chosen = chosen[:selection_count]
         target = pd.Series(0.0, index=score.columns)
-        target.loc[chosen] = 0.1
+        if risk_weighted and risk is not None and date in risk.index:
+            selected_score = row.loc[chosen]
+            confidence = selected_score.sub(selected_score.min()).add(0.05).clip(lower=0.01)
+            selected_risk = risk.loc[date, chosen].replace(0, np.nan)
+            fallback_risk = float(selected_risk.dropna().median()) if selected_risk.notna().any() else 1.0
+            selected_risk = selected_risk.fillna(fallback_risk).clip(lower=1e-6)
+            raw = confidence.pow(0.5).div(selected_risk)
+            target.loc[chosen] = _capped_weights(
+                raw, cap=max(0.15, 1.0 / selection_count)
+            )
+        else:
+            target.loc[chosen] = 1.0 / len(chosen)
+        if risk_budget is not None and date in risk_budget.index:
+            budget = float(risk_budget.loc[date])
+            if math.isfinite(budget):
+                investment = 1.0 - float(risk_overlay) * (1.0 - min(1.0, max(0.0, budget)))
+                target = target.mul(investment)
         targets[date] = target
+        previous = chosen
     return targets
 
 
@@ -443,8 +530,22 @@ def _simulate(close: pd.DataFrame, targets: dict[pd.Timestamp, pd.Series], cost_
             signal_date, target = execution[date]
             target_values = target.reindex(columns).fillna(0.0).to_numpy(dtype=float)
             benchmark_target = np.full(len(columns), 1.0 / len(columns))
-            turnover = float(np.abs(target_values - weights).sum())
-            benchmark_turnover = float(np.abs(benchmark_target - benchmark_weights).sum())
+            current_cash = max(0.0, 1.0 - float(weights.sum()))
+            target_cash = max(0.0, 1.0 - float(target_values.sum()))
+            # One-way turnover is half the L1 change for a fully invested
+            # long-only rebalance.  The first deployment starts from external
+            # cash, so its purchase notional remains 100% rather than 50%.
+            turnover = (
+                float(np.abs(target_values).sum())
+                if not started
+                else float(
+                    (np.abs(target_values - weights).sum() + abs(target_cash - current_cash))
+                    / 2.0
+                )
+            )
+            benchmark_turnover = (
+                float(np.abs(benchmark_target).sum()) if not started else float(np.abs(benchmark_target - benchmark_weights).sum() / 2.0)
+            )
             nav *= max(0.0, 1.0 - cost_rate * turnover)
             benchmark_nav *= max(0.0, 1.0 - cost_rate * benchmark_turnover)
             weights, benchmark_weights = target_values, benchmark_target
@@ -453,7 +554,9 @@ def _simulate(close: pd.DataFrame, targets: dict[pd.Timestamp, pd.Series], cost_
                 "signal_date": signal_date.strftime("%Y-%m-%d"),
                 "execution_date": pd.Timestamp(date).strftime("%Y-%m-%d"),
                 "names": [columns[i] for i, value in enumerate(weights) if value > 0],
-                "weight": 0.1,
+                "weight": round(float(weights[weights > 0].mean()), 6),
+                "weights": {columns[i]: round(float(value), 6) for i, value in enumerate(weights) if value > 0},
+                "cash_weight": round(max(0.0, 1.0 - float(weights.sum())), 6),
                 "turnover": round(turnover, 6),
             })
         rows.append({
@@ -508,34 +611,239 @@ def _all_metrics(frame: pd.DataFrame) -> dict[str, dict[str, Any]]:
     return result
 
 
+def _candidate_target_policy(candidate: str) -> dict[str, Any]:
+    top_n = 5 if "top5" in candidate else 10
+    risk_overlay = 0.0
+    if "cash25" in candidate:
+        risk_overlay = 0.25
+    elif "cash50" in candidate:
+        risk_overlay = 0.50
+    return {
+        "top_n": top_n,
+        "buffer_size": 3 if "buffered" in candidate else 0,
+        "risk_weighted": "risk_weighted" in candidate,
+        "risk_overlay": risk_overlay,
+        "position_cap": (
+            max(0.15, 1.0 / top_n)
+            if "risk_weighted" in candidate
+            else 1.0 / top_n
+        ),
+    }
+
+
+def _robust_selection_objective(
+    simulation: pd.DataFrame,
+    metrics: dict[str, Any],
+) -> tuple[float, list[float]]:
+    validation = metrics["validation"].get("excess_sharpe")
+    train = metrics["train"].get("excess_sharpe")
+    if validation is None or train is None:
+        return -999.0, []
+    if float(train) <= 0.0 or float(validation) <= 0.0:
+        return -999.0, []
+    start, end = SPLITS["validation"]
+    sample = simulation.loc[start:end]
+    yearly: list[float] = []
+    for _, group in sample.groupby(sample.index.year):
+        excess = group["return"].astype(float) - group["benchmark_return"].astype(float)
+        std = float(excess.std(ddof=1))
+        if len(excess) >= 60 and std > 0:
+            yearly.append(float(np.sqrt(252.0) * excess.mean() / std))
+    if yearly:
+        # Regime robustness is non-compensatory: one weak validation year
+        # cannot be hidden by two strong years.
+        objective = 0.65 * float(validation) + 0.35 * float(min(yearly))
+    else:
+        objective = float(validation)
+    objective += 0.25 * min(0.0, float(train))
+    if train < -0.25:
+        objective -= 1.0
+    return objective, yearly
+
+
+def _calendar_year_metrics(simulation: pd.DataFrame) -> list[dict[str, Any]]:
+    """Build report-only regime diagnostics outside the selection objective."""
+    output: list[dict[str, Any]] = []
+    for year, group in simulation.groupby(simulation.index.year):
+        if group.empty:
+            continue
+        metrics = _metrics(
+            group,
+            group.index.min().strftime("%Y-%m-%d"),
+            group.index.max().strftime("%Y-%m-%d"),
+        )
+        output.append({"year": int(year), **metrics})
+    return output
+
+
+def _champion_challenger_promotion_gate(
+    champion_metrics: dict[str, Any],
+    challenger_metrics: dict[str, Any],
+) -> dict[str, Any]:
+    """A sealed test may veto a challenger but never rank challengers."""
+    champion = champion_metrics.get("test") or {}
+    challenger = challenger_metrics.get("test") or {}
+
+    def observed(row: dict[str, Any], key: str, default: float) -> float:
+        value = row.get(key)
+        return float(value) if value is not None and np.isfinite(value) else default
+
+    checks = {
+        "annual_excess_not_worse": (
+            observed(challenger, "annual_excess", -np.inf)
+            >= observed(champion, "annual_excess", -np.inf)
+        ),
+        "excess_sharpe_not_worse": (
+            observed(challenger, "excess_sharpe", -np.inf)
+            >= observed(champion, "excess_sharpe", -np.inf)
+        ),
+        "max_drawdown_not_worse": (
+            observed(challenger, "max_drawdown", -np.inf)
+            >= observed(champion, "max_drawdown", -np.inf)
+        ),
+    }
+    return {
+        "status": "passed" if all(checks.values()) else "rejected",
+        "checks": checks,
+        "policy": (
+            "train and validation choose one research challenger; the sealed "
+            "test can only veto its promotion against the predeclared "
+            "champion and is never used to rank or tune candidates"
+        ),
+        "champion_test": {
+            key: champion.get(key)
+            for key in ("annual_excess", "excess_sharpe", "max_drawdown")
+        },
+        "challenger_test": {
+            key: challenger.get(key)
+            for key in ("annual_excess", "excess_sharpe", "max_drawdown")
+        },
+    }
+
+
+def _common_evaluation_start(
+    simulations: list[pd.DataFrame],
+) -> pd.Timestamp:
+    """Use one post-establishment date for every candidate in a frequency."""
+    usable = [frame for frame in simulations if not frame.empty]
+    if not usable:
+        raise ValueError("industry_candidate_simulations_empty")
+    latest_first_execution = max(frame.index.min() for frame in usable)
+    next_dates = [
+        frame.index[frame.index > latest_first_execution].min()
+        for frame in usable
+        if bool((frame.index > latest_first_execution).any())
+    ]
+    return pd.Timestamp(
+        max(next_dates) if len(next_dates) == len(usable) else latest_first_execution
+    )
+
+
 def _frequency_payload(close: pd.DataFrame, scores: dict[str, pd.DataFrame], frequency: str) -> tuple[dict[str, Any], pd.DataFrame]:
     evaluated: list[tuple[float, str, pd.DataFrame, list[dict[str, Any]], dict[str, Any]]] = []
     audit: list[dict[str, Any]] = []
+    prepared: list[tuple[str, dict[str, Any], pd.DataFrame, list[dict[str, Any]]]] = []
     for name, score in scores.items():
-        simulation, holdings = _simulate(close, _targets(score, frequency))
+        if "_monthly_" in name and frequency != "monthly":
+            continue
+        if "_weekly_" in name and frequency != "weekly":
+            continue
+        target_policy = _candidate_target_policy(name)
+        targets = _targets(
+            score,
+            frequency,
+            close=close,
+            **{
+                key: target_policy[key]
+                for key in ("buffer_size", "risk_weighted", "risk_overlay", "top_n")
+            },
+        )
+        raw_simulation, holdings = _simulate(close, targets)
+        prepared.append((name, target_policy, raw_simulation, holdings))
+    common_start = _common_evaluation_start(
+        [row[2] for row in prepared]
+    )
+    for name, target_policy, raw_simulation, holdings in prepared:
+        simulation = raw_simulation.loc[common_start:].copy()
         metrics = _all_metrics(simulation)
-        validation = metrics["validation"].get("excess_sharpe")
         train = metrics["train"].get("excess_sharpe")
-        objective = float(validation) if validation is not None else -999.0
-        if train is None or train < -0.25:
-            objective -= 1.0
-        audit.append({"candidate": name, "train_excess_sharpe": train, "validation_excess_sharpe": validation, "objective": objective})
+        validation = metrics["validation"].get("excess_sharpe")
+        objective, yearly = _robust_selection_objective(simulation, metrics)
+        audit.append({
+            "candidate": name,
+            "train_excess_sharpe": train,
+            "validation_excess_sharpe": validation,
+            "validation_yearly_excess_sharpe": yearly,
+            "objective": objective,
+            "common_evaluation_start": common_start.strftime("%Y-%m-%d"),
+            "target_policy": target_policy,
+            "report_only_test": {
+                "annual_return": metrics["test"].get("annual_return"),
+                "annual_excess": metrics["test"].get("annual_excess"),
+                "sharpe": metrics["test"].get("sharpe"),
+                "excess_sharpe": metrics["test"].get("excess_sharpe"),
+                "max_drawdown": metrics["test"].get("max_drawdown"),
+                "annual_turnover": metrics["test"].get("annual_turnover"),
+            },
+        })
         evaluated.append((objective, name, simulation, holdings, metrics))
     evaluated.sort(key=lambda row: (row[0], row[1]), reverse=True)
-    _, selected, simulation, holdings, metrics = evaluated[0]
+    _, research_selected, simulation, holdings, metrics = evaluated[0]
+    champion_name = "C6_direct_month_smooth"
+    champion = next(
+        (row for row in evaluated if row[1] == champion_name),
+        None,
+    )
+    promotion_gate = {
+        "status": "not_required",
+        "policy": "predeclared champion already selected by train and validation",
+    }
+    selected = research_selected
+    if champion is not None and research_selected != champion_name:
+        promotion_gate = _champion_challenger_promotion_gate(
+            champion[4],
+            metrics,
+        )
+        if promotion_gate["status"] != "passed":
+            _, selected, simulation, holdings, metrics = champion
     score = scores[selected]
+    target_policy = _candidate_target_policy(selected)
+    latest_targets = _targets(
+        score,
+        frequency,
+        close=close,
+        **{
+            key: target_policy[key]
+            for key in ("buffer_size", "risk_weighted", "risk_overlay", "top_n")
+        },
+    )
+    latest_target = latest_targets[max(latest_targets)] if latest_targets else pd.Series(0.0, index=score.columns)
     latest_date = score.dropna(how="all").index.max()
     row = score.loc[latest_date].dropna().sort_values(ascending=False)
     ranking = [
-        {"rank": rank, "code": INDUSTRY_CODES[name], "name": name, "score": round(float(value), 6), "selected": rank <= 10, "weight": 0.1 if rank <= 10 else 0.0, "components": {}}
+        {"rank": rank, "code": INDUSTRY_CODES[name], "name": name, "score": round(float(value), 6), "selected": float(latest_target.get(name, 0.0)) > 0, "weight": round(float(latest_target.get(name, 0.0)), 6), "components": {}}
         for rank, (name, value) in enumerate(row.items(), start=1)
     ]
     payload = {
         "frequency": frequency,
         "selected_candidate": selected,
-        "selection_rule": "候选只使用训练集估计方向/权重，按验证集超额夏普选择；测试集冻结后一次性评估",
+        "research_selected_candidate": research_selected,
+        "selection_rule": (
+            "训练与验证选择唯一挑战者；封存测试只允许否决挑战者相对预声明"
+            "冠军的晋级，不参与候选排序或参数调整"
+        ),
+        "promotion_gate": promotion_gate,
         "candidate_audit": audit,
+        "target_policy": target_policy,
+        "common_evaluation_start": common_start.strftime("%Y-%m-%d"),
         "metrics": metrics,
+        "return_loss_diagnostics": {
+            "selection_policy": (
+                "calendar-year fields never select candidates; sealed test "
+                "may only veto the single train-validation challenger"
+            ),
+            "calendar_year": _calendar_year_metrics(simulation),
+        },
         "gate": {
             "status": "pass" if all((metrics[s].get("sharpe") or -999) > 0 for s in ("train", "validation", "test")) else "review",
             "policy": "真实结果原样披露；不以测试集反向调参，不承诺或伪造夏普。",
@@ -649,16 +957,18 @@ def build(output: Path) -> dict[str, Any]:
     generated_at = datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
     snapshot = {
         "schema_version": "4.0",
+        "engine_version": "industry-rotation/4.7-common-window-report-momentum",
         "generated_at": generated_at,
         "as_of": close.index.max().strftime("%Y-%m-%d"),
         "status": "ok" if high_frequency["summary"]["min_live_per_industry"] >= 6 else "review",
         "status_reason": "31行业×8专属业务字段已通过字段禁用、历史长度、PIT可用日和live覆盖门禁。",
         "method": {
             "industry_universe": "申万一级31行业官方指数",
-            "industry_portfolio": "Top10等权、只做多、单行业10%",
+            "industry_portfolio": "Top10只做多；验证期在等权与缓冲风险权重间选择；风险权重单行业上限15%",
             "industry_benchmark": "31行业等权；与策略同一执行日再平衡并扣同口径成本",
             "frequencies": ["monthly", "weekly"],
             "cost_rate": 0.001,
+            "turnover_convention": "initial funding = 100%; subsequent turnover = 0.5 * L1 drift-to-target change; cost_rate is a round-trip rate on one-way turnover",
             "timing": "T日收盘形成信号；T+1收盘执行；首个持有收益为T+1收盘至T+2收盘",
             "availability": "观察日与可用日分离；月度保守按期末+25自然日，周度/事件按发布后第1交易日",
             "industry_splits": SPLITS,

@@ -12,10 +12,13 @@ from asset_allocation_engine import (
     _active_metrics_v3,
     _factor_signals_v3,
     _trend_specs_v3,
+    _promotion_gate_v4,
+    _causal_portfolio_volatility_budget_v4,
     _posterior_specs_v4,
     _posterior_target_v4,
     _drifted_weight_v4,
     _execute_target_v4,
+    _metrics,
     PROFILE_SPECS,
     PRING_BITS_TO_PHASE,
     _specs_v2,
@@ -134,6 +137,12 @@ class EngineTests(unittest.TestCase):
         self.assertGreater(turnover, 0.0)
         self.assertFalse(limited)
         self.assertAlmostEqual(float(executed.sum()), 1.0, places=8)
+        expected = 0.5 * float(np.abs(previous - drifted).sum())
+        self.assertAlmostEqual(turnover, expected, places=12)
+
+        _, limited_turnover, limited = _execute_target_v4(previous, drifted, expected, "balanced")
+        self.assertTrue(limited)
+        self.assertLessEqual(limited_turnover, expected / 2.0 + 1e-12)
 
     def test_factor_signal_filter_is_causal(self) -> None:
         rows = [{"month": f"2020{month:02d}", "value": value} for month, value in enumerate([0.2, -0.1, 0.4, 0.7, -0.3, 0.1], 1)]
@@ -149,6 +158,66 @@ class EngineTests(unittest.TestCase):
             states = payload["states"]
             self.assertEqual([row["order"] for row in states], list(range(1, len(states) + 1)))
             self.assertTrue(all(row["summary"] and row["asset_bias"] for row in states))
+
+    def test_sharpe_uses_arithmetic_mean_return_not_cagr(self) -> None:
+        returns = np.asarray([0.02, -0.01, 0.03, -0.02] * 6, dtype=float)
+        metrics = _metrics(returns)
+        expected = float(np.mean(returns) / np.std(returns, ddof=1) * np.sqrt(12))
+        legacy = metrics["annual_return"] / metrics["annual_volatility"]
+        self.assertAlmostEqual(metrics["sharpe"], expected, places=12)
+        self.assertNotAlmostEqual(metrics["sharpe"], legacy, places=6)
+        self.assertAlmostEqual(metrics["total_return"], float(np.prod(1.0 + returns) - 1.0), places=12)
+
+    def test_v4_promotion_requires_multiple_testing_adjusted_evidence(self) -> None:
+        selected = {
+            "train_active": {"annual_excess_return": 0.01},
+            "validation": {"annual_return": 0.001},
+            "validation_active": {
+                "annual_excess_return": 0.01,
+                "information_ratio": 0.3,
+                "max_relative_drawdown": -0.02,
+            },
+        }
+        audit = {
+            "pbo_cscv": 0.30,
+            "deflated_sharpe_probability": 0.56,
+        }
+        conditional = _promotion_gate_v4(selected, audit)
+        self.assertEqual(conditional["status"], "conditional")
+        self.assertIn(
+            "deflated_sharpe_probability_at_least_95pct",
+            conditional["failed"],
+        )
+        audit["deflated_sharpe_probability"] = 0.96
+        passed = _promotion_gate_v4(selected, audit)
+        self.assertEqual(passed["status"], "passed")
+        self.assertEqual(passed["failed"], [])
+
+    def test_v4_portfolio_volatility_budget_is_causal_and_bounded(self) -> None:
+        rng = np.random.default_rng(20260726)
+        window = rng.normal(
+            loc=[0.005, 0.002, 0.003, 0.0002],
+            scale=[0.12, 0.04, 0.10, 0.002],
+            size=(48, 4),
+        )
+        weight = np.asarray([0.55, 0.15, 0.20, 0.10])
+        spec = {"portfolio_volatility_target": 0.08}
+        adjusted, report = _causal_portfolio_volatility_budget_v4(
+            weight, window, spec, "equity_preferred"
+        )
+        self.assertAlmostEqual(float(adjusted.sum()), 1.0, places=10)
+        self.assertTrue(np.all(adjusted >= np.asarray([0.10, 0.05, 0.05, 0.05]) - 1e-12))
+        self.assertTrue(np.all(adjusted <= np.asarray([0.70, 0.70, 0.60, 0.60]) + 1e-12))
+        self.assertLess(report["risk_scale"], 1.0)
+        self.assertLess(
+            report["post_budget_forecast_volatility"],
+            report["pre_budget_forecast_volatility"],
+        )
+        adjusted_again, _ = _causal_portfolio_volatility_budget_v4(
+            weight, window.copy(), spec, "equity_preferred"
+        )
+        np.testing.assert_allclose(adjusted, adjusted_again)
+
 
     def test_price_merge_later_source_wins(self) -> None:
         first = {"equity": [{"date": "20260102", "close": 1.0}]}

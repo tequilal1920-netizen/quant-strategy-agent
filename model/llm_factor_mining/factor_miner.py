@@ -25,6 +25,15 @@ warnings.simplefilter("ignore", PerformanceWarning)
 
 
 DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(DEFAULT_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(DEFAULT_PROJECT_ROOT))
+
+from research_metrics import (  # noqa: E402
+    annualized_information_ratio,
+    annualized_sharpe,
+    annualized_volatility,
+)
+
 SOURCE_AGENT = "05_factor_mining_agent"
 DEFAULT_MODEL_NAME = os.environ.get("FACTOR_MINING_LLM_MODEL", "gpt-5.5")
 DEFAULT_REASONING_EFFORT = os.environ.get("FACTOR_MINING_REASONING_EFFORT", "xhigh")
@@ -220,11 +229,10 @@ def metrics_from_returns(rets, bench_rets=None, periods_per_year=12):
     periods = len(rets)
     total = nav[-1] - 1.0
     annual = nav[-1] ** (periods_per_year / periods) - 1.0 if periods and nav[-1] > 0 else 0.0
-    vol = float(np.std(rets)) * math.sqrt(periods_per_year) if periods else 0.0
-    sharpe = annual / vol if vol else 0.0
+    vol = annualized_volatility(rets, periods_per_year)
+    sharpe = annualized_sharpe(rets, periods_per_year)
     excess = [a - b for a, b in zip(rets, bench_rets)]
     ex_annual = (1.0 + float(np.mean(excess))) ** periods_per_year - 1.0 if excess else 0.0
-    ir_vol = float(np.std(excess)) * math.sqrt(periods_per_year) if len(excess) > 1 else 0.0
     return {
         "periods": periods,
         "periods_per_year": float(periods_per_year),
@@ -235,7 +243,7 @@ def metrics_from_returns(rets, bench_rets=None, periods_per_year=12):
         "max_drawdown": max_drawdown(nav),
         "win_rate": sum(1 for x in rets if x > 0) / periods if periods else 0.0,
         "excess_annual_return": ex_annual,
-        "information_ratio": ex_annual / ir_vol if ir_vol else 0.0,
+        "information_ratio": annualized_information_ratio(excess, periods_per_year),
     }
 
 

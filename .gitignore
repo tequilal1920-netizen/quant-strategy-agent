@@ -32,6 +32,13 @@ board/**/data_cache/
 copy/
 *.log
 *.tmp
+
+# Release packages and externally mounted vNext model outputs
+dist/
+board/quant_strategy_agent_vnext/data/*.json
+board/quant_strategy_agent_vnext/data/audit/
+!board/quant_strategy_agent_vnext/data/README.md
+board/quant_strategy_agent_vnext/qa/*.png
 *.bak
 
 # Locally vendored third-party packages; install from requirements instead

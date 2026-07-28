@@ -26,6 +26,10 @@ LEADERBOARD = AGENT_DIR / "output" / "framework" / "backtest" / "model_outputs_f
 OUTPUT = APP_DIR / "data" / "index_enhancement_snapshot.json"
 PAGES = ["home", "universe", "alpha", "smartbeta", "risk", "tracking"]
 UNIVERSES = ["CSI800_ENH", "CSI2000_ENH"]
+POST_TEST_DIAGNOSTIC_MODELS = {
+    "index_active_risk_optimizer_v12",
+    "index_active_risk_reliability_v13",
+}
 
 
 def finite(value: Any, default: float | None = None) -> float | None:
@@ -92,6 +96,205 @@ def rolling_stats(returns: list[float], benchmark: list[float], window: int = 12
         ir.append(round_or_none(mean(active) / active_vol * math.sqrt(12), 4) if active_vol else None)
         te.append(round_or_none(active_vol * math.sqrt(12), 6))
     return {"sharpe": sharpe, "information_ratio": ir, "tracking_error": te}
+
+
+def annualized_metrics(rows: list[sqlite3.Row]) -> dict[str, Any]:
+    """Calculate one split without borrowing observations from another split."""
+    returns = [finite(row["period_return"], 0.0) or 0.0 for row in rows]
+    benchmark = [finite(row["benchmark_return"], 0.0) or 0.0 for row in rows]
+    if not returns:
+        return {"status": "missing", "months": 0}
+    active = [value - base for value, base in zip(returns, benchmark)]
+    nav, level = [], 1.0
+    for value in returns:
+        level *= 1.0 + value
+        nav.append(level)
+    annual_return = level ** (12.0 / len(returns)) - 1.0 if level > 0 else -1.0
+    annual_volatility = pstdev(returns) * math.sqrt(12.0)
+    tracking_error = pstdev(active) * math.sqrt(12.0)
+    return {
+        "status": "ok",
+        "months": len(returns),
+        "start": str(rows[0]["trade_date"]),
+        "end": str(rows[-1]["trade_date"]),
+        "annual_return": round_or_none(annual_return),
+        "annual_volatility": round_or_none(annual_volatility),
+        "sharpe": round_or_none(mean(returns) / pstdev(returns) * math.sqrt(12.0)) if pstdev(returns) else None,
+        "annual_excess_return": round_or_none(mean(active) * 12.0),
+        "information_ratio": round_or_none(mean(active) / pstdev(active) * math.sqrt(12.0)) if pstdev(active) else None,
+        "max_drawdown": round_or_none(min(drawdown(nav))),
+        "positive_month_rate": round_or_none(sum(value > 0 for value in returns) / len(returns)),
+    }
+
+
+def _percentile_rank(value: float | None, values: list[float]) -> float:
+    if value is None or not values:
+        return 0.0
+    return sum(item <= value for item in values) / len(values)
+
+
+def build_champion_audit(conn: sqlite3.Connection) -> dict[str, Any]:
+    """Select with train/validation only; attach test after the champion is frozen."""
+    result: dict[str, Any] = {}
+    for universe in UNIVERSES:
+        all_models = [
+            row[0]
+            for row in conn.execute(
+                "SELECT DISTINCT model_name FROM backtest_nav WHERE universe=? ORDER BY model_name",
+                (universe,),
+            ).fetchall()
+        ]
+        excluded_post_test = [
+            model for model in all_models if model in POST_TEST_DIAGNOSTIC_MODELS
+        ]
+        models = [model for model in all_models if model not in POST_TEST_DIAGNOSTIC_MODELS]
+        candidates: list[dict[str, Any]] = []
+        for model in models:
+            metrics: dict[str, Any] = {}
+            for split in ("train", "valid"):
+                rows = conn.execute(
+                    """SELECT trade_date,period_return,benchmark_return FROM backtest_nav
+                    WHERE universe=? AND model_name=? AND split_name=? ORDER BY trade_date""",
+                    (universe, model, split),
+                ).fetchall()
+                metrics["validation" if split == "valid" else split] = annualized_metrics(rows)
+            if metrics["train"].get("months", 0) and metrics["validation"].get("months", 0):
+                candidates.append({"model": model, "splits": metrics})
+        if not candidates:
+            result[universe] = {
+                "status": "insufficient_train_validation_history",
+                "champion": None,
+                "candidate_count": 0,
+                "selection_uses_test": False,
+                "test_policy": "not_evaluated_without_train_validation_selection",
+                "reason": "数据库没有可比的训练和验证分段，禁止使用全样本或测试段选模。",
+            }
+            continue
+
+        dimensions: dict[str, list[float]] = {
+            "train_sharpe": [],
+            "validation_sharpe": [],
+            "train_ir": [],
+            "validation_ir": [],
+            "train_drawdown": [],
+            "validation_drawdown": [],
+        }
+        for candidate in candidates:
+            train, valid = candidate["splits"]["train"], candidate["splits"]["validation"]
+            dimensions["train_sharpe"].append(finite(train.get("sharpe"), -99.0) or -99.0)
+            dimensions["validation_sharpe"].append(finite(valid.get("sharpe"), -99.0) or -99.0)
+            dimensions["train_ir"].append(finite(train.get("information_ratio"), -99.0) or -99.0)
+            dimensions["validation_ir"].append(finite(valid.get("information_ratio"), -99.0) or -99.0)
+            dimensions["train_drawdown"].append(finite(train.get("max_drawdown"), -1.0) or -1.0)
+            dimensions["validation_drawdown"].append(finite(valid.get("max_drawdown"), -1.0) or -1.0)
+
+        for candidate in candidates:
+            train, valid = candidate["splits"]["train"], candidate["splits"]["validation"]
+            raw = {
+                "train_sharpe": train.get("sharpe"),
+                "validation_sharpe": valid.get("sharpe"),
+                "train_ir": train.get("information_ratio"),
+                "validation_ir": valid.get("information_ratio"),
+                "train_drawdown": train.get("max_drawdown"),
+                "validation_drawdown": valid.get("max_drawdown"),
+            }
+            ranks = {key: _percentile_rank(finite(value), dimensions[key]) for key, value in raw.items()}
+            primary = [ranks[key] for key in ("train_sharpe", "validation_sharpe", "train_ir", "validation_ir")]
+            candidate["rank_components"] = {key: round(value, 6) for key, value in ranks.items()}
+            candidate["robust_score"] = round(min(primary) + 0.20 * mean(primary) + 0.10 * min(ranks["train_drawdown"], ranks["validation_drawdown"]), 6)
+
+        selected = max(
+            candidates,
+            key=lambda row: (
+                row["robust_score"],
+                finite(row["splits"]["validation"].get("information_ratio"), -99.0) or -99.0,
+                finite(row["splits"]["validation"].get("sharpe"), -99.0) or -99.0,
+            ),
+        )
+        test_rows = conn.execute(
+            """SELECT trade_date,period_return,benchmark_return FROM backtest_nav
+            WHERE universe=? AND model_name=? AND split_name='test' ORDER BY trade_date""",
+            (universe, selected["model"]),
+        ).fetchall()
+        test_metric = annualized_metrics(test_rows)
+        train, valid = selected["splits"]["train"], selected["splits"]["validation"]
+        gate_passed = all(
+            (finite(metric.get(field), -99.0) or -99.0) > 0
+            for metric in (train, valid)
+            for field in ("sharpe", "information_ratio")
+        )
+        result[universe] = {
+            "status": "conditional_champion" if gate_passed else "research_champion",
+            "champion": selected["model"],
+            "candidate_count": len(candidates),
+            "selection_method": "non-compensatory percentile maximin across train/validation Sharpe and IR, with drawdown tie support",
+            "selection_uses_test": False,
+            "test_policy": "sealed_report_only_after_champion_freeze",
+            "excluded_post_test_models": excluded_post_test,
+            "promotion_gate_passed": gate_passed,
+            "splits": {**selected["splits"], "test": test_metric},
+            "rank_components": selected["rank_components"],
+            "robust_score": selected["robust_score"],
+            "candidate_audit": sorted(candidates, key=lambda row: row["robust_score"], reverse=True),
+        }
+    return result
+
+
+def build_shadow_challenger_audit(conn: sqlite3.Connection) -> dict[str, Any]:
+    """Compare post-test architectures on train/validation only."""
+    candidates: list[dict[str, Any]] = []
+    for model in sorted(POST_TEST_DIAGNOSTIC_MODELS):
+        splits: dict[str, Any] = {}
+        for split in ("train", "valid", "test"):
+            rows = conn.execute(
+                """SELECT trade_date,period_return,benchmark_return FROM backtest_nav
+                WHERE universe='CSI800_ENH' AND model_name=? AND split_name=?
+                ORDER BY trade_date""",
+                (model, split),
+            ).fetchall()
+            splits["validation" if split == "valid" else split] = annualized_metrics(rows)
+        if splits["train"].get("months", 0) and splits["validation"].get("months", 0):
+            train_ir = finite(splits["train"].get("information_ratio"), -99.0) or -99.0
+            valid_ir = finite(splits["validation"].get("information_ratio"), -99.0) or -99.0
+            train_sharpe = finite(splits["train"].get("sharpe"), -99.0) or -99.0
+            valid_sharpe = finite(splits["validation"].get("sharpe"), -99.0) or -99.0
+            candidates.append(
+                {
+                    "model": model,
+                    "splits": splits,
+                    "selection_score": round(
+                        min(train_ir, valid_ir)
+                        + 0.20 * min(train_sharpe, valid_sharpe),
+                        6,
+                    ),
+                }
+            )
+    if not candidates:
+        return {
+            "status": "missing",
+            "selection_uses_test": False,
+            "promotion_eligible": False,
+            "reason": "post-test challenger evidence is unavailable",
+        }
+    selected = max(candidates, key=lambda row: row["selection_score"])
+    for candidate in candidates:
+        candidate["decision"] = (
+            "retained_for_future_shadow"
+            if candidate["model"] == selected["model"]
+            else "rejected_no_train_validation_dominance"
+        )
+    return {
+        "status": "post_test_diagnostic_only",
+        "selected_shadow": selected["model"],
+        "selection_method": "train/validation non-compensatory IR with Sharpe tie penalty",
+        "selection_uses_test": False,
+        "promotion_eligible": False,
+        "reason": (
+            "The 2023-2026 interval was inspected before these architectures "
+            "were specified; test metrics remain diagnostic and cannot promote a model."
+        ),
+        "candidates": sorted(candidates, key=lambda row: row["selection_score"], reverse=True),
+    }
 
 
 def read_leaderboard() -> list[dict[str, Any]]:
@@ -276,13 +479,15 @@ def build_universe(conn: sqlite3.Connection, universe: str) -> dict[str, Any]:
     }
 
 
-def build_nav(conn: sqlite3.Connection, leaderboard: list[dict[str, Any]]) -> dict[str, Any]:
+def build_nav(conn: sqlite3.Connection, leaderboard: list[dict[str, Any]], champion_audit: dict[str, Any]) -> dict[str, Any]:
     selected_models = {
         "CSI800_ENH": [
             "index_enhancement_agent_v6",
             "index_enhancement_deep_agent_v6",
             "industry_budget_ic_optimizer_v7",
             "csi800_quality_value_core_v10",
+            "index_active_risk_optimizer_v12",
+            "index_active_risk_reliability_v13",
         ],
         "CSI2000_ENH": [
             "csi2000_style_concentrated_agent_v6",
@@ -295,6 +500,8 @@ def build_nav(conn: sqlite3.Connection, leaderboard: list[dict[str, Any]]) -> di
     }
     result: dict[str, Any] = {}
     for universe, models in selected_models.items():
+        champion = (champion_audit.get(universe) or {}).get("champion")
+        models = list(dict.fromkeys(([champion] if champion else []) + models))
         series: list[dict[str, Any]] = []
         benchmark: dict[str, Any] | None = None
         for model in models:
@@ -332,6 +539,7 @@ def build_nav(conn: sqlite3.Connection, leaderboard: list[dict[str, Any]]) -> di
         result[universe] = {
             "benchmark": benchmark,
             "series": series,
+            "champion": champion_audit.get(universe),
             "leaderboard": [row for row in leaderboard if row["universe"] == universe],
         }
     return result
@@ -444,6 +652,24 @@ def solver_catalog() -> dict[str, Any]:
 
 def research_basis() -> list[dict[str, str]]:
     return [
+        {
+            "type": "券商正式研报",
+            "name": "国泰海通：组合约束对收益表现的影响分析",
+            "use": "跟踪误差、换手、行业和个股偏离进入增强组合可行域",
+            "url": "https://www.htsec.com/jfimg/colimg/upload/20240102/1704164158494000761.pdf",
+        },
+        {
+            "type": "券商正式研报",
+            "name": "国泰海通：中证A500指数增强组合构建",
+            "use": "基准复制、主动权重优化、成本后超额和风格反转归因",
+            "url": "https://www.haitong.com/jfimg/colimg/upload/20250221/1740114664739061176.pdf",
+        },
+        {
+            "type": "券商正式研报",
+            "name": "中邮证券：机器学习中证A500指数增强",
+            "use": "行业风格完全中性下比较LGBM、神经网络和GRU时序因子",
+            "url": "https://cnpsec.com/plat_files/upload/png_upload/20241125/202411251732520351042.pdf",
+        },
         {"type": "本地正式证据", "name": "research_warehouse.db / formal model outputs", "use": "PIT资产池、因子检验、净值、夏普、IR、回撤"},
         {"type": "券商路线", "name": "国盛证券：基于深度学习的指数增强策略", "use": "多频量价/资金流深度表征与指数增强落地"},
         {"type": "券商路线", "name": "民生证券：MASTER与深度风险模型系列", "use": "市场引导Transformer、非线性风险因子与组合构建"},
@@ -461,7 +687,9 @@ def build_snapshot() -> dict[str, Any]:
     try:
         leaderboard = read_leaderboard()
         universes = {universe: build_universe(conn, universe) for universe in UNIVERSES}
-        nav = build_nav(conn, leaderboard)
+        champion_audit = build_champion_audit(conn)
+        shadow_challenger_audit = build_shadow_challenger_audit(conn)
+        nav = build_nav(conn, leaderboard, champion_audit)
         factor_tests = build_factor_tests(conn)
     finally:
         conn.close()
@@ -474,6 +702,8 @@ def build_snapshot() -> dict[str, Any]:
         "weight_sums": {key: value["weight_sum"] for key, value in universes.items()},
         "chart_contract": 44,
         "external_api_calls": 0,
+        "champion_selection_uses_test": any(value.get("selection_uses_test") for value in champion_audit.values()),
+        "post_test_challenger_count": len(shadow_challenger_audit.get("candidates", [])),
     }
     passed = (
         set(PAGES) == {"home", "universe", "alpha", "smartbeta", "risk", "tracking"}
@@ -481,10 +711,11 @@ def build_snapshot() -> dict[str, Any]:
         and all(99.0 <= (value["weight_sum"] or 0) <= 101.0 for value in universes.values())
         and quality_checks["nav_series"] >= 8
         and quality_checks["factor_test_rows"] >= 20
+        and not quality_checks["champion_selection_uses_test"]
     )
     return {
         "status": "ready" if passed else "failed",
-        "engine_version": "index-enhancement/1.0.0",
+        "engine_version": "index-enhancement/1.2-active-risk-shadow-audit",
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "data_as_of": max(value["as_of"] for value in universes.values()),
         "page_contract": PAGES,
@@ -492,6 +723,8 @@ def build_snapshot() -> dict[str, Any]:
         "universes": universes,
         "nav": nav,
         "leaderboard": leaderboard,
+        "champion_audit": champion_audit,
+        "shadow_challenger_audit": shadow_challenger_audit,
         "factor_tests": factor_tests,
         "models": model_catalog(),
         "smartbeta": smartbeta_catalog(),

@@ -1,0 +1,295 @@
+.research-evidence--dense {
+  --dense-navy: #10296a;
+  --dense-blue: #2f75b5;
+  --dense-red: #b42318;
+  --dense-ink: #172033;
+  --dense-muted: #667085;
+  --dense-line: #d7dce3;
+  background: #f5f7fa;
+  border-color: #c8d0dc;
+}
+
+.research-evidence--dense .research-evidence__head {
+  margin-bottom: 14px;
+  border-bottom: 3px solid var(--dense-navy);
+  background: linear-gradient(90deg, #fff 0%, #f2f5fa 100%);
+}
+
+.dense-block {
+  margin: 14px 0;
+  overflow: hidden;
+  border: 1px solid #c9d0da;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(23 32 51 / 5%);
+}
+
+.dense-block > header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 47px;
+  padding: 8px 14px;
+  color: #fff;
+  background: linear-gradient(90deg, var(--dense-navy), #244d91);
+}
+
+.dense-block > header > span {
+  display: grid;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 55%);
+  border-radius: 50%;
+  font: 700 12px/1 Arial, sans-serif;
+}
+
+.dense-block > header h3 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: .04em;
+}
+
+.dense-block > header p {
+  margin: 3px 0 0;
+  color: rgb(255 255 255 / 78%);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.dense-block > h4 {
+  margin: 0;
+  padding: 10px 14px 7px;
+  color: var(--dense-ink);
+  font-size: 14px;
+}
+
+.dense-block__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(360px, .85fr);
+  gap: 0;
+  align-items: stretch;
+  min-height: 280px;
+}
+
+.dense-data,
+.dense-visual {
+  min-width: 0;
+  padding: 9px 11px 12px;
+}
+
+.dense-visual {
+  border-left: 1px solid var(--dense-line);
+  background: #fbfcfe;
+}
+
+.dense-table-wrap {
+  max-height: none;
+  overflow: visible;
+  border: 1px solid var(--dense-line);
+}
+
+.dense-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--dense-ink);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.dense-table th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  padding: 7px 8px;
+  border-right: 1px solid #c4ccd8;
+  border-bottom: 1px solid #aeb8c7;
+  color: #16213a;
+  background: #dfe6f0;
+  text-align: center;
+  white-space: normal;
+}
+
+.dense-table td {
+  max-width: none;
+  padding: 5px 7px;
+  overflow: visible;
+  border-right: 1px solid #e4e7ec;
+  border-bottom: 1px solid #e4e7ec;
+  background: #fff;
+  text-align: right;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.dense-table td:first-child,
+.dense-table td[data-format="text"] {
+  text-align: left;
+}
+
+.dense-table tbody tr:nth-child(even) td {
+  background-color: #f8f9fb;
+}
+
+.dense-table tbody tr:hover td {
+  background-color: #eef3f9;
+}
+
+.dense-number[data-sign="positive"] {
+  color: #194f90;
+  font-weight: 700;
+}
+
+.dense-number[data-sign="negative"] {
+  color: var(--dense-red);
+  font-weight: 700;
+}
+
+.dense-arrow {
+  display: inline-block;
+  min-width: 20px;
+  font: 800 20px/1 Arial, sans-serif;
+  text-align: center;
+}
+
+.dense-arrow[data-sign="positive"] {
+  color: #277a68;
+}
+
+.dense-arrow[data-sign="negative"] {
+  color: #c44c32;
+}
+
+.dense-arrow[data-sign="flat"] {
+  color: #9b7b2f;
+}
+
+.dense-heat {
+  display: block;
+  min-width: 58px;
+  padding: 3px 5px;
+  color: #172033;
+  background:
+    linear-gradient(90deg, rgb(47 117 181 / 34%) var(--ratio), transparent var(--ratio)),
+    #f7f9fc;
+  text-align: right;
+}
+
+.dense-status {
+  display: inline-block;
+  max-width: none;
+  padding: 2px 6px;
+  overflow: visible;
+  border-radius: 3px;
+  background: #e9edf2;
+  color: #475467;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.dense-status[data-tone="pass"] {
+  background: #d8eee8;
+  color: #12614d;
+}
+
+.dense-status[data-tone="fail"] {
+  background: #f5d9d7;
+  color: #8f241e;
+}
+
+.dense-sparkline {
+  display: block;
+  width: 100%;
+  min-width: 72px;
+  max-width: 116px;
+  height: 32px;
+}
+
+.dense-empty {
+  display: grid;
+  min-height: 70px;
+  place-items: center;
+  color: var(--dense-muted);
+  font-size: 12px;
+}
+
+.dense-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  align-content: center;
+  border-left: 0;
+  background: linear-gradient(135deg, #f5f8fc, #fff);
+}
+
+.dense-flow > div {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 7px;
+  align-items: center;
+  min-height: 54px;
+  padding: 8px;
+  border: 1px solid #b8c6d9;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.dense-flow b {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--dense-navy);
+  font: 700 10px/1 Arial, sans-serif;
+}
+
+.dense-flow span {
+  color: var(--dense-ink);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.dense-formula {
+  margin: 0 11px 12px;
+  padding: 8px 11px;
+  border-left: 3px solid var(--dense-blue);
+  color: #344054;
+  background: #f0f4f9;
+  font-family: Arial, KaiTi, STKaiti, sans-serif;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.dense-plot {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  min-height: 350px;
+}
+
+@media (max-width: 1180px) {
+  .dense-block__body {
+    grid-template-columns: 1fr;
+  }
+
+  .dense-visual {
+    border-top: 1px solid var(--dense-line);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .dense-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .dense-table {
+    font-size: 10px;
+  }
+}

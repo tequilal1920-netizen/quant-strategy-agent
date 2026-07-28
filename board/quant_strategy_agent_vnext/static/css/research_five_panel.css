@@ -1,0 +1,482 @@
+html.五图页面 #core-conclusion {
+  display: none !important;
+}
+
+.research-five-panel {
+  container-type: inline-size;
+  --研红: #c00000;
+  --研黄: #ffc000;
+  --研蓝: #2f75b5;
+  --研灰: #808080;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  color: #18212b;
+  font-family: Arial, KaiTi, STKaiti, sans-serif;
+}
+
+.研究原页隐藏 {
+  display: none !important;
+}
+
+.研究五图模式 {
+  min-width: 0;
+}
+
+.统一参数区,
+.五图板块 {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d8e0e8;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.统一参数区 {
+  position: sticky;
+  z-index: 5;
+  top: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: stretch;
+  border-top: 4px solid var(--研红);
+}
+
+.统一参数标题 {
+  display: flex;
+  min-width: 120px;
+  padding: 10px 16px;
+  flex-direction: column;
+  justify-content: center;
+  background: #f7f7f7;
+  border-right: 1px solid #e1e6eb;
+}
+
+.统一参数标题 b {
+  font-size: 16px;
+}
+
+.统一参数标题 span {
+  margin-top: 2px;
+  color: #748091;
+  font-size: 11px;
+}
+
+.统一参数控件 {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+  align-items: end;
+  gap: 0;
+  padding: 4px 8px;
+  min-width: 0;
+}
+
+.统一参数控件:has(> *) + .统一参数摘要 {
+  border-top: 1px solid #edf0f3;
+}
+
+.统一参数控件 .研究参数原件 {
+  max-width: 100%;
+  max-height: 64px;
+  overflow: hidden;
+}
+
+.统一参数控件 > select.研究参数原件,
+.统一参数控件 > input.研究参数原件,
+.统一参数控件 > textarea.研究参数原件 {
+  align-self: end;
+  width: calc(100% - 14px);
+  min-width: 0;
+  min-height: 31px;
+  margin: 5px 7px !important;
+}
+
+.统一参数控件 label.研究参数原件,
+.统一参数控件 div.研究参数原件 {
+  display: flex !important;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 5px 7px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: #fff !important;
+  color: #5e6977;
+  font-size: 11px;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 3px;
+}
+
+.统一参数控件 .研究参数原件 select,
+.统一参数控件 .研究参数原件 input,
+.统一参数控件 .研究参数原件 textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 31px;
+  margin: 0;
+}
+
+.统一参数控件 .研究参数动作 {
+  align-self: end;
+  justify-content: center;
+  min-height: 31px;
+  margin: 5px 7px !important;
+}
+
+.统一参数控件 .研究参数原件 > * {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.统一参数摘要 {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  min-width: 0;
+}
+
+.统一参数摘要 > div {
+  min-width: 0;
+  padding: 8px 11px;
+  border-left: 1px solid #edf0f3;
+}
+
+.统一参数摘要 small,
+.五图数字 small {
+  display: block;
+  color: #7c8795;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.统一参数摘要 strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 2px;
+  color: #17212c;
+  font-size: 14px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.五图标题 {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  gap: 11px;
+  padding: 7px 13px;
+  border-bottom: 1px solid #e1e6eb;
+  background: #fff;
+}
+
+.五图标题 > b {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 7px;
+  color: #fff;
+  background: var(--研红);
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+}
+
+.五图标题 h2 {
+  min-width: 124px;
+  margin: 0;
+  color: #17212c;
+  font-size: 18px;
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.五图数字 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(95px, 1fr));
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+}
+
+.五图数字 > span {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: baseline;
+  column-gap: 7px;
+  padding: 2px 10px;
+  border-left: 1px solid #e6eaee;
+  overflow: hidden;
+}
+
+.五图数字 strong {
+  grid-row: 1 / span 2;
+  grid-column: 1;
+  color: #17212c;
+  font-family: Arial, sans-serif;
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.五图数字 small {
+  grid-row: 1;
+  grid-column: 2;
+}
+
+.五图数字 em {
+  grid-row: 2;
+  grid-column: 2;
+  overflow: hidden;
+  max-height: 2.4em;
+  color: #515c69;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.2;
+  white-space: normal;
+}
+
+.五图综合画布 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.42fr) minmax(390px, 0.88fr);
+  min-width: 0;
+  align-items: stretch;
+}
+
+.五图综合画布 > * {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.五图主图 {
+  min-width: 0;
+  min-height: 420px;
+  border-right: 1px solid #e6eaee;
+}
+
+.五图主图 .plot-container,
+.五图主图 .svg-container {
+  width: 100% !important;
+}
+
+.五图空白,
+.条件矩阵空 {
+  display: grid;
+  min-height: 420px;
+  place-items: center;
+  color: #7c8795;
+}
+
+.条件矩阵 {
+  min-width: 0;
+  padding: 9px 10px 10px;
+  background: #fff;
+}
+
+.条件矩阵标题 {
+  height: 29px;
+  padding: 7px 8px 0;
+  color: #384554;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.条件矩阵表头,
+.条件矩阵行 {
+  display: grid;
+  grid-template-columns: 28px minmax(118px, 1.5fr) repeat(var(--矩阵数), minmax(48px, 0.72fr));
+  min-width: 0;
+  align-items: center;
+}
+
+.条件矩阵表头 {
+  min-height: 28px;
+  color: #657181;
+  background: #f2f2f2;
+  border-radius: 5px 5px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.条件矩阵表头 > span,
+.条件矩阵行 > span,
+.条件矩阵行 > strong {
+  min-width: 0;
+  padding: 4px 5px;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.条件矩阵行 {
+  min-height: 34px;
+  border-bottom: 1px solid #e5e9ed;
+  background: #fff;
+  font-size: 11px;
+}
+
+.条件矩阵行:nth-child(odd) {
+  background: #fafbfc;
+}
+
+.条件矩阵行:hover {
+  background: #f3f6f9;
+}
+
+.条件矩阵行 .矩阵名称 {
+  text-align: left;
+  color: #26313d;
+  font-weight: 700;
+  line-height: 1.15;
+  max-height: 2.3em;
+  white-space: normal;
+  word-break: break-all;
+  text-overflow: clip;
+}
+
+.矩阵序号 {
+  color: #8a94a0;
+  font-family: Arial, sans-serif;
+}
+
+.矩阵数值,
+.矩阵状态 {
+  font-family: Arial, KaiTi, STKaiti, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.矩阵状态 {
+  font-weight: 700;
+}
+
+.微趋势 {
+  display: block;
+  width: 100%;
+  min-width: 60px;
+  max-width: 112px;
+  height: 28px;
+  margin: auto;
+}
+
+.微趋势空 {
+  color: #a1a9b2;
+}
+
+.条件矩阵表头 > span {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.条件矩阵--参数 {
+  display: grid;
+  align-content: start;
+}
+
+.参数矩阵行 {
+  display: grid;
+  min-height: 36px;
+  grid-template-columns: 30px minmax(120px, 1fr) minmax(90px, 0.8fr);
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  border-bottom: 1px solid #e5e9ed;
+  background: #fff;
+}
+
+.参数矩阵行 b {
+  color: #9a3a33;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+}
+
+.参数矩阵行 span {
+  color: #52606e;
+  font-size: 12px;
+}
+
+.参数矩阵行 strong {
+  overflow: hidden;
+  text-align: right;
+  color: #17212c;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.research-five-panel,
+.research-five-panel h2,
+.research-five-panel strong,
+.research-five-panel small,
+.research-five-panel em,
+.research-five-panel span,
+.research-five-panel label {
+  color: #18212b;
+}
+
+.research-five-panel .统一参数标题 span,
+.research-five-panel .统一参数摘要 small,
+.research-five-panel .五图数字 small,
+.research-five-panel .五图数字 em,
+.research-five-panel .矩阵序号 {
+  color: #657181;
+}
+
+@container (max-width: 980px) {
+  .五图综合画布 { grid-template-columns: minmax(0, 1fr); }
+  .五图主图 { border-right: 0; border-bottom: 1px solid #e6eaee; }
+}
+
+@media (max-width: 1250px) {
+  .五图综合画布 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .五图主图 {
+    border-right: 0;
+    border-bottom: 1px solid #e6eaee;
+  }
+
+  .五图数字 {
+    grid-template-columns: repeat(2, minmax(100px, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .统一参数区 {
+    position: static;
+    grid-template-columns: 1fr;
+  }
+
+  .统一参数标题,
+  .统一参数控件,
+  .统一参数摘要 {
+    grid-column: 1;
+  }
+
+  .统一参数标题 {
+    border-right: 0;
+    border-bottom: 1px solid #e1e6eb;
+  }
+
+  .五图标题 {
+    flex-wrap: wrap;
+  }
+
+  .五图数字 {
+    width: 100%;
+    flex-basis: 100%;
+  }
+
+  .条件矩阵表头,
+  .条件矩阵行 {
+    grid-template-columns: 25px minmax(105px, 1.4fr) repeat(var(--矩阵数), minmax(42px, 0.7fr));
+  }
+}

@@ -72,7 +72,7 @@ DEFAULT_OUTPUT_ROOT = DEFAULT_PROJECT_ROOT / "output" / "kline_memory_learning"
 MAIN_FREQUENCIES = ["D", "W", "M"]
 ROLLING_FREQUENCIES = ["3D", "5D", "10D", "20D", "60D", "120D"]
 ALL_FREQUENCIES = MAIN_FREQUENCIES + ROLLING_FREQUENCIES
-MODEL_VERSION = "9.0-cohort-wyckoff-evolution"
+MODEL_VERSION = "9.2-dual-momentum-volatility-budget"
 FORWARD_HORIZONS = [5, 10, 20, 60]
 DEFAULT_COST_RATE = 0.001
 DEFAULT_HOLDING_DAYS = 20
@@ -6491,6 +6491,7 @@ class NoDegradationGuard:
         final_train = final_backtest.get("metrics", {}).get("train", {})
         base_trade = _split_trade_stats(baseline_backtest, "valid")
         final_trade = _split_trade_stats(final_backtest, "valid")
+        final_train_trade = _split_trade_stats(final_backtest, "train")
         valid_return_delta = safe_float(final_valid.get("total_return")) - safe_float(base_valid.get("total_return"))
         valid_sharpe_delta = safe_float(final_valid.get("sharpe")) - safe_float(base_valid.get("sharpe"))
         valid_drawdown_delta = abs(safe_float(final_valid.get("max_drawdown"))) - abs(safe_float(base_valid.get("max_drawdown")))
@@ -6541,7 +6542,23 @@ class NoDegradationGuard:
             )
             or validation_risk_adjusted_compensation
         )
+        train_has_active_path = (
+            safe_float(final_train.get("signal_trigger_count")) > 0
+            or safe_float(final_train.get("avg_position")) > 1e-12
+            or safe_float(final_train_trade.get("trade_count")) > 0
+            or abs(safe_float(final_train.get("total_return"))) > 1e-12
+        )
+        validation_has_active_path = (
+            safe_float(final_valid.get("signal_trigger_count")) > 0
+            or safe_float(final_valid.get("avg_position")) > 1e-12
+            or safe_float(final_trade.get("trade_count")) > 0
+            or abs(safe_float(final_valid.get("total_return"))) > 1e-12
+        )
         penalties = []
+        if not train_has_active_path:
+            penalties.append("candidate_has_no_active_train_path")
+        if not validation_has_active_path:
+            penalties.append("candidate_has_no_active_validation_path")
         if valid_return_delta < -0.005:
             penalties.append("valid_return_degraded")
         if valid_sharpe_delta < -0.03:
@@ -6618,6 +6635,8 @@ class NoDegradationGuard:
             "validation_risk_adjusted_compensation": (
                 validation_risk_adjusted_compensation
             ),
+            "train_has_active_path": train_has_active_path,
+            "validation_has_active_path": validation_has_active_path,
             "valid_signals_per_year": valid_signals_per_year,
             "base_buy_hold_capture_ratio": base_capture,
             "final_buy_hold_capture_ratio": final_capture,
@@ -6626,6 +6645,44 @@ class NoDegradationGuard:
             "hard_signal_frequency_cap_per_year": SIGNAL_HARD_MAX_PER_YEAR,
             "fallback_action": "keep_final" if accepted else "revert_to_champion_signal_chain",
         }
+
+
+def _strategy_evidence_status(
+    guard_report: Dict[str, Any],
+    selected_spec: Optional[Dict[str, Any]] = None,
+    selected_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Separate a safe cash fallback from an accepted strategy improvement."""
+    selected_spec = selected_spec or {}
+    train_active = bool(guard_report.get("train_has_active_path"))
+    validation_active = bool(guard_report.get("validation_has_active_path"))
+    validated = bool(
+        guard_report.get("accepted_final")
+        and train_active
+        and validation_active
+        and not selected_spec.get("observe_only")
+    )
+    if validated:
+        status = "validated_train_valid_strategy"
+    elif selected_spec.get("observe_only") or not (train_active and validation_active):
+        status = "observe_only_no_validated_strategy"
+    else:
+        status = "champion_preserved_after_challenger_rejection"
+    return {
+        "status": status,
+        "validated_strategy": validated,
+        "selected_signal_chain": selected_name,
+        "observe_only": bool(selected_spec.get("observe_only")),
+        "train_has_active_path": train_active,
+        "validation_has_active_path": validation_active,
+        "test_usage": "sealed_report_only",
+        "policy": (
+            "a zero-position train/validation result is a safety fallback, "
+            "not an accepted model improvement"
+        ),
+    }
+
+
 class ModelScopeGuard:
     """Accept a new rule source only when paired train/valid evidence supports it."""
 
@@ -8702,7 +8759,7 @@ class StrategyMultipleTestingAudit:
             ),
             "test_usage": "not_used",
         }
-        nested_confirmation_enabled = False
+        nested_confirmation_enabled = len(initial_trial_rows) > 1
 
         def architecture_family(row: Dict[str, Any]) -> str:
             spec = row.get("spec", {}) or {}
@@ -12015,15 +12072,25 @@ def build_causal_multihorizon_momentum_targets(
     daily: List[PriceBar],
     split_by_date: Dict[str, str],
     holding_days: int,
+    benchmark_by_date: Optional[
+        Dict[str, Dict[str, float]]
+    ] = None,
+    use_relative_strength: bool = False,
+    use_volatility_budget: bool = False,
 ) -> Tuple[Dict[str, float], Dict[str, Dict[str, Any]], Dict[str, Any]]:
     """Build a causal five-level trend-rank position path."""
 
+    architecture = (
+        "absolute_and_benchmark_relative_multihorizon_momentum_with_"
+        "causal_own_history_volatility_budget"
+        if use_relative_strength
+        else "absolute_multihorizon_momentum"
+    )
     report: Dict[str, Any] = {
         "enabled": False,
         "agent": "CausalMultiHorizonTimeSeriesMomentumAgent",
         "method": (
-            "20_60_120_250_day_moving_average_vote_plus_60_day_risk_"
-            "adjusted_trend_with_trailing_three_year_causal_rank"
+            architecture + "_with_trailing_three_year_causal_rank"
         ),
         "test_usage": "sealed_not_used_for_fit_mapping_or_selection",
     }
@@ -12039,6 +12106,7 @@ def build_causal_multihorizon_momentum_targets(
     )
     raw_by_date: Dict[str, float] = {}
     components_by_date: Dict[str, Dict[str, float]] = {}
+    volatility_by_date: Dict[str, float] = {}
     for index, bar in enumerate(daily):
         if index < max(horizons):
             continue
@@ -12049,6 +12117,7 @@ def build_causal_multihorizon_momentum_targets(
                 1.0 if closes[index] > moving_average else -1.0
             )
         trailing_volatility = stdev(log_returns[index - 59:index + 1])
+        volatility_by_date[bar.date] = trailing_volatility * math.sqrt(252.0)
         risk_scale = max(trailing_volatility * math.sqrt(20.0), 0.01)
         return_60 = math.log(
             max(closes[index], 1e-12)
@@ -12059,8 +12128,34 @@ def build_causal_multihorizon_momentum_targets(
             risk_scale * math.sqrt(3.0),
         )
         moving_average_vote = mean(list(components.values()))
+        relative_votes: List[float] = []
+        if use_relative_strength and benchmark_by_date:
+            benchmark = benchmark_by_date.get(bar.date, {}) or {}
+            for horizon in (20, 60, 120):
+                stock_return = safe_div(
+                    closes[index],
+                    closes[index - horizon],
+                    1.0,
+                ) - 1.0
+                benchmark_return = safe_float(
+                    benchmark.get(
+                        f"benchmark_return_{horizon}"
+                    )
+                )
+                relative_return = (
+                    stock_return - benchmark_return
+                )
+                relative_vote = (
+                    1.0 if relative_return > 0.0 else -1.0
+                )
+                components[
+                    f"relative_strength_{horizon}"
+                ] = relative_return
+                relative_votes.append(relative_vote)
         components["risk_adjusted_return_60"] = risk_adjusted_60
-        raw_score = moving_average_vote + 0.35 * risk_adjusted_60
+        directional_votes = list(components[key] for key in components if key.startswith("above_ma_"))
+        directional_votes.extend(relative_votes)
+        raw_score = mean(directional_votes) + 0.35 * risk_adjusted_60
         raw_by_date[bar.date] = raw_score
         components_by_date[bar.date] = components
 
@@ -12086,6 +12181,7 @@ def build_causal_multihorizon_momentum_targets(
     target_by_date: Dict[str, float] = {}
     score_by_date: Dict[str, Dict[str, Any]] = {}
     score_history: List[float] = []
+    volatility_history: List[float] = []
     current_position = 0.0
     decision_count_by_split: Dict[str, int] = defaultdict(int)
     position_count_by_split: Dict[str, Counter] = {
@@ -12118,11 +12214,39 @@ def build_causal_multihorizon_momentum_targets(
                 raw_score,
                 reference,
             )
+            current_volatility = safe_float(
+                volatility_by_date.get(bar.date)
+            )
+            volatility_budget = 1.0
+            if (
+                use_volatility_budget
+                and current_volatility > 1e-9
+                and len(volatility_history) >= 252
+            ):
+                normal_volatility = percentile(
+                    volatility_history[-causal_reference_window:],
+                    0.50,
+                )
+                volatility_budget = min(
+                    1.0,
+                    safe_div(
+                        normal_volatility,
+                        current_volatility,
+                        1.0,
+                    ),
+                )
+                target = min(
+                    POSITION_LEVELS,
+                    key=lambda value: abs(
+                        value - target * volatility_budget
+                    ),
+                )
             current_position = target
             decision_count_by_split[split] += 1
         else:
             target = current_position
             percentile_rank = 0.0
+            volatility_budget = 1.0
         target_by_date[bar.date] = target
         if split in position_count_by_split:
             position_count_by_split[split][str(target)] += 1
@@ -12131,6 +12255,8 @@ def build_causal_multihorizon_momentum_targets(
             "raw_momentum_score": raw_score,
             "momentum_components": components_by_date.get(bar.date, {}),
             "momentum_positive_percentile": percentile_rank,
+            "forecast_annual_volatility": volatility_by_date.get(bar.date),
+            "causal_volatility_budget": volatility_budget,
             "continuous_target": target,
             "quantized_target": target,
             "decision_date": is_decision,
@@ -12149,9 +12275,16 @@ def build_causal_multihorizon_momentum_targets(
             "split": split,
         }
         score_history.append(raw_score)
+        current_volatility = volatility_by_date.get(bar.date)
+        if current_volatility is not None:
+            volatility_history.append(current_volatility)
     report.update({
         "enabled": True,
+        "architecture": architecture,
         "horizons": list(horizons),
+        "relative_strength_horizons": [20, 60, 120] if use_relative_strength else [],
+        "volatility_budget_enabled": use_volatility_budget,
+        "volatility_budget_reference": "causal_trailing_756_day_median_annualized_volatility",
         "decision_stride_trading_days": decision_stride,
         "position_grid": list(POSITION_LEVELS),
         "causal_reference_window_trading_days": causal_reference_window,
@@ -12161,6 +12294,10 @@ def build_causal_multihorizon_momentum_targets(
             "close_vs_ma120",
             "close_vs_ma250",
             "risk_adjusted_return_60",
+            *(
+                ["relative_strength_20", "relative_strength_60", "relative_strength_120"]
+                if use_relative_strength else []
+            ),
         ],
         "decision_count_by_split": dict(decision_count_by_split),
         "position_day_count_by_split": {
@@ -17553,6 +17690,7 @@ def select_signal_chain(
             daily,
             split_by_date,
             holding_days,
+            benchmark_by_date=None,
         )
     )
     momentum_trend_candidate_summary: Dict[str, Any] = {}
@@ -17783,6 +17921,123 @@ def select_signal_chain(
                 ),
                 "online_memory_report": compressed_report,
                 "momentum_trend_report": compressed_report,
+            })
+
+        (
+            dual_momentum_targets,
+            dual_momentum_scores,
+            dual_momentum_report,
+        ) = build_causal_multihorizon_momentum_targets(
+            daily,
+            split_by_date,
+            holding_days,
+            benchmark_by_date=benchmark_by_date,
+            use_relative_strength=True,
+            use_volatility_budget=True,
+        )
+        if dual_momentum_targets and dual_momentum_scores:
+            dual_momentum_agent = DirectPositionSignalAgent(
+                dual_momentum_targets,
+                dual_momentum_scores,
+                dual_momentum_report,
+            )
+            dual_momentum_agent.rule_portfolio_report = {
+                "enabled": True,
+                "method": (
+                    "absolute_and_benchmark_relative_multihorizon_"
+                    "momentum_with_causal_own_history_volatility_budget"
+                ),
+                "selected_rule_count": 8,
+                "selected_rules": [
+                    {
+                        "name_cn": "\u7edd\u5bf9\u8d8b\u52bf\u5747\u7ebf\u7ec4",
+                        "frequency": "D",
+                        "count": 4,
+                    },
+                    {
+                        "name_cn": "\u6ce2\u52a8\u7387\u8c03\u6574\u6536\u76ca",
+                        "frequency": "D",
+                        "count": 1,
+                    },
+                    {
+                        "name_cn": "\u57fa\u51c6\u76f8\u5bf9\u5f3a\u5f31",
+                        "frequency": "D",
+                        "count": 3,
+                    },
+                ],
+                "test_usage": "not_used",
+            }
+            dual_momentum_backtest = backtest_agent.run(
+                daily,
+                dual_momentum_agent,
+                dual_momentum_scores,
+                split_by_date,
+            )
+            dual_momentum_selection = _strategy_variant_score(
+                dual_momentum_backtest
+            )
+            dual_momentum_selection[
+                "momentum_trend_report"
+            ] = dual_momentum_report
+            dual_momentum_accepted = bool(
+                dual_momentum_selection.get("quality_gate_pass")
+            )
+            dual_momentum_selection[
+                "dual_momentum_gate"
+            ] = {
+                "status": (
+                    "eligible_for_formal_multiple_testing_audit"
+                    if dual_momentum_accepted
+                    else "rejected_by_own_validation_quality_gate"
+                ),
+                "decision_basis": (
+                    "standalone_train_validation_quality_then_common_"
+                    "deflated_sharpe_cpcv_and_directional_capture_gate"
+                ),
+                "test_usage": "not_used",
+            }
+            if not dual_momentum_accepted:
+                dual_momentum_selection[
+                    "quality_gate_pass"
+                ] = False
+                dual_momentum_selection[
+                    "provisional_tradability_gate_pass"
+                ] = False
+                dual_momentum_selection[
+                    "reliability_status"
+                ] = (
+                    "dual_momentum_rejected_by_validation_gate"
+                )
+            evaluated.append({
+                "spec": {
+                    "name": "\u76f8\u5bf9\u5f3a\u5f31\u6ce2\u52a8\u9884\u7b97\u591a\u5468\u671f\u8d8b\u52bf",
+                    "momentum_trend": True,
+                    "dual_momentum": True,
+                    "volatility_budget": True,
+                    "position_expert": True,
+                    "final_selection_eligible": True,
+                    "supporting_rule_count": 8,
+                    "indicator_count": 8,
+                    "active_only": False,
+                    "portfolio": True,
+                    "trend": True,
+                    "policy": True,
+                },
+                "rules": copy.deepcopy(
+                    momentum_row.get("rules", [])
+                ),
+                "agent": dual_momentum_agent,
+                "scores": dual_momentum_scores,
+                "backtest": dual_momentum_backtest,
+                "selection": dual_momentum_selection,
+                "diversity_report": {},
+                "regime_rule_memory_report": {},
+                "regime_source": (
+                    "causal_absolute_relative_multihorizon_"
+                    "momentum_volatility_budget"
+                ),
+                "online_memory_report": dual_momentum_report,
+                "momentum_trend_report": dual_momentum_report,
             })
 
     trend_risk_budget_candidate_rows: List[Dict[str, Any]] = []
@@ -22997,9 +23252,16 @@ def analyze(
             champion_backtest,
         )
         guard_report = dict(guard_report)
-        guard_report["candidate_chain_accepted"] = True
+        exact_champion_evidence = _strategy_evidence_status(
+            guard_report, selected_spec, strategy_selection_report.get("selected_name")
+        )
+        guard_report["candidate_chain_accepted"] = exact_champion_evidence["validated_strategy"]
+        guard_report["validated_strategy"] = exact_champion_evidence["validated_strategy"]
+        guard_report["release_status"] = exact_champion_evidence["status"]
         guard_report["effective_result_after_guard"] = (
             "reused_exact_train_valid_selected_champion"
+            if exact_champion_evidence["validated_strategy"]
+            else "observe_only_no_validated_strategy"
         )
         guard_report["final_output_degraded"] = False
         patch_report["exact_champion_reused"] = True
@@ -23091,6 +23353,12 @@ def analyze(
         "rule_portfolio": getattr(signal_agent, "rule_portfolio_report", {}),
         "execution_constraints": "slippage + suspend/zero-volume + price-limit blocking + annual signal budget",
     }
+    result["strategy_evidence_status"] = _strategy_evidence_status(
+        guard_report,
+        selected_spec,
+        strategy_selection_report.get("selected_name"),
+    )
+    result["no_degradation_guard"].update(result["strategy_evidence_status"])
     if write_db:
         write_db_features(Path(db), code, scores_by_date, learned_rules)
         result["db_write"] = {"table": "kline_feature_daily", "status": "completed"}

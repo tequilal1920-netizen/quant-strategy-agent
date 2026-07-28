@@ -2,8 +2,20 @@
 name: portfolio-optimization
 description: "用于运行、审计和维护多资产组合优化；当任务涉及优化求解、资产池、风险约束、候选方案、目标权重、配置策略或组合回测时使用。"
 ---
-
 # 组合优化
+
+
+## 直接对话入口
+
+```powershell
+python skill/portfolio-optimization/scripts/query.py current 最小权重=0.001
+python skill/portfolio-optimization/scripts/query.py solver
+python skill/portfolio-optimization/scripts/query.py backtest
+```
+
+`current` 返回当前候选、求解器、非零权重、预期收益、波动和风险贡献；`solver` 返回入选参数、约束余量、风险模型、PBO和多重试验修正；`backtest` 返回收益损失归因、成本敏感性、压力情景和晋级门禁。
+
+当用户提供新的标的、得分和约束时，先把输入保存到运行目录，再调用 `model/portfolio_optimization/portfolio_optimization_engine.py` 的正式命令行入口。不得直接改写现有冠军快照。
 
 ## 目标
 

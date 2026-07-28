@@ -2,8 +2,28 @@
 name: factor-laboratory
 description: "用于运行、审计和维护因子实验室；当任务涉及因子看板、因子挖掘、LLM因子表达式、严格检验、综合打分、指数增强或配置策略时使用。"
 ---
-
 # 因子实验室
+
+
+## 直接对话入口
+
+```powershell
+python skill/factor-laboratory/scripts/query.py champion
+python skill/factor-laboratory/scripts/query.py index 指数=CSI800_ENH 数量=10
+python skill/factor-laboratory/scripts/query.py models
+```
+
+`champion` 返回当前因子冠军、训练验证测试三段绩效、候选归因和十项门禁；`index` 返回指数增强冠军与影子挑战者；`models` 返回因子、SmartBeta、风险和求解模型清单。
+
+需要启动或读取远程因子任务时，使用统一服务，不在提示词中保存账号：
+
+```powershell
+python -m agent_runtime remote GET /api/factor/status
+python -m agent_runtime remote GET /api/factor/history
+python -m agent_runtime remote POST /api/factor/job/start --json '{"mode":"standard"}'
+```
+
+任务参数必须由用户问题和模型契约共同确定。测试集继续保持只报告。
 
 ## 目标
 

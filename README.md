@@ -1,5 +1,97 @@
 # 量化策略 Agent
 
+
+## 新 Agent 直接使用
+
+新 Agent 读取仓库根目录 `AGENTS.md`，再按问题读取对应的 `skill/<模型>/SKILL.md`。八个 Skill 都有可执行查询脚本，结果直接来自模型快照、因子冠军清单和治理证据。
+
+```powershell
+git clone --branch agent/industry-style-r16-6 https://github.com/tequilal1920-netizen/quant-strategy-agent.git
+Set-Location quant-strategy-agent
+python -m agent_runtime catalog
+```
+
+远程机器把已有数据目录作为外部只读依赖接入，不把数据库、缓存或授权数据提交到 GitHub：
+
+```powershell
+$env:QUANT_AGENT_SNAPSHOT_ROOT = "<R25.4部署目录>\board\quant_strategy_agent_vnext\data"
+$env:RESEARCH_WAREHOUSE_DB = "<研究数据库路径>"
+$env:FACTOR_STATE_DB = "<因子状态库路径>"
+$env:QUANT_AGENT_OUTPUT_ROOT = "<模型输出目录>"
+python -m agent_runtime doctor
+```
+
+典型问答对应的真实命令：
+
+```powershell
+python skill/asset-allocation/scripts/query.py current 画像=平衡
+python skill/industry-rotation/scripts/query.py ranking 频率=高频 数量=10
+python skill/industry-rotation/scripts/query.py drivers 行业=电子 数量=8
+python skill/liquidity-tracking/scripts/query.py page 页面=外资
+python skill/factor-laboratory/scripts/query.py champion
+python skill/technical-analysis/scripts/query.py status
+python skill/portfolio-optimization/scripts/query.py current 最小权重=0.001
+python skill/research-home/scripts/query.py overview
+```
+
+每次输出都包含 `数据截止`、`生成时间`、`数据来源` 和 `结果`。训练与验证负责选模，测试仅报告；研究候选、观察状态和生产可交易状态保持区分。
+
+## 八个一级模型 Skill
+
+| 一级标题 | Skill | 一句话应用 |
+| --- | --- | --- |
+| 主页 | [`research-home`](skill/research-home/SKILL.md) | 汇总七个研究模块的时点结论、治理状态、风险提示和当前组合。 |
+| 数据看板 | [`data-dashboard`](skill/data-dashboard/SKILL.md) | 查询宏观、全球市场、行业、商品、个股和事件快照及数据质量。 |
+| 资产配置 | [`asset-allocation`](skill/asset-allocation/SKILL.md) | 识别多类宏观周期并输出分画像资产权重和风险贡献。 |
+| 资金面跟踪 | [`liquidity-tracking`](skill/liquidity-tracking/SKILL.md) | 查询七类资金主体的最新值、方向、来源和质量状态。 |
+| 行业景气度 | [`industry-rotation`](skill/industry-rotation/SKILL.md) | 查询行业景气排名、高频驱动、月周轮动和季度风格箱。 |
+| 因子实验室 | [`factor-laboratory`](skill/factor-laboratory/SKILL.md) | 查询因子冠军、指数增强、SmartBeta、三段绩效和治理门禁。 |
+| 技术分析 | [`technical-analysis`](skill/technical-analysis/SKILL.md) | 查询K线治理和形态知识，并转接远程单股学习任务。 |
+| 组合优化 | [`portfolio-optimization`](skill/portfolio-optimization/SKILL.md) | 查询求解器、权重、风险贡献、约束余量、压力和回测门禁。 |
+
+## 本机接口与远程模型
+
+只读运行层不依赖第三方包：
+
+```powershell
+python -m agent_runtime serve --host 127.0.0.1 --port 8091
+```
+
+接口：
+
+- `GET /health`
+- `GET /v1/catalog`
+- `POST /v1/query`
+
+查询示例：
+
+```json
+{
+  "skill": "industry-rotation",
+  "operation": "drivers",
+  "params": {"行业": "电子", "数量": 8}
+}
+```
+
+需要运行K线或因子任务时，使用已部署统一服务。账号和口令只从环境变量读取：
+
+```powershell
+$env:QUANT_AGENT_BASE_URL = "http://127.0.0.1:8076/quant-agent-vnext"
+$env:QUANT_AGENT_USER = "<运行时账号>"
+$env:QUANT_AGENT_PASSWORD = "<运行时口令>"
+python -m agent_runtime remote GET /api/services
+python -m agent_runtime remote GET "/api/kline/stocks?q=000001&limit=20"
+python -m agent_runtime remote GET /api/factor/status
+```
+
+一键远程克隆、接入外部数据并验收：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File environment/deployment/deploy_agent_runtime_remote.ps1 `
+  -SnapshotRoot "<R25.4部署目录>\board\quant_strategy_agent_vnext\data" `
+  -ResearchWarehouseDb "<研究数据库路径>" `
+  -FactorStateDb "<因子状态库路径>"
+```
 本仓库保存当前生产源码、可复现配置、模型说明和标准化 Skill。数据库、运行输出、缓存、私密凭据、正式研究文档及历史备份不进入公开仓库。
 
 ## 目录结构
@@ -90,7 +182,9 @@ node --check board\quant_strategy_agent\static\js\app.js
 
 - 统一看板：https://desktop-i22b489.tailf9d7ac.ts.net/quant-agent/
 - AI 监控：https://desktop-i22b489.tailf9d7ac.ts.net/tech-diffusion/
-- 当前生产版本：`2026.07.23-research-workspace-r16.6-stylebox`
+- 原公网版本：`2026.07.27-scoped-controls-ai-cache-r21.2`
+- vNext 入口：https://desktop-i22b489.tailf9d7ac.ts.net:10000/quant-agent-vnext/
+- vNext 版本：`2026.07.27-five-panel-dense-vnext-r25.4`
 - K 线模型：`9.0-cohort-wyckoff-evolution`
 - 部署与回滚脚本：`environment/deployment/`
 - 公开仓库：https://github.com/tequilal1920-netizen/quant-strategy-agent

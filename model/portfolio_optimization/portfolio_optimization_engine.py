@@ -14,6 +14,7 @@ import json
 import math
 import sqlite3
 import statistics
+import sys
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
@@ -23,6 +24,7 @@ from typing import Any, Iterable
 import numpy as np
 import pandas as pd
 from scipy.cluster.hierarchy import leaves_list, linkage
+from scipy.optimize import minimize
 from scipy.spatial.distance import squareform
 from scipy.stats import norm
 from sklearn.covariance import LedoitWolf
@@ -33,7 +35,18 @@ except Exception:  # pragma: no cover - runtime fallback is tested separately.
     cp = None
 
 
-ENGINE_VERSION = "portfolio-optimizer/2.1-risk-adjusted-smart-factor"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from research_metrics import (  # noqa: E402
+    annualized_information_ratio,
+    annualized_sharpe,
+    annualized_volatility,
+)
+
+
+ENGINE_VERSION = "portfolio-optimizer/2.4-solver-audit"
 SCHEMA_VERSION = "2.0"
 TRAIN = ("20150101", "20201231")
 VALIDATION = ("20210101", "20221231")
@@ -80,8 +93,22 @@ def max_drawdown(returns: Iterable[float]) -> float:
 
 
 def annual_metrics(returns: Iterable[float], benchmark: Iterable[float] | None = None) -> dict[str, float]:
-    r = np.asarray(list(returns), dtype=float)
-    r = r[np.isfinite(r)]
+    raw_returns = np.asarray(list(returns), dtype=float)
+    aligned_benchmark: np.ndarray | None = None
+    if benchmark is None:
+        r = raw_returns[np.isfinite(raw_returns)]
+    else:
+        raw_benchmark = np.asarray(list(benchmark), dtype=float)
+        aligned_count = min(raw_returns.size, raw_benchmark.size)
+        if aligned_count:
+            paired_returns = raw_returns[-aligned_count:]
+            paired_benchmark = raw_benchmark[-aligned_count:]
+            valid = np.isfinite(paired_returns) & np.isfinite(paired_benchmark)
+            r = paired_returns[valid]
+            aligned_benchmark = paired_benchmark[valid]
+        else:
+            r = np.asarray([], dtype=float)
+            aligned_benchmark = np.asarray([], dtype=float)
     if r.size == 0:
         return {
             "months": 0,
@@ -98,22 +125,18 @@ def annual_metrics(returns: Iterable[float], benchmark: Iterable[float] | None =
         }
     total = float(np.prod(1.0 + r) - 1.0)
     annual = float((1.0 + total) ** (MONTHS_PER_YEAR / r.size) - 1.0) if total > -1 else -1.0
-    vol = float(np.std(r, ddof=1) * math.sqrt(MONTHS_PER_YEAR)) if r.size > 1 else 0.0
-    sharpe = annual / vol if vol > 1e-12 else 0.0
+    vol = annualized_volatility(r, MONTHS_PER_YEAR)
+    sharpe = annualized_sharpe(r, MONTHS_PER_YEAR)
     drawdown = max_drawdown(r)
     calmar = annual / abs(drawdown) if drawdown < -1e-12 else 0.0
     active_annual = 0.0
     information_ratio = 0.0
-    if benchmark is not None:
-        b = np.asarray(list(benchmark), dtype=float)
-        n = min(r.size, b.size)
-        if n:
-            active = r[-n:] - b[-n:]
-            benchmark_total = float(np.prod(1.0 + b[-n:]) - 1.0)
-            benchmark_annual = float((1.0 + benchmark_total) ** (MONTHS_PER_YEAR / n) - 1.0) if benchmark_total > -1 else -1.0
-            active_annual = annual - benchmark_annual
-            tracking = float(np.std(active, ddof=1) * math.sqrt(MONTHS_PER_YEAR)) if n > 1 else 0.0
-            information_ratio = float(np.mean(active) * MONTHS_PER_YEAR / tracking) if tracking > 1e-12 else 0.0
+    if aligned_benchmark is not None and aligned_benchmark.size:
+        active = r - aligned_benchmark
+        benchmark_total = float(np.prod(1.0 + aligned_benchmark) - 1.0)
+        benchmark_annual = float((1.0 + benchmark_total) ** (MONTHS_PER_YEAR / r.size) - 1.0) if benchmark_total > -1 else -1.0
+        active_annual = annual - benchmark_annual
+        information_ratio = annualized_information_ratio(active, MONTHS_PER_YEAR)
     return {
         "months": int(r.size),
         "total_return": total,
@@ -425,6 +448,112 @@ class ConvexPortfolioSolver:
             constraints.extend([cp.sum(self.w[indexes]) >= lower, cp.sum(self.w[indexes]) <= upper])
         self.problem = cp.Problem(objective, constraints)
 
+    def _solve_with_scipy(
+        self,
+        mu: np.ndarray,
+        covariance: np.ndarray,
+        previous: np.ndarray,
+        spec: CandidateSpec,
+        started: float,
+        upstream_error: str = "",
+    ) -> tuple[np.ndarray, dict[str, Any]] | None:
+        """Solve the same convex program with SLSQP when CVXPY is unavailable.
+
+        This is a real constrained-optimization fallback rather than an
+        equal-weight seed.  It preserves the budget, group, position and
+        turnover constraints used by the primary DPP problem.
+        """
+        cov = nearest_psd(covariance)
+        expected = np.asarray(mu, dtype=float)
+        prior = np.asarray(previous, dtype=float)
+        cap = max(float(spec.position_cap), 1.0 / self.n)
+        turnover_cap = max(float(spec.turnover_cap), 0.01)
+        l1_epsilon = 1e-8
+
+        def objective(weights: np.ndarray) -> float:
+            active = weights - prior
+            smooth_l1 = np.sqrt(active * active + l1_epsilon * l1_epsilon) - l1_epsilon
+            utility = (
+                float(expected @ weights)
+                - float(spec.risk_aversion) * float(weights @ cov @ weights)
+                - float(spec.turnover_l2) * float(active @ active)
+                - float(spec.turnover_l1) * float(smooth_l1.sum())
+            )
+            return -utility
+
+        def gradient(weights: np.ndarray) -> np.ndarray:
+            active = weights - prior
+            smooth_sign = active / np.sqrt(active * active + l1_epsilon * l1_epsilon)
+            utility_gradient = (
+                expected
+                - 2.0 * float(spec.risk_aversion) * (cov @ weights)
+                - 2.0 * float(spec.turnover_l2) * active
+                - float(spec.turnover_l1) * smooth_sign
+            )
+            return -utility_gradient
+
+        constraints: list[dict[str, Any]] = [
+            {"type": "eq", "fun": lambda weights: float(weights.sum() - 1.0)},
+            {
+                "type": "ineq",
+                "fun": lambda weights: float(turnover_cap - np.abs(weights - prior).sum() / 2.0),
+            },
+        ]
+        for group, (lower, upper) in group_limits(self.groups).items():
+            indexes = np.asarray([i for i, value in enumerate(self.groups) if value == group], dtype=int)
+            constraints.extend(
+                [
+                    {
+                        "type": "ineq",
+                        "fun": lambda weights, idx=indexes, bound=lower: float(weights[idx].sum() - bound),
+                    },
+                    {
+                        "type": "ineq",
+                        "fun": lambda weights, idx=indexes, bound=upper: float(bound - weights[idx].sum()),
+                    },
+                ]
+            )
+
+        candidates = [prior.copy(), feasible_seed(self.groups, cap)]
+        best_result: Any | None = None
+        best_weights: np.ndarray | None = None
+        best_objective = math.inf
+        best_violation = math.inf
+        for initial in candidates:
+            initial = capped_simplex(np.clip(initial, 0.0, cap), cap)
+            result = minimize(
+                objective,
+                initial,
+                jac=gradient,
+                method="SLSQP",
+                bounds=[(0.0, cap)] * self.n,
+                constraints=constraints,
+                options={"maxiter": 1200, "ftol": 1e-11, "disp": False},
+            )
+            weights = np.asarray(result.x, dtype=float)
+            diagnostics = constraint_diagnostics(weights, prior, self.groups, spec)
+            violation = safe_float(diagnostics.get("max_violation"), math.inf)
+            value = objective(weights)
+            if violation < best_violation - 1e-10 or (
+                violation <= 1e-6 and best_violation <= 1e-6 and value < best_objective
+            ):
+                best_result = result
+                best_weights = weights
+                best_objective = value
+                best_violation = violation
+
+        if best_result is None or best_weights is None or best_violation > 1e-6:
+            return None
+        return best_weights, {
+            "status": "optimal",
+            "solver": "SCIPY_SLSQP",
+            "solve_time_ms": (time.perf_counter() - started) * 1000.0,
+            "iterations": int(getattr(best_result, "nit", 0) or 0),
+            "objective": -safe_float(best_objective),
+            "fallback_reason": upstream_error[:240],
+            "max_constraint_violation": best_violation,
+        }
+
     def solve(
         self,
         mu: np.ndarray,
@@ -433,9 +562,26 @@ class ConvexPortfolioSolver:
         spec: CandidateSpec,
         force_solver: str | None = None,
     ) -> tuple[np.ndarray, dict[str, Any]]:
+        started = time.perf_counter()
         if self.problem is None:
+            scipy_result = self._solve_with_scipy(
+                mu,
+                covariance,
+                previous,
+                spec,
+                started,
+                upstream_error="cvxpy_unavailable",
+            )
+            if scipy_result is not None:
+                return scipy_result
             weights = feasible_seed(self.groups, spec.position_cap)
-            return weights, {"status": "fallback_no_cvxpy", "solver": "feasible_seed", "solve_time_ms": 0.0, "iterations": 0}
+            return weights, {
+                "status": "degraded_no_optimizer",
+                "solver": "feasible_seed",
+                "solve_time_ms": (time.perf_counter() - started) * 1000.0,
+                "iterations": 0,
+                "error": "cvxpy_unavailable;scipy_slsqp_failed",
+            }
         cov = nearest_psd(covariance)
         factor = np.linalg.cholesky(cov + np.eye(self.n) * 1e-8)
         self.mu.value = np.asarray(mu, dtype=float)
@@ -448,7 +594,6 @@ class ConvexPortfolioSolver:
         self.position_cap.value = max(float(spec.position_cap), 1.0 / self.n)
         self.turnover_cap.value = max(float(spec.turnover_cap), 0.01)
         paths = [force_solver] if force_solver else [name for name in ("CLARABEL", "OSQP", "SCS") if name in self.available]
-        started = time.perf_counter()
         last_error = ""
         inaccurate_result: tuple[np.ndarray, dict[str, Any]] | None = None
         for solver in paths:
@@ -467,6 +612,8 @@ class ConvexPortfolioSolver:
                     continue
                 weights = np.maximum(np.asarray(self.w.value, dtype=float), 0.0)
                 weights /= max(float(weights.sum()), 1e-12)
+                diagnostics = constraint_diagnostics(weights, np.asarray(previous, dtype=float), self.groups, spec)
+                max_violation = safe_float(diagnostics.get("max_violation"), math.inf)
                 stats = self.problem.solver_stats
                 result = (
                     weights,
@@ -476,9 +623,13 @@ class ConvexPortfolioSolver:
                         "solve_time_ms": (time.perf_counter() - started) * 1000.0,
                         "iterations": int(getattr(stats, "num_iters", 0) or 0),
                         "objective": safe_float(self.problem.value),
+                        "max_constraint_violation": max_violation,
                     },
                 )
-                if status == "optimal" or force_solver:
+                if max_violation > 1e-6:
+                    last_error = f"{solver}:constraint_violation={max_violation:.3e}"
+                    continue
+                if status == "optimal":
                     return result
                 inaccurate_result = result
                 last_error = status
@@ -486,9 +637,19 @@ class ConvexPortfolioSolver:
                 last_error = f"{type(exc).__name__}:{exc}"
         if inaccurate_result is not None:
             return inaccurate_result
+        scipy_result = self._solve_with_scipy(
+            mu,
+            covariance,
+            previous,
+            spec,
+            started,
+            upstream_error=last_error,
+        )
+        if scipy_result is not None:
+            return scipy_result
         weights = feasible_seed(self.groups, spec.position_cap)
         return weights, {
-            "status": "fallback_after_solver_failure",
+            "status": "degraded_no_optimizer",
             "solver": "feasible_seed",
             "solve_time_ms": (time.perf_counter() - started) * 1000.0,
             "iterations": 0,
@@ -570,6 +731,7 @@ def run_convex_backtest(
                 "turnover": turnover,
                 "transaction_cost": cost,
                 "weights": weights.tolist(),
+                "asset_returns": realized.tolist(),
                 "solver": solve_meta,
                 "max_constraint_violation": diagnostics["max_violation"],
             }
@@ -616,9 +778,80 @@ def run_rule_backtest(
         benchmark = float(np.mean(realized))
         turnover = float(np.abs(weights - previous).sum() / 2.0)
         cost = turnover * cost_bps / 10000.0
-        rows.append({"decision_date": decision, "trade_date": next_date, "gross_return": gross_return, "net_return": gross_return - cost, "benchmark_return": benchmark, "turnover": turnover, "transaction_cost": cost, "weights": weights.tolist(), "solver": {"solver": "closed_form", "status": "optimal"}, "max_constraint_violation": 0.0})
+        rows.append({"decision_date": decision, "trade_date": next_date, "gross_return": gross_return, "net_return": gross_return - cost, "benchmark_return": benchmark, "turnover": turnover, "transaction_cost": cost, "weights": weights.tolist(), "asset_returns": realized.tolist(), "solver": {"solver": "closed_form", "status": "optimal"}, "max_constraint_violation": 0.0})
         previous = drift_weights(weights, realized)
     return rows
+
+
+def _return_loss_slice(rows: list[dict[str, Any]], codes: list[str], groups: list[str]) -> dict[str, Any]:
+    if not rows:
+        return {"months": 0}
+    n = len(codes)
+    group_active = {group: 0.0 for group in sorted(set(groups))}
+    group_weight = {group: [] for group in sorted(set(groups))}
+    asset_active = {code: 0.0 for code in codes}
+    gross_active_total = 0.0
+    net_active_total = 0.0
+    costs = 0.0
+    for row in rows:
+        realized = np.asarray(row.get("asset_returns", []), dtype=float)
+        weights = np.asarray(row.get("weights", []), dtype=float)
+        if realized.size != n or weights.size != n:
+            continue
+        active = weights - 1.0 / n
+        contributions = active * realized
+        gross_active_total += float(contributions.sum())
+        net_active_total += float(row["net_return"] - row.get("benchmark_return", 0.0))
+        costs += float(row.get("transaction_cost", 0.0))
+        for index, code in enumerate(codes):
+            asset_active[code] += float(contributions[index])
+        for group in group_active:
+            indexes = [index for index, value in enumerate(groups) if value == group]
+            group_active[group] += float(contributions[indexes].sum())
+            group_weight[group].append(float(weights[indexes].sum()))
+    strategy = [float(row["net_return"]) for row in rows]
+    benchmark = [float(row.get("benchmark_return", 0.0)) for row in rows]
+    metrics = annual_metrics(strategy, benchmark)
+    up_indexes = [index for index, value in enumerate(benchmark) if value > 0]
+    down_indexes = [index for index, value in enumerate(benchmark) if value < 0]
+    def capture(indexes: list[int]) -> float | None:
+        denominator = float(sum(benchmark[index] for index in indexes))
+        return float(sum(strategy[index] for index in indexes) / denominator) if indexes and abs(denominator) > 1e-12 else None
+    return {
+        "months": len(rows),
+        "annual_return": metrics["annual_return"],
+        "benchmark_annual_return": metrics["annual_return"] - metrics["annual_excess_return"],
+        "annual_excess_return": metrics["annual_excess_return"],
+        "sharpe": metrics["sharpe"],
+        "information_ratio": metrics["information_ratio"],
+        "gross_selection_active_return_sum": gross_active_total,
+        "net_active_return_sum": net_active_total,
+        "implementation_residual": net_active_total - gross_active_total,
+        "transaction_cost_sum": costs,
+        "up_market_capture": capture(up_indexes),
+        "down_market_capture": capture(down_indexes),
+        "group_average_weights": {group: float(np.mean(values)) if values else 0.0 for group, values in group_weight.items()},
+        "group_gross_active_contribution": group_active,
+        "asset_gross_active_contribution": asset_active,
+    }
+
+
+def return_loss_attribution(rows: list[dict[str, Any]], codes: list[str], groups: list[str]) -> dict[str, Any]:
+    """Decompose relative return loss without feeding test evidence into selection."""
+    split_rows = {
+        split: [row for row in rows if start <= row["trade_date"] <= end]
+        for split, (start, end) in SPLITS.items()
+    }
+    years = sorted({str(row["trade_date"])[:4] for row in rows})
+    return {
+        "method": "monthly Brinson-style active contribution against equal asset weights; implementation residual reconciles benchmark drift and both strategies' costs",
+        "selection_policy": "report_only; attribution fields are never read by candidate selection",
+        "splits": {split: _return_loss_slice(chosen, codes, groups) for split, chosen in split_rows.items()},
+        "calendar_year": {
+            year: _return_loss_slice([row for row in rows if str(row["trade_date"]).startswith(year)], codes, groups)
+            for year in years
+        },
+    }
 
 
 def candidate_grid() -> list[CandidateSpec]:
@@ -657,6 +890,57 @@ def score_validation(metrics: dict[str, float]) -> float:
     )
 
 
+def _percentile_composite(
+    rows: list[dict[str, Any]],
+    fields: tuple[tuple[str, bool], ...],
+) -> dict[str, float]:
+    """Scale heterogeneous objectives by cross-sectional percentile.
+
+    The bool flag is True when a larger raw value is preferable. Percentile
+    scaling prevents Sharpe, return and turnover units from silently setting
+    the selection result through arbitrary coefficient magnitudes.
+    """
+    if not rows:
+        return {}
+    frame = pd.DataFrame(rows).set_index("candidate_id")
+    components: list[pd.Series] = []
+    for field, higher_is_better in fields:
+        values = pd.to_numeric(frame.get(field), errors="coerce")
+        if values is None or values.notna().sum() == 0:
+            continue
+        ranked = values.rank(method="average", pct=True, ascending=higher_is_better)
+        components.append(ranked.fillna(0.0))
+    if not components:
+        return {str(candidate_id): 0.0 for candidate_id in frame.index}
+    score = pd.concat(components, axis=1).mean(axis=1)
+    return {str(candidate_id): float(value) for candidate_id, value in score.items()}
+
+
+def _attach_train_selection_scores(rows: list[dict[str, Any]]) -> None:
+    absolute = _percentile_composite(
+        rows,
+        (("train_annual_return", True), ("train_sharpe", True), ("train_calmar", True), ("train_max_drawdown", True)),
+    )
+    active = _percentile_composite(
+        rows,
+        (("train_annual_excess_return", True), ("train_information_ratio", True)),
+    )
+    implementation = _percentile_composite(rows, (("train_annual_turnover", False), ("train_cost_drag", False)))
+    for row in rows:
+        candidate_id = str(row["candidate_id"])
+        absolute_score = absolute.get(candidate_id, 0.0)
+        active_score = active.get(candidate_id, 0.0)
+        implementation_score = implementation.get(candidate_id, 0.0)
+        row["train_absolute_percentile"] = absolute_score
+        row["train_active_percentile"] = active_score
+        row["train_implementation_percentile"] = implementation_score
+        row["train_selection_score"] = (
+            0.50 * min(absolute_score, active_score)
+            + 0.35 * (absolute_score + active_score) / 2.0
+            + 0.15 * implementation_score
+        )
+
+
 def select_candidate(
     returns: pd.DataFrame,
     groups: list[str],
@@ -672,7 +956,18 @@ def select_candidate(
         metrics["annual_turnover"] = float(np.mean([row["turnover"] for row in rows]) * 12.0) if rows else 0.0
         train_rows.append({**asdict(spec), **{f"train_{key}": value for key, value in metrics.items()}, "train_score": score_train(metrics)})
         candidate_curves[spec.candidate_id] = rows
-    shortlist_ids = [row["candidate_id"] for row in sorted(train_rows, key=lambda row: row["train_score"], reverse=True)[:24]]
+    _attach_train_selection_scores(train_rows)
+    robust_ids = {
+        row["candidate_id"]
+        for row in sorted(train_rows, key=lambda row: row["train_selection_score"], reverse=True)[:24]
+    }
+    absolute_ids = {
+        row["candidate_id"] for row in sorted(train_rows, key=lambda row: row["train_absolute_percentile"], reverse=True)[:8]
+    }
+    active_ids = {
+        row["candidate_id"] for row in sorted(train_rows, key=lambda row: row["train_active_percentile"], reverse=True)[:8]
+    }
+    shortlist_ids = robust_ids | absolute_ids | active_ids
     by_id = {spec.candidate_id: spec for spec in specs}
     leaderboard: list[dict[str, Any]] = []
     validation_curves: dict[str, list[dict[str, Any]]] = {}
@@ -685,13 +980,45 @@ def select_candidate(
             validation_curves[candidate_id] = rows
             valid = split_metrics(rows)["validation"]
             item.update({f"validation_{key}": value for key, value in valid.items()})
-            item["validation_score"] = score_validation(valid)
+            item["validation_score_legacy"] = score_validation(valid)
             item["validation_eligible"] = valid.get("months", 0) >= 20 and valid.get("max_drawdown", 0.0) > -0.35
         else:
             item["validation_eligible"] = False
+            item["validation_score_legacy"] = -999.0
             item["validation_score"] = -999.0
         leaderboard.append(item)
     eligible = [row for row in leaderboard if row["validation_eligible"]]
+    validation_absolute = _percentile_composite(
+        eligible,
+        (
+            ("validation_annual_return", True),
+            ("validation_sharpe", True),
+            ("validation_calmar", True),
+            ("validation_max_drawdown", True),
+        ),
+    )
+    validation_active = _percentile_composite(
+        eligible,
+        (("validation_annual_excess_return", True), ("validation_information_ratio", True)),
+    )
+    validation_implementation = _percentile_composite(
+        eligible,
+        (("validation_annual_turnover", False), ("validation_cost_drag", False)),
+    )
+    for row in eligible:
+        candidate_id = str(row["candidate_id"])
+        absolute_score = validation_absolute.get(candidate_id, 0.0)
+        active_score = validation_active.get(candidate_id, 0.0)
+        implementation_score = validation_implementation.get(candidate_id, 0.0)
+        row["validation_absolute_percentile"] = absolute_score
+        row["validation_active_percentile"] = active_score
+        row["validation_implementation_percentile"] = implementation_score
+        row["validation_score"] = (
+            0.50 * min(absolute_score, active_score)
+            + 0.25 * (absolute_score + active_score) / 2.0
+            + 0.15 * row["train_selection_score"]
+            + 0.10 * implementation_score
+        )
     selected_row = max(eligible or [row for row in leaderboard if row["shortlisted_by_train"]], key=lambda row: row["validation_score"])
     return by_id[selected_row["candidate_id"]], leaderboard, validation_curves, cache
 
@@ -768,24 +1095,56 @@ def current_estimates(returns: pd.DataFrame, spec: CandidateSpec) -> tuple[np.nd
     return mu, covariance
 
 
-def solver_benchmark(solver: ConvexPortfolioSolver, mu: np.ndarray, covariance: np.ndarray, previous: np.ndarray, spec: CandidateSpec) -> list[dict[str, Any]]:
+def solver_benchmark(
+    solver: ConvexPortfolioSolver,
+    mu: np.ndarray,
+    covariance: np.ndarray,
+    previous: np.ndarray,
+    spec: CandidateSpec,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for name in ("OSQP", "CLARABEL", "SCS"):
-        if name not in solver.available:
+    for name in ("CLARABEL", "OSQP", "SCS", "SCIPY_SLSQP"):
+        if name != "SCIPY_SLSQP" and name not in solver.available:
             rows.append({"solver": name, "status": "not_installed", "median_ms": None, "iterations": None, "max_constraint_violation": None})
             continue
         timings: list[float] = []
         iterations: list[int] = []
         statuses: list[str] = []
+        actual_solvers: list[str] = []
         weights = np.asarray(previous, dtype=float)
         for _ in range(4):
-            weights, meta = solver.solve(mu, covariance, previous, spec, force_solver=name)
+            if name == "SCIPY_SLSQP":
+                result = solver._solve_with_scipy(
+                    mu,
+                    covariance,
+                    previous,
+                    spec,
+                    time.perf_counter(),
+                    upstream_error="benchmark_direct",
+                )
+                if result is None:
+                    meta = {"status": "failed", "solver": name, "solve_time_ms": 0.0, "iterations": 0}
+                else:
+                    weights, meta = result
+            else:
+                weights, meta = solver.solve(mu, covariance, previous, spec, force_solver=name)
             timings.append(safe_float(meta.get("solve_time_ms")))
             iterations.append(int(meta.get("iterations") or 0))
             statuses.append(str(meta.get("status")))
-        failed = statuses[-1].startswith("fallback")
-        diagnostics = None if failed else constraint_diagnostics(weights, previous, solver.groups, spec)
-        rows.append({"solver": name, "status": statuses[-1], "median_ms": float(statistics.median(timings[1:] or timings)), "iterations": int(statistics.median(iterations)), "max_constraint_violation": None if failed else diagnostics["max_violation"]})
+            actual_solvers.append(str(meta.get("solver") or "unknown"))
+        diagnostics = constraint_diagnostics(weights, previous, solver.groups, spec)
+        routed = actual_solvers[-1] != name
+        status = f"routed_to_{actual_solvers[-1]}" if routed else statuses[-1]
+        rows.append(
+            {
+                "solver": name,
+                "actual_solver": actual_solvers[-1],
+                "status": status,
+                "median_ms": float(statistics.median(timings[1:] or timings)),
+                "iterations": int(statistics.median(iterations)),
+                "max_constraint_violation": diagnostics["max_violation"],
+            }
+        )
     return rows
 
 
@@ -819,7 +1178,7 @@ def profile_from_returns(code: str, name: str, asset_type: str, group: str, retu
         "observations": int(len(values)),
         "annual_return_1y": annual,
         "annual_volatility_1y": vol,
-        "sharpe_1y": annual / vol if vol > 1e-12 else 0.0,
+        "sharpe_1y": annualized_sharpe(recent, TRADING_DAYS),
         "downside_volatility_1y": downside,
         "max_drawdown_3y": max_drawdown(values.tail(756)),
         "daily_cvar_95": cvar,
@@ -1022,14 +1381,15 @@ def parameter_registry() -> list[dict[str, Any]]:
             ("partial_fill_ratio", 1.0, "研究", True), ("execution_horizon_days", 1, "研究", True),
         ],
         "求解器": [
-            ("qp_primary", "OSQP", "生产", False), ("conic_secondary", "Clarabel", "生产", False),
-            ("first_order_fallback", "SCS", "生产", False), ("lp_milp", "HiGHS", "研究", False),
+            ("conic_primary", "Clarabel", "生产", False), ("qp_secondary", "OSQP", "生产", False),
+            ("first_order_fallback", "SCS", "生产", False), ("constrained_fallback", "SciPy SLSQP", "生产", False),
+            ("lp_milp", "HiGHS", "研究", False),
             ("miqp_optional", "Gurobi/SCIP", "研究", False), ("dpp_cache", True, "生产", False),
             ("warm_start", True, "生产", False), ("absolute_tolerance", 1e-7, "生产", True),
             ("relative_tolerance", 1e-7, "生产", True), ("max_iterations", 20000, "生产", True),
             ("presolve", True, "生产", False), ("polishing", True, "生产", False),
-            ("solver_race", True, "生产", False), ("kkt_recheck", True, "生产", False),
-            ("repair_after_solve", True, "生产", False), ("deterministic_seed", 20260720, "生产", False),
+            ("solver_race", False, "生产", False), ("post_solve_constraint_recheck", True, "生产", False),
+            ("repair_after_solve", False, "生产", False), ("deterministic_seed", 20260720, "生产", False),
         ],
         "深度学习与LLM": [
             ("tft_enabled", False, "研究", True), ("patchtst_enabled", False, "研究", True),
@@ -1045,9 +1405,9 @@ def parameter_registry() -> list[dict[str, Any]]:
             ("train_start", TRAIN[0], "生产", False), ("train_end", TRAIN[1], "生产", False),
             ("validation_start", VALIDATION[0], "生产", False), ("validation_end", VALIDATION[1], "生产", False),
             ("test_start", TEST[0], "生产", False), ("test_policy", "只报告不选模", "生产", False),
-            ("candidate_count", 96, "生产", False), ("train_shortlist", 12, "生产", True),
+            ("candidate_count", 192, "生产", False), ("train_shortlist", "24主榜+8绝对+8主动，去重", "生产", True),
             ("cscv_blocks", 8, "生产", True), ("embargo_months", 1, "生产", True),
-            ("purge_horizon_months", 1, "生产", True), ("dsr_trials", 96, "生产", False),
+            ("purge_horizon_months", 1, "生产", True), ("dsr_trials", 192, "生产", False),
             ("cost_sensitivity", "5/10/20/30bp", "生产", False), ("stress_windows", 4, "生产", False),
             ("shadow_months", 12, "生产", False), ("promotion_requires_pbo", True, "生产", False),
         ],
@@ -1225,6 +1585,13 @@ def build_snapshot(
         ]
         solver_rows = solver_benchmark(solver, mu, covariance, previous, selected_spec)
         frontier = efficient_frontier(solver, mu, covariance, previous, selected_spec)
+        degraded_solve_count = sum(
+            1
+            for row in selected_rows
+            if str((row.get("solver") or {}).get("status")) == "degraded_no_optimizer"
+            or str((row.get("solver") or {}).get("solver")) == "feasible_seed"
+        )
+        current_solver_ok = str(current_meta.get("status")) in {"optimal", "optimal_inaccurate"} and str(current_meta.get("solver")) != "feasible_seed"
         quality_checks = [
             {"check": "本地数据库最新日", "passed": bool(as_of), "value": as_of},
             {"check": "优化资产数不少于10", "passed": len(codes) >= 10, "value": len(codes)},
@@ -1233,7 +1600,8 @@ def build_snapshot(
             {"check": "预声明候选数", "passed": len(candidate_grid()) == 192, "value": len(candidate_grid())},
             {"check": "测试集未参与选模", "passed": True, "value": "train shortlist → validation select → test report only"},
             {"check": "当前解约束残差", "passed": current_constraints["max_violation"] <= 1e-5, "value": current_constraints["max_violation"]},
-            {"check": "专业求解器可用", "passed": any(name in solver.available for name in ("OSQP", "CLARABEL")), "value": solver.available},
+            {"check": "约束求解器路径可用", "passed": current_solver_ok, "value": current_meta},
+            {"check": "回测未发生无求解器降级", "passed": degraded_solve_count == 0, "value": degraded_solve_count},
             {"check": "净值序列完整", "passed": len(selected_rows) >= 100, "value": len(selected_rows)},
         ]
         quality_status = "passed" if all(row["passed"] for row in quality_checks) else "failed"
@@ -1297,6 +1665,7 @@ def build_snapshot(
             },
             "backtest": {
                 "strategies": strategies,
+                "return_loss_attribution": return_loss_attribution(selected_rows, codes, groups),
                 "cost_sensitivity_test": cost_sensitivity,
                 "stress_scenarios": scenario_rows(selected_nav, benchmark_nav),
                 "promotion_gate": promotion,

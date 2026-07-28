@@ -1,0 +1,5 @@
+@media (min-width: 1121px) {
+  .weight-control-panel {
+    width: min(100%, 920px);
+  }
+}

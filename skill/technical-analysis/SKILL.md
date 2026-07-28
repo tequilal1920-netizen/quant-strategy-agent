@@ -2,8 +2,27 @@
 name: technical-analysis
 description: "用于运行、审计和维护技术分析；当任务涉及K线学习、单股或同类公司分析、形态记忆、情境进化、历史任务或技术配置策略时使用。"
 ---
-
 # 技术分析
+
+
+## 直接对话入口
+
+```powershell
+python skill/technical-analysis/scripts/query.py status
+python skill/technical-analysis/scripts/query.py patterns 关键词=breakout 数量=20
+```
+
+`status` 回答K线横截面模型是否已经通过治理；`patterns` 检索正式形态知识。当前治理返回观察状态时，必须明确说明没有可用于交易的验证策略。
+
+需要运行远程单股学习时先查询证券和交易日，再提交任务：
+
+```powershell
+python -m agent_runtime remote GET "/api/kline/stocks?q=000001&limit=20"
+python -m agent_runtime remote GET "/api/kline/dates?code=000001.SZ"
+python -m agent_runtime remote POST /api/kline/jobs --json '{"code":"000001.SZ","as_of":"latest","analysis_depth":"fast"}'
+```
+
+任务编号返回后，通过 `/api/kline/jobs/<任务编号>` 查询状态和结果。凭据只从环境变量读取。
 
 ## 目标
 

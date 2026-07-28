@@ -6,11 +6,24 @@ import itertools
 import effective_dsr as v4
 
 
-VERSION = "factor-lab/2.3-stable-lstm-rl"
+VERSION = "factor-lab/3.2-inverse-volatility-rank-execution"
 
 
 def run_rl_stable(panel, config, progress_path):
-    base_result = v4.v3.v2._base_run_rl(panel, config, progress_path)
+    transformer_error = None
+    try:
+        base_result = v4.v3.v2._base_run_rl(panel, config, progress_path)
+    except RuntimeError as exc:
+        if "PyTorch" not in str(exc):
+            raise
+        transformer_error = str(exc)
+        base_result = {
+            "engine": "rl_transformer",
+            "engine_version": VERSION,
+            "search": {"trial_count": 0},
+            "candidates": [],
+            "runtime_status": "degraded",
+        }
     frames, target = v4.v3.v2._rl_frames(panel)
     formulas = [
         ["ret_20", "CS_RANK", "ret_5", "CS_RANK", "SUB"],
@@ -81,7 +94,13 @@ def run_rl_stable(panel, config, progress_path):
     trials = len(evaluated) + len(combinations) + int((base_result.get("search") or {}).get("trial_count") or 0)
     base_result.update({
         "engine_version": VERSION,
-        "architecture": {"name": "RL+Transformer", "components": ["Transformer", "PPO", "grammar_mask", "quality_diversity_archive", "stable_development_folds"]},
+        "architecture": {
+            "name": "RL+Transformer",
+            "components": ["Transformer", "PPO", "grammar_mask", "quality_diversity_archive", "stable_development_folds"] if transformer_error is None else ["grammar_formula_library", "stable_development_folds"],
+            "transformer_runtime_status": "ok" if transformer_error is None else "blocked",
+            "transformer_runtime_error": transformer_error,
+            "execution_mode": "rl_transformer" if transformer_error is None else "curated_formula_fallback",
+        },
         "metrics": metrics,
         "selection": {
             "name": "RL+Transformer", "formulas": chosen["formulas"], "directions": chosen["directions"],

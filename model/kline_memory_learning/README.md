@@ -1,6 +1,6 @@
 # 04 个股K线记忆学习Agent
 
-当前正式版本：`6.5-split-isolated-confidence-gate`
+当前正式版本：`9.2-dual-momentum-volatility-budget`
 
 主入口：`single_stock_analyzer.py`
 
@@ -18,7 +18,9 @@ python model\kline_memory_learning\single_stock_analyzer.py --code 000001.SZ --a
 output/kline_memory_learning/<股票代码>_<截止日期>/
 ```
 
-6.5新增非重叠成熟路径现金置信学习：从已通过个股训练与验证筛选的7条多样化K线规则形成稀疏专家，并与两类现金防守专家竞争；每个持有窗口只结算一条互不重叠的独立路径，训练、验证、测试分别初始化和更新。该候选只有在训练与验证收益和夏普均为正、且正式多重检验审计通过时，才可在普通候选全部被拒绝后进入救援；测试结果仍不参与选择。
+9.2 新增绝对趋势、20/60/120 日基准相对强弱、756 日因果分位和自身波动预算五档仓位挑战者。所有状态估计只读取决策日以前的数据，训练和验证先完成嵌套筛选及多重检验，测试期只作最终报告。
+
+现金观察保护用于候选全部失败后的安全回退。训练期或验证期没有实际持仓路径时，输出状态必须为 `observe_only_no_validated_strategy`，不得标记为模型提升或已验证策略。
 核心产物：
 
 - `learned_kline_notes.txt`：一行一个学习后的K线指标或组合逻辑。

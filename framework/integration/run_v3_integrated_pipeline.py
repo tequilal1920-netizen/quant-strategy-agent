@@ -6,6 +6,7 @@ import importlib.util
 import json
 import math
 import sqlite3
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -22,6 +23,14 @@ TARGET_ANNUAL_RETURN = 0.20
 TARGET_SHARPE = 1.50
 V2_RUN_ID = "v2_formal_models"
 DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(DEFAULT_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(DEFAULT_PROJECT_ROOT))
+
+from research_metrics import (  # noqa: E402
+    annualized_sharpe,
+    compounded_annual_return,
+)
+
 
 CORE_TABLES = [
     "source_manifest",
@@ -615,14 +624,13 @@ def perf_metrics(returns, periods_per_year=12):
     for r in returns:
         nav.append(nav[-1] * (1 + r))
     periods = len(returns)
-    annual = nav[-1] ** (periods_per_year / periods) - 1 if nav[-1] > 0 else -1.0
-    vol = float(np.std(returns)) * math.sqrt(periods_per_year)
+    annual = compounded_annual_return(returns, periods_per_year)
     peak = 1.0
     mdd = 0.0
     for x in nav:
         peak = max(peak, x)
         mdd = min(mdd, x / peak - 1)
-    sharpe = annual / vol if vol else 0.0
+    sharpe = annualized_sharpe(returns, periods_per_year)
     return {
         "periods": periods,
         "annual_return": annual,

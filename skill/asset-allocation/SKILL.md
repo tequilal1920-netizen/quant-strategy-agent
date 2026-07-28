@@ -2,8 +2,20 @@
 name: asset-allocation
 description: "用于运行、审计和维护宏观周期驱动的大类资产配置；当任务涉及周期跟踪、配置策略、资产权重、风险贡献、换手或回测时使用。"
 ---
-
 # 资产配置
+
+
+## 直接对话入口
+
+```powershell
+python skill/asset-allocation/scripts/query.py current 画像=平衡
+python skill/asset-allocation/scripts/query.py cycle
+python skill/asset-allocation/scripts/query.py backtest
+```
+
+将“现在是什么周期，如何配置资产”映射为 `current`；将“基钦、普林格、朱格拉、康波、美林分别处于什么状态”映射为 `cycle`；将“模型为什么没有晋级实盘”映射为 `backtest`。画像支持稳健、平衡和权益优先。
+
+回答顺序固定为周期状态、周期置信度、资产权重、风险贡献、换手、训练验证测试和晋级门禁。不得因测试期夏普较高而省略验证期和多重试验修正。
 
 ## 目标
 

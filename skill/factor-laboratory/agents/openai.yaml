@@ -1,4 +1,4 @@
 interface:
   display_name: "因子实验室"
-  short_description: "统一运行因子看板、LLM挖掘、严格检验、综合评分与指数增强配置"
-  default_prompt: "Use $factor-laboratory to run or verify the factor dashboard, mining, validation, and strategy workflow."
+  short_description: "查询因子冠军、三段绩效、指数增强、SmartBeta模型与治理门禁"
+  default_prompt: "请使用 $factor-laboratory 审计当前因子冠军和指数增强模型。"

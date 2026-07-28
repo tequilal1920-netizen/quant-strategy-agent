@@ -2,8 +2,20 @@
 name: research-home
 description: "用于生成和维护量化研究主页的跨模型研报式总览；当任务涉及综合点评、风险提示、数据联动，或日度、周度、月度推荐组合与权重时使用。"
 ---
-
 # 研究主页
+
+
+## 直接对话入口
+
+从仓库根目录运行：
+
+```powershell
+python skill/research-home/scripts/query.py overview
+```
+
+适用问法包括“汇总当前周期、行业、因子和组合结论”“现在最重要的配置结论与风险是什么”。脚本会分别读取七个正式模块并返回数据截止日、生成时间、数据来源、当前结论和治理状态。任一模块受阻时单独标记，不用旧值补齐。
+
+远程机器先设置 `QUANT_AGENT_SNAPSHOT_ROOT`、`RESEARCH_WAREHOUSE_DB`、`FACTOR_STATE_DB` 和 `QUANT_AGENT_OUTPUT_ROOT`。完整环境约定见仓库根目录 `AGENTS.md`。
 
 ## 目标
 

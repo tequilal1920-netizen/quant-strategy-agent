@@ -3,6 +3,7 @@ import importlib.util
 import json
 import math
 import sqlite3
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -12,6 +13,20 @@ import pandas as pd
 
 RUN_ID = "v2_formal_models"
 DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(DEFAULT_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(DEFAULT_PROJECT_ROOT))
+
+from research_metrics import (  # noqa: E402
+    annualized_information_ratio,
+    annualized_sharpe,
+    annualized_volatility,
+    compounded_annual_return,
+)
+from framework.backtest.index_active_risk_optimizer import (  # noqa: E402
+    ActiveRiskConfig,
+    backtest_active_risk_optimizer,
+)
+
 START_DATE = "20120101"
 END_DATE = "20260630"
 COST_RATE = 0.001
@@ -121,6 +136,35 @@ INDEX_ENH_MODELS = {
         "regime": "adaptive_equity_risk",
     },
 }
+INDEX_ACTIVE_RISK_MODELS = {
+    "index_active_risk_optimizer_v12": {
+        "score": "walkforward_ic_alpha_v10",
+        "config": ActiveRiskConfig(
+            target_tracking_error=0.045,
+            max_active_weight=0.008,
+            max_total_weight=0.05,
+            turnover_penalty=3.0,
+            residual_ridge=1.0e-4,
+            volatility_lookback=36,
+            volatility_min_periods=12,
+        ),
+    },
+    "index_active_risk_reliability_v13": {
+        "score": "walkforward_ic_alpha_v10",
+        "config": ActiveRiskConfig(
+            target_tracking_error=0.045,
+            max_active_weight=0.008,
+            max_total_weight=0.05,
+            turnover_penalty=3.0,
+            residual_ridge=1.0e-4,
+            volatility_lookback=36,
+            volatility_min_periods=12,
+            use_causal_alpha_reliability=True,
+            reliability_lookback=60,
+            reliability_prior_strength=24.0,
+        ),
+    },
+}
 UNIVERSE_INCEPTION = {
     "CSI2000_ENH": "20230811",
 }
@@ -204,6 +248,7 @@ REPORT_STYLE_MODELS = {
 def load_factor_miner(project_root):
     root = Path(project_root)
     candidates = [
+        root / "model" / "llm_factor_mining" / "factor_miner.py",
         root / "models" / "05_factor_mining_agent" / "factor_miner.py",
         root / "agents" / "10_factor_mining_agent" / "factor_miner.py",
     ]
@@ -268,12 +313,11 @@ def metrics_from_returns(rets, bench_rets=None, periods_per_year=12):
         nav.append(nav[-1] * (1.0 + r))
     periods = len(rets)
     total = nav[-1] - 1.0
-    annual = nav[-1] ** (periods_per_year / periods) - 1.0 if periods and nav[-1] > 0 else 0.0
-    vol = float(np.std(rets)) * math.sqrt(periods_per_year) if periods else 0.0
-    sharpe = annual / vol if vol else 0.0
+    annual = compounded_annual_return(rets, periods_per_year)
+    vol = annualized_volatility(rets, periods_per_year)
+    sharpe = annualized_sharpe(rets, periods_per_year)
     excess = [a - b for a, b in zip(rets, bench_rets)]
     ex_annual = (1.0 + np.mean(excess)) ** periods_per_year - 1.0 if excess else 0.0
-    ir_vol = float(np.std(excess)) * math.sqrt(periods_per_year) if len(excess) > 1 else 0.0
     return {
         "periods": periods,
         "total_return": total,
@@ -283,7 +327,7 @@ def metrics_from_returns(rets, bench_rets=None, periods_per_year=12):
         "max_drawdown": max_drawdown(nav),
         "win_rate": sum(1 for x in rets if x > 0) / periods if periods else 0.0,
         "excess_annual_return": ex_annual,
-        "information_ratio": ex_annual / ir_vol if ir_vol else 0.0,
+        "information_ratio": annualized_information_ratio(excess, periods_per_year),
         "target_pass": int(annual >= TARGET_ANNUAL_RETURN and sharpe >= TARGET_SHARPE),
     }
 
@@ -1528,6 +1572,7 @@ def run(db, project_root, out_dir, allow_incomplete=False, max_months=None):
     miner = load_factor_miner(project_root)
     leaderboard = []
     learning_diagnostics = {}
+    active_risk_diagnostics = {}
     for universe in ["ALL_A", "CSI800_ENH", "CSI2000_ENH"]:
         stock_models = {**STOCK_MODELS, "factor_ic_learned_agent_v7": STRUCTURAL_MODELS["factor_ic_learned_agent_v7"], **SPECIAL_STOCK_MODELS.get(universe, {})}
         report_style_models = {
@@ -1627,6 +1672,25 @@ def run(db, project_root, out_dir, allow_incomplete=False, max_months=None):
                 write_model(conn, run_id, universe, model, nav_rows, sig_rows, rets, bench)
                 m = metrics_from_returns(rets, bench)
                 leaderboard.append({"universe": universe, "model": model, "status": "ready", **m})
+            for model, cfg in INDEX_ACTIVE_RISK_MODELS.items():
+                rets, bench, nav_rows, sig_rows, solver_evidence = backtest_active_risk_optimizer(
+                    panel,
+                    cfg["score"],
+                    cost_rate=COST_RATE,
+                    config=cfg["config"],
+                    safe_float=safe_float,
+                )
+                write_model(conn, run_id, universe, model, nav_rows, sig_rows, rets, bench)
+                m = metrics_from_returns(rets, bench)
+                leaderboard.append(
+                    {
+                        "universe": universe,
+                        "model": model,
+                        "status": "post_test_diagnostic_challenger",
+                        **m,
+                    }
+                )
+                active_risk_diagnostics[universe] = solver_evidence
 
     etf_panel = build_etf_panel(conn, START_DATE, END_DATE if not allow_incomplete else min(END_DATE, conn.execute("select max(trade_date) from etf_ohlcv_daily").fetchone()[0]), max_months)
     if etf_panel.empty:
@@ -1650,6 +1714,7 @@ def run(db, project_root, out_dir, allow_incomplete=False, max_months=None):
     payload = {"status": "ready" if any(x.get("status") == "ready" for x in leaderboard) else "blocked", "run_id": run_id, "leaderboard": leaderboard, "allow_incomplete": allow_incomplete}
     (out / "model_run_summary.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     (out / "factor_ic_learning_diagnostics.json").write_text(json.dumps(learning_diagnostics, ensure_ascii=False, indent=2), encoding="utf-8")
+    (out / "index_active_risk_diagnostics.json").write_text(json.dumps(active_risk_diagnostics, ensure_ascii=False, indent=2), encoding="utf-8")
     return payload
 
 

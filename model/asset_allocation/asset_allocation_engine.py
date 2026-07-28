@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
+import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -19,6 +20,15 @@ from typing import Any, Sequence
 
 import numpy as np
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from research_metrics import (
+    annualized_sharpe,
+    annualized_volatility,
+    compounded_annual_return,
+)
 
 ENGINE_VERSION = "asset-allocation-cycle-rp-v1.0"
 ASSET_ORDER = ("equity", "bond", "commodity", "cash")
@@ -522,10 +532,12 @@ def _cycle_by_month(history: Sequence[dict[str,Any]], months: Sequence[str]) -> 
 
 
 def _metrics(returns: Sequence[float]) -> dict[str,float]:
-    values=np.asarray(returns,dtype=float); nav=np.cumprod(1+values); years=max(len(values)/12.0,1/12)
-    annual=float(nav[-1]**(1/years)-1) if len(nav) else 0.0; vol=float(np.std(values,ddof=1)*math.sqrt(12)) if len(values)>1 else 0.0
+    values=np.asarray(returns,dtype=float); nav=np.cumprod(1+values)
+    annual=compounded_annual_return(values, periods_per_year=12)
+    vol=annualized_volatility(values, periods_per_year=12)
     peak=np.maximum.accumulate(nav) if len(nav) else np.asarray([1.0]); drawdown=nav/peak-1 if len(nav) else np.asarray([0.0]); mdd=float(drawdown.min())
-    return {"annual_return":annual,"annual_volatility":vol,"sharpe":annual/vol if vol>1e-12 else 0.0,
+    return {"annual_return":annual,"annual_volatility":vol,
+            "sharpe":annualized_sharpe(values, periods_per_year=12),
             "max_drawdown":mdd,"calmar":annual/abs(mdd) if mdd<-1e-12 else 0.0,
             "positive_month_rate":float(np.mean(values>0)) if len(values) else 0.0,"total_return":float(nav[-1]-1) if len(nav) else 0.0}
 
@@ -1462,7 +1474,7 @@ public_payload=public_payload_v3
 # v4: posterior trend breadth, drift-aware turnover and non-compensatory selection.
 # The v1-v3 functions above remain importable for reproduction. Production aliases
 # at the end of this block expose the v4 implementation without breaking callers.
-ENGINE_VERSION = "asset-allocation-research-v4.0"
+ENGINE_VERSION = "asset-allocation-research-v4.4-dsr-promotion-guard"
 ASSET_PROXIES["bond"] = {
     "code": "sh.511010", "ts_code": "511010.SH", "name": "国泰上证5年期国债ETF",
     "provider": "AKShare-Sina日线+累计分红总收益", "listed_since": "2013-03-25", "sina_symbol": "sh511010",
@@ -1555,6 +1567,7 @@ def _posterior_specs_v4() -> list[dict[str,Any]]:
             "stability_base":0.05,"stability_max":stability_max,"stability_center":0.50,"stability_slope":10.0,
             "equity_guard_max":equity_guard_max,"equity_guard_center":0.55,"equity_guard_slope":10.0,
             "macro_strength":macro_strength,"turnover_cap":0.70,
+            "portfolio_volatility_target":0.08,
         })
     return output
 
@@ -1613,6 +1626,58 @@ def _posterior_target_v4(window: np.ndarray,spec: dict[str,Any],profile_name: st
     return weight,metadata
 
 
+def _causal_portfolio_volatility_budget_v4(
+    weight: np.ndarray,
+    window: np.ndarray,
+    spec: dict[str, Any],
+    profile_name: str,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    """Scale the selected allocation toward the cash ETF using prior returns."""
+
+    profile = _profile_v2(profile_name)
+    target_volatility = float(
+        spec.get("portfolio_volatility_target", 0.08)
+    )
+    covariance_estimates = []
+    for lookback in (12, 36):
+        sample = np.asarray(window[-min(lookback, len(window)):], dtype=float)
+        if len(sample) < 6:
+            continue
+        covariance = np.cov(sample, rowvar=False)
+        diagonal = np.diag(np.diag(covariance))
+        covariance = 0.65 * covariance + 0.35 * diagonal
+        covariance_estimates.append(covariance)
+    if not covariance_estimates:
+        return np.asarray(weight, dtype=float), {
+            "enabled": False,
+            "reason": "insufficient_history",
+        }
+    forecast_volatility = max(
+        math.sqrt(max(float(weight @ covariance @ weight) * 12.0, 0.0))
+        for covariance in covariance_estimates
+    )
+    risk_scale = min(
+        1.0,
+        max(0.25, target_volatility / max(forecast_volatility, 1e-8)),
+    )
+    cash_anchor = np.asarray([0.0, 0.0, 0.0, 1.0])
+    adjusted = risk_scale * np.asarray(weight, dtype=float) + (1.0 - risk_scale) * cash_anchor
+    adjusted = _project_profile_v4(adjusted, profile["floors"], profile["caps"])
+    achieved_forecast = max(
+        math.sqrt(max(float(adjusted @ covariance @ adjusted) * 12.0, 0.0))
+        for covariance in covariance_estimates
+    )
+    return adjusted, {
+        "enabled": True,
+        "method": "max_of_12_and_36_month_shrunk_covariance_to_cash_etf",
+        "target_annual_volatility": target_volatility,
+        "pre_budget_forecast_volatility": forecast_volatility,
+        "post_budget_forecast_volatility": achieved_forecast,
+        "risk_scale": risk_scale,
+        "lookahead_guard": "window ends before the allocated outcome month",
+    }
+
+
 def strategy_weights_v4(strategy: str,window: np.ndarray,cycle: dict[str,Any],previous: np.ndarray|None=None,config: ResearchBacktestConfig|None=None,
                         *,cycle_window: Sequence[dict[str,Any]]|None=None,spec: dict[str,Any]|None=None,profile_name: str="balanced") -> tuple[np.ndarray,dict[str,Any]]:
     config=config or ResearchBacktestConfig(); spec=spec or _posterior_specs_v4()[0]
@@ -1622,6 +1687,13 @@ def strategy_weights_v4(strategy: str,window: np.ndarray,cycle: dict[str,Any],pr
             profile=_profile_v2(profile_name); macro=_macro_view_v3(cycle); macro_confidence=0.35+0.65*float(cycle.get("confidence") or 0.0)
             tilted=weight*np.exp(macro_strength*macro_confidence*macro); weight=_project_profile_v4(tilted,profile["floors"],profile["caps"])
             metadata={**metadata,"macro_view":macro.tolist(),"macro_strength":macro_strength,"macro_confidence":round(macro_confidence,6)}
+        if strategy in {"recommended", "recommended_candidate"}:
+            weight, volatility_budget = (
+                _causal_portfolio_volatility_budget_v4(
+                    weight, window, spec, profile_name
+                )
+            )
+            metadata = {**metadata, "portfolio_volatility_budget": volatility_budget}
         return weight,metadata
     if strategy=="dual_momentum": return _posterior_target_v4(window,_posterior_specs_v4()[0],profile_name)
     # v2 comparators are intentionally preserved and receive no previous target;
@@ -1636,11 +1708,13 @@ def _drifted_weight_v4(previous: np.ndarray,realized_return: np.ndarray) -> np.n
 
 def _execute_target_v4(target: np.ndarray,drifted: np.ndarray|None,cap: float,profile_name: str) -> tuple[np.ndarray,float,bool]:
     if drifted is None: return np.asarray(target,dtype=float),0.0,False
-    turnover=float(np.abs(target-drifted).sum())
-    if turnover<=cap+1e-12: return np.asarray(target,dtype=float),turnover,False
-    profile=_profile_v2(profile_name); executed=drifted+(target-drifted)*(cap/turnover)
+    # Preserve the historical L1 execution cap and weight path.  Reported
+    # turnover and round-trip cost use one-way turnover: 0.5 * L1 change.
+    l1_change=float(np.abs(target-drifted).sum())
+    if l1_change<=cap+1e-12: return np.asarray(target,dtype=float),0.5*l1_change,False
+    profile=_profile_v2(profile_name); executed=drifted+(target-drifted)*(cap/l1_change)
     executed=_project_profile_v4(executed,profile["floors"],profile["caps"])
-    return executed,float(np.abs(executed-drifted).sum()),True
+    return executed,0.5*float(np.abs(executed-drifted).sum()),True
 
 
 def _weight_dynamics_v4(rows: Sequence[dict[str,Any]]) -> dict[str,Any]:
@@ -1690,6 +1764,24 @@ def _calendar_diagnostics_v4(simulation: dict[str,Any],benchmark: dict[str,Any])
     years=sorted({row["month"][:4] for row in simulation["nav"]}); return [_period_diagnostic_v4(simulation,benchmark,year+"01",year+"12") for year in years]
 
 
+def _promotion_gate_v4(selected: dict[str,Any], audit: dict[str,Any]) -> dict[str,Any]:
+    checks={
+        "train_excess_positive":selected["train_active"]["annual_excess_return"]>0,
+        "validation_absolute_return_positive":selected["validation"]["annual_return"]>0,
+        "validation_excess_positive":selected["validation_active"]["annual_excess_return"]>0,
+        "validation_information_ratio_positive":selected["validation_active"]["information_ratio"]>0,
+        "validation_relative_drawdown_within_8pct":abs(selected["validation_active"]["max_relative_drawdown"])<=0.08,
+        "pbo_at_most_50pct":audit["pbo_cscv"]<=0.50,
+        "deflated_sharpe_probability_at_least_95pct":audit["deflated_sharpe_probability"]>=0.95,
+    }
+    return {
+        "status":"passed" if all(checks.values()) else "conditional",
+        "checks":checks,
+        "failed":[key for key,value in checks.items() if not value],
+        "policy":"train/validation active evidence and multiple-testing diagnostics only; test metrics are disclosed after selection and cannot repair a failed gate",
+    }
+
+
 def _select_spec_v4(months: Sequence[str],prices: np.ndarray,cycles: Sequence[dict[str,Any]],config: ResearchBacktestConfig) -> tuple[dict[str,Any],dict[str,Any]]:
     benchmark=_simulate_v4(months,prices,cycles,"equal_weight",config,profile_name="balanced"); candidates=[]; specs=_posterior_specs_v4()
     for spec in specs:
@@ -1699,13 +1791,27 @@ def _select_spec_v4(months: Sequence[str],prices: np.ndarray,cycles: Sequence[di
         folds={"train_early":_period_diagnostic_v4(simulation,benchmark,"201601","201812"),"train_late":_period_diagnostic_v4(simulation,benchmark,"201901","202012"),
                "validation_early":_period_diagnostic_v4(simulation,benchmark,"202101","202112"),"validation_late":_period_diagnostic_v4(simulation,benchmark,"202201","202212")}
         worst_train_fold=min(folds["train_early"]["annual_excess_return"],folds["train_late"]["annual_excess_return"]); turnover=float(simulation["metrics"]["average_annual_turnover"])
-        train_eligible=ta["annual_excess_return"]>0 and worst_train_fold>-0.01 and abs(ta["max_relative_drawdown"])<=0.10 and turnover<=3.50
+        worst_validation_fold=min(folds["validation_early"]["annual_excess_return"],folds["validation_late"]["annual_excess_return"])
+        l1_turnover_equivalent=2.0*turnover
+        train_eligible=ta["annual_excess_return"]>0 and worst_train_fold>-0.01 and abs(ta["max_relative_drawdown"])<=0.10 and l1_turnover_equivalent<=3.50
         validation_eligible=train_eligible and valid["annual_return"]>0 and va["annual_excess_return"]>0 and va["information_ratio"]>0 and abs(va["max_relative_drawdown"])<=0.08
-        train_score=10*ta["annual_excess_return"]+0.75*ta["information_ratio"]+0.20*train["sharpe"]+0.30*worst_train_fold-0.25*max(0,turnover-3.0)
-        validation_score=10*min(ta["annual_excess_return"],va["annual_excess_return"])+0.75*min(ta["information_ratio"],va["information_ratio"])+0.25*va["information_ratio"]+0.20*min(train["sharpe"],valid["sharpe"])+0.30*min(item["annual_excess_return"] for item in folds.values())-0.25*max(0,turnover-3.0)
+        train_score=10*ta["annual_excess_return"]+0.75*ta["information_ratio"]+0.20*train["sharpe"]+0.30*worst_train_fold-0.25*max(0,l1_turnover_equivalent-3.0)
+        validation_score=10*min(ta["annual_excess_return"],va["annual_excess_return"])+0.75*min(ta["information_ratio"],va["information_ratio"])+0.25*va["information_ratio"]+0.20*min(train["sharpe"],valid["sharpe"])+0.30*min(worst_train_fold,worst_validation_fold)-0.25*max(0,l1_turnover_equivalent-3.0)
+        score_components={
+            "train":{"excess_floor":10*ta["annual_excess_return"],"information_ratio_floor":0.75*ta["information_ratio"],
+                     "sharpe_floor":0.20*train["sharpe"],"subperiod_floor":0.30*worst_train_fold,
+                     "turnover_penalty":-0.25*max(0,l1_turnover_equivalent-3.0)},
+            "validation":{"excess_floor":10*min(ta["annual_excess_return"],va["annual_excess_return"]),
+                          "information_ratio_floor":0.75*min(ta["information_ratio"],va["information_ratio"]),
+                          "validation_information_ratio":0.25*va["information_ratio"],
+                          "sharpe_floor":0.20*min(train["sharpe"],valid["sharpe"]),
+                          "subperiod_floor":0.30*min(worst_train_fold,worst_validation_fold),
+                          "turnover_penalty":-0.25*max(0,l1_turnover_equivalent-3.0)}}
         active_returns=[row["active_return"] for row in simulation["nav"] if row["sample_set"]=="validation"]
         candidates.append({"spec":spec,"train":train,"validation":valid,"test_report_only":test,"train_active":ta,"validation_active":va,
             "test_active_report_only":te,"train_score":float(train_score),"validation_score":float(validation_score),"turnover":turnover,
+            "l1_turnover_equivalent":l1_turnover_equivalent,"worst_train_fold_excess":worst_train_fold,
+            "worst_validation_fold_excess":worst_validation_fold,"score_components":score_components,
             "train_eligible":train_eligible,"validation_eligible":validation_eligible,"folds":folds,"validation_active_returns":active_returns})
     eligible=[item for item in candidates if item["validation_eligible"]]
     if not eligible: eligible=[item for item in candidates if item["train_eligible"] and item["validation_active"]["annual_excess_return"]>0]
@@ -1723,12 +1829,10 @@ def _select_spec_v4(months: Sequence[str],prices: np.ndarray,cycles: Sequence[di
             "train_score":item["train_score"],"validation_score":item["validation_score"],"train_sharpe":item["train"]["sharpe"],"validation_sharpe":item["validation"]["sharpe"],
             "train_excess":item["train_active"]["annual_excess_return"],"validation_return":item["validation"]["annual_return"],"validation_excess":item["validation_active"]["annual_excess_return"],
             "validation_information_ratio":item["validation_active"]["information_ratio"],"test_excess_report_only":item["test_active_report_only"]["annual_excess_return"],
-            "test_sharpe_report_only":item["test_report_only"]["sharpe"],"turnover":item["turnover"]} for item in ordered[:16]]}
-    checks={"train_excess_positive":selected["train_active"]["annual_excess_return"]>0,"validation_absolute_return_positive":selected["validation"]["annual_return"]>0,
-            "validation_excess_positive":selected["validation_active"]["annual_excess_return"]>0,"validation_information_ratio_positive":selected["validation_active"]["information_ratio"]>0,
-            "validation_relative_drawdown_within_8pct":abs(selected["validation_active"]["max_relative_drawdown"])<=0.08,"pbo_at_most_50pct":audit["pbo_cscv"]<=0.50}
-    audit["promotion_gate"]={"status":"passed" if all(checks.values()) else "conditional","checks":checks,"failed":[key for key,value in checks.items() if not value],
-        "policy":"test metrics are disclosed after selection and cannot repair a failed train/validation or overfit gate"}
+            "worst_train_fold_excess":item["worst_train_fold_excess"],"worst_validation_fold_excess":item["worst_validation_fold_excess"],
+            "test_sharpe_report_only":item["test_report_only"]["sharpe"],"turnover":item["turnover"],
+            "l1_turnover_equivalent":item["l1_turnover_equivalent"],"score_components":item["score_components"]} for item in ordered[:16]]}
+    audit["promotion_gate"]=_promotion_gate_v4(selected,audit)
     return selected["spec"],audit
 
 
@@ -1825,7 +1929,9 @@ def build_snapshot_v4(macro_rows: Sequence[dict[str,Any]],price_series: dict[str
         "methodology":{"rebalance":"month_end_signal_to_next_month_etf_return; holdings drift through realized return before the next trade","point_in_time":True,
             "point_in_time_selection":"factor identity=train; noncompensatory candidate gate=train; final choice=validation; test=report-only and excluded from scores",
             "benchmark":"equal_weight 25/25/25/25 monthly rebalance from drifted holdings with identical costs","transaction_cost_bps":config.transaction_cost_bps,
-            "constraints":{"long_only":True,"profile_specific_bounds":True,"recommended_max_monthly_turnover":0.70,"comparator_max_monthly_turnover":config.max_turnover},
+            "turnover_convention":"reported turnover = 0.5 * L1 drift-to-target change; transaction_cost_bps is a round-trip rate on one-way turnover",
+            "constraints":{"long_only":True,"profile_specific_bounds":True,"recommended_target_l1_change_cap":0.70,
+                           "comparator_target_l1_change_cap":config.max_turnover,"equivalent_recommended_one_way_turnover_cap":0.35},
             "recommended_model":"strategic prior + multi-horizon trend posterior + breadth-conditioned stable risk sleeve + volatility/correlation diversification + smooth equity risk-off gate",
             "equity_preference":"45% strategic equity prior and higher equity risk budget; predeclared 10% crisis floor permits genuine risk-off execution","llm_policy":"server-side cited explanation only; cannot overwrite deterministic weights"},
         "profiles":PROFILE_SPECS,"factor_registry":FACTOR_REGISTRY,"factor_selection":selection,"factor_series":factor_series,"cycle_definitions":CYCLE_DEFINITIONS_V3,"cycle_state_series":cycle_state_series,"research_evidence":RESEARCH_EVIDENCE,

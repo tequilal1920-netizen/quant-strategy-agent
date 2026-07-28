@@ -1,4 +1,4 @@
 interface:
   display_name: "资产配置"
-  short_description: "运行并审计周期跟踪、配置策略、资产权重、风险贡献与回测证据"
-  default_prompt: "Use $asset-allocation to run or verify the cycle-tracking and allocation-strategy workflow."
+  short_description: "识别多类宏观周期并输出分画像资产权重、风险贡献、换手与治理结论"
+  default_prompt: "请使用 $asset-allocation 判断当前周期并给出平衡型资产配置。"
