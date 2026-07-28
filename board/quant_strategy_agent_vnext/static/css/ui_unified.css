@@ -121,3 +121,97 @@ body.is-authenticated .app-shell tr {
   font-family: Arial, "KaiTi", "STKaiti", "Kaiti SC", "楷体", sans-serif !important;
   font-size: 14px !important;
 }
+
+/* Trump index compact integration: source contract lives in board/trump. */
+.trump-index-dashboard { display: grid; gap: 16px; }
+.trump-index-status-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: #fff;
+  box-shadow: var(--ui-shadow);
+}
+.trump-index-status-card > div { display: grid; gap: 5px; }
+.trump-index-status-card span { color: var(--muted); }
+.trump-index-status-card strong { color: var(--ink); }
+.trump-index-status-card strong.is-ok { color: var(--ui-green); }
+.trump-index-status-card strong.is-warning { color: var(--ui-blue); }
+.trump-index-emphasis { color: var(--ui-red); }
+.trump-index-chart-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(320px, .85fr); gap: 14px; }
+.trump-index-chart-grid .chart-panel { min-width: 0; }
+.trump-index-topics,
+.trump-index-events,
+.trump-index-sources {
+  padding: 18px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: #fff;
+  box-shadow: var(--ui-shadow);
+}
+.trump-index-topics > header,
+.trump-index-events > header,
+.trump-index-sources > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--soft-border);
+}
+.trump-index-topics h2,
+.trump-index-events h2,
+.trump-index-sources h2 { margin: 0; color: var(--ink); }
+.trump-index-topics header span,
+.trump-index-events header span,
+.trump-index-sources header span { color: var(--muted); }
+.trump-index-topics > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.trump-index-topics > div > span {
+  display: inline-flex;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid var(--soft-border);
+  border-radius: 5px;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.trump-index-event-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.trump-index-event {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--soft-border);
+  border-left: 4px solid var(--ui-blue);
+  border-radius: 7px;
+  background: #fbfcfd;
+}
+.trump-index-event.is-tight { border-left-color: var(--ui-red); }
+.trump-index-event.is-easing { border-left-color: var(--ui-green); }
+.trump-index-event > header { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); }
+.trump-index-event > header span { font-weight: 800; }
+.trump-index-event.is-tight > header span { color: var(--ui-red); }
+.trump-index-event.is-easing > header span { color: var(--ui-green); }
+.trump-index-event h3 { margin: 10px 0 6px; color: var(--ink); }
+.trump-index-event p { margin: 0 0 9px; color: var(--muted); line-height: 1.65; }
+.trump-index-event a { color: var(--brand); font-weight: 800; text-decoration: none; }
+.trump-index-sources > div { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.trump-index-sources article { display: flex; align-items: flex-start; gap: 8px; padding: 11px; border: 1px solid var(--soft-border); border-radius: 6px; background: #fbfcfd; }
+.trump-index-sources article i { flex: 0 0 8px; width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: var(--ui-blue); }
+.trump-index-sources article.is-ok i { background: var(--ui-green); }
+.trump-index-sources article > div { display: grid; gap: 4px; min-width: 0; }
+.trump-index-sources article strong { color: var(--ink); }
+.trump-index-sources article span { color: var(--muted); line-height: 1.45; }
+.trump-index-sources > p { margin: 12px 0 0; color: var(--muted); line-height: 1.7; }
+@media (max-width: 1100px) {
+  .trump-index-chart-grid { grid-template-columns: minmax(0, 1fr); }
+  .trump-index-event-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .trump-index-sources > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .trump-index-status-card { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .trump-index-event-grid,
+  .trump-index-sources > div { grid-template-columns: minmax(0, 1fr); }
+}

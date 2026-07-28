@@ -126,6 +126,10 @@ SERVICE_BASES: dict[str, list[str]] = {
         os.environ.get("AI_MONITOR_BASE_URL", "http://127.0.0.1:8074/tech-diffusion").rstrip("/"),
         f"{PUBLIC_HOST}/tech-diffusion",
     ],
+    "trump": [
+        os.environ.get("TRUMP_MONITOR_BASE_URL", "http://127.0.0.1:8092").rstrip("/"),
+        f"{PUBLIC_HOST}:10009",
+    ],
 }
 
 SSL_CONTEXT = ssl._create_unverified_context()

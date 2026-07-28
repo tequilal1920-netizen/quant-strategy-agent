@@ -1816,7 +1816,7 @@
     const services=(S.services&&S.services.services)||{};
     const map={home:'board',data:'board',allocation:'allocation',portfolio:'portfolio',index:'index_enhancement',rotation:'rotation',liquidity:'liquidity',technical:'kline',kline:'kline',factorlab:'factor_lab',factor:'factor'};
     document.querySelectorAll('.nav-item').forEach(function(item){
-      const target=String(item.dataset.target||''),prefix=target.split(':')[0],service=target==='data:ai_monitor'?'ai_monitor':map[prefix],record=services[service]||{};
+      const target=String(item.dataset.target||''),prefix=target.split(':')[0],service=target==='data:ai_monitor'?'ai_monitor':target==='data:trump_index'?'trump':map[prefix],record=services[service]||{};
       item.dataset.status=st(record.status||record.snapshot_status);
     });
     document.querySelectorAll('.nav-group').forEach(function(group){
@@ -3003,6 +3003,7 @@
     'data:stock':{group:'数据看板',title:'个股',subtitle:'行情、风险收益、新闻与智能分析',sections:[{id:'stock',label:'个股',kind:'data',page:'stock'}]},
     'data:news_events':{group:'数据看板',title:'新闻事件',subtitle:'行业与个股事件流',sections:[{id:'news',label:'新闻事件',kind:'data',page:'news_events'}]},
     'data:ai_monitor':{group:'数据看板',title:'AI监控',subtitle:'五维技术扩散、申万三级行业图谱、行业时序与个股归因',sections:[{id:'overview',label:'综合总览',kind:'ai-monitor'},{id:'industry-map',label:'三级行业图谱',kind:'ai-monitor'},{id:'industry-series',label:'行业时序',kind:'ai-monitor'},{id:'stock-attribution',label:'个股归因',kind:'ai-monitor'}]},
+    'data:trump_index':{group:'数据看板',title:'川普指数',subtitle:'政策压力、支持率与市场约束',sections:[{id:'overview',label:'指数总览',kind:'trump-index'}]},
     'allocation:cycle':{group:'资产配置',title:'周期跟踪',subtitle:'普林格、基钦、朱格拉、康波与美林时钟',sections:[{id:'cycle',label:'周期跟踪',kind:'allocation',page:'cycle'}]},
     'allocation:strategy':{group:'资产配置',title:'配置策略',subtitle:'综合配置、权重方案与回测审计',sections:[{id:'overview',label:'综合配置',kind:'allocation',page:'home'},{id:'weights',label:'权重方案',kind:'allocation',page:'strategy'},{id:'backtest',label:'回测检验',kind:'allocation',page:'backtest'}]},
     'liquidity:retail':{group:'资金面跟踪',title:'散户',subtitle:'资金总览、小单流、开户与参与度',sections:[{id:'overview',label:'资金总览',kind:'liquidity',page:'home'},{id:'retail',label:'散户',kind:'liquidity',page:'retail'}]},
@@ -3080,6 +3081,61 @@
     const latest=state&&state.snapshot&&(state.snapshot.latest_date||state.snapshot.as_of||(state.snapshot.meta&&state.snapshot.meta.latest_trade_dt));
     if(latest)conclusion('科技扩散数据更新正常，最新交易日 <strong>'+esc(latest)+'</strong>。五维扩散、三级行业图谱、行业时序与个股归因均已通过当前看板统一鉴权和缓存链路加载。');
   }
+
+  async function workspaceTrumpIndex(forceRefresh){
+    header('川普指数','政策压力、支持率与市场约束','数据看板');
+    const data=await api('/api/trump/core'+(forceRefresh?'?refresh=1':''));
+    const pressure=obj(data.pressure),approval=obj(data.approval),current=obj(approval.current),audit=obj(pressure.audit);
+    if(data.status!=='ok'||pressure.available!==true)throw new Error('川普指数数据暂不可用');
+    const components=arr(pressure.components),events=arr(data.events),sources=arr(data.sources),series=arr(pressure.series).slice(-180);
+    const value=Number(pressure.value),change20d=Number(pressure.change20d),net=Number(current.net);
+    const signedOne=function(number,suffix){const n=Number(number);return Number.isFinite(n)?(n>0?'+':'')+fmt(n,1)+(suffix||''):'--';};
+    const componentNames={approval:'净支持率',dgs10:'十年期美债',move:'美债波动率',sp500:'标普500',vix:'市场恐慌指数',bkevenpy02:'通胀压力'};
+    const sourceNames={'reference-index':'指数与原始数据','federal-register':'美国联邦公报',sp500:'标普500',vix:'恐慌指数',yield10:'十年期美债'};
+    const strongest=components.slice().sort(function(a,b){return Math.abs(Number(b.value))-Math.abs(Number(a.value));})[0]||{};
+    const cutoff=new Date(String(data.asOf||pressure.asOfDate||'')+'T00:00:00Z');
+    if(Number.isFinite(cutoff.getTime()))cutoff.setUTCDate(cutoff.getUTCDate()-30);
+    const cutoffText=Number.isFinite(cutoff.getTime())?cutoff.toISOString().slice(0,10):'';
+    const recentPolicyCount=events.filter(function(item){return !cutoffText||String(item.date||'')>=cutoffText;}).length;
+    const auditPassed=Number(audit.passed||0),auditTotal=Number(audit.total||0);
+    const directionText=function(direction){return direction==='收紧'?'政策约束上升':direction==='缓和'?'政策约束缓和':'政策方向待观察';};
+    const eventClass=function(direction){return direction==='收紧'?'is-tight':direction==='缓和'?'is-easing':'is-watch';};
+    const chartTrend=pid('trump-index-trend-'),chartComponents=pid('trump-index-components-');
+    const eventHtml=events.slice(0,6).map(function(item){
+      return '<article class="trump-index-event '+eventClass(item.direction)+'"><header><time>'+esc(item.date||'--')+'</time><span>'+esc(item.direction||'观察')+'</span></header><h3>'+esc(item.category||'政策动态')+'</h3><p>'+esc((item.category||'政策')+'文件，系统识别为'+directionText(item.direction)+'。')+'</p><a href="'+esc(item.url||'#')+'" target="_blank" rel="noreferrer" title="'+esc(item.title||'')+'">查看原文</a></article>';
+    }).join('');
+    const categoryCounts={};
+    events.forEach(function(item){const key=item.category||'其他政策';categoryCounts[key]=(categoryCounts[key]||0)+1;});
+    const categoryHtml=Object.keys(categoryCounts).sort(function(a,b){return categoryCounts[b]-categoryCounts[a];}).slice(0,5).map(function(key){
+      return '<span><strong>'+esc(key)+'</strong>'+categoryCounts[key]+'项</span>';
+    }).join('');
+    const sourceHtml=sources.map(function(item){
+      const state=String(item.status||'').toLowerCase()==='ok'?'is-ok':'is-warning';
+      return '<article class="'+state+'"><i aria-hidden="true"></i><div><strong>'+esc(sourceNames[item.id]||item.label||'数据源')+'</strong><span>'+esc(item.updatedAt||'--')+' · '+esc(item.note||'已更新')+'</span></div></article>';
+    }).join('');
+    conclusion('当前川普指数为 <strong class="trump-index-emphasis">'+signedOne(value)+'</strong>，处于'+esc(pressure.label||'观察')+'，较20个交易日前 '+signedOne(change20d)+'；主要压力来自'+esc(componentNames[strongest.key]||strongest.label||'综合因子')+'。原始数据直接核验 '+auditPassed+'/'+auditTotal+' 项，授权数据与未公开变换继续以蓝色警示标注。');
+    root('<div class="trump-index-dashboard">'+
+      '<section class="trump-index-status-card"><div><span>数据日期</span><strong>'+esc(data.asOf||pressure.asOfDate||'--')+'</strong></div><div><span>数据状态</span><strong class="'+(audit.status==='warn'?'is-warning':'is-ok')+'">'+(audit.status==='warn'?'可用，部分待复核':'更新正常')+'</strong></div><button id="trump-index-refresh" class="ghost-button" type="button">刷新数据</button></section>'+
+      '<div class="kpi-grid trump-index-kpis">'+
+        '<article class="kpi-card"><small>当前指数</small><strong>'+signedOne(value)+'</strong><em><span>'+esc(pressure.label||'观察')+'</span><span>'+esc(pressure.asOfDate||data.asOf||'')+'</span></em></article>'+
+        '<article class="kpi-card"><small>20日变化</small><strong>'+signedOne(change20d)+'</strong><em><span>'+(change20d>0?'压力上升':'压力缓和')+'</span><span>交易日</span></em></article>'+
+        '<article class="kpi-card"><small>净支持率</small><strong>'+signedOne(net,'%')+'</strong><em><span>支持 '+fmt(current.approve,1)+'%</span><span>反对 '+fmt(current.disapprove,1)+'%</span></em></article>'+
+        '<article class="kpi-card"><small>近30日政策文件</small><strong>'+recentPolicyCount+'</strong><em><span>自动分类</span><span>'+esc(data.asOf||'')+'</span></em></article>'+
+      '</div>'+
+      '<div class="trump-index-chart-grid">'+panel(chartTrend,'指数走势','最近180个观察日',true)+panel(chartComponents,'六项因子贡献','红色为压力上升，绿色为缓和',false)+'</div>'+
+      '<section class="trump-index-topics"><header><h2>政策关注方向</h2><span>按近期文件数量</span></header><div>'+categoryHtml+'</div></section>'+
+      '<section class="trump-index-events"><header><h2>最新政策动态</h2><span>仅保留方向、类别与日期</span></header><div class="trump-index-event-grid">'+eventHtml+'</div></section>'+
+      '<section class="trump-index-sources"><header><h2>数据状态</h2><span>'+auditPassed+'/'+auditTotal+' 项直接核验通过</span></header><div>'+sourceHtml+'</div><p>指数采用20日压力变化、稳健标准化、截尾和固定权重加总。美债波动率为授权指数，通胀分项含未公开中间变换，因此保留透明警示。</p></section>'+
+    '</div>');
+    await loadPlotly();
+    plot(chartTrend,[{type:'scatter',mode:'lines',name:'川普指数',x:series.map(function(item){return item.date;}),y:series.map(function(item){return Number(item.value);}),line:{color:'#b42318',width:2.5},fill:'tozeroy',fillcolor:'rgba(180,35,24,.08)'}],{height:330,hovermode:'x unified',showlegend:false,xaxis:{showgrid:false},yaxis:{title:'指数',gridcolor:'#edf0f2',zerolinecolor:'#98a2b3',zerolinewidth:1.2}});
+    plot(chartComponents,[{type:'bar',orientation:'h',x:components.map(function(item){return Number(item.value);}),y:components.map(function(item){return componentNames[item.key]||item.label;}),marker:{color:components.map(function(item){return Number(item.value)>=0?'#b42318':'#168a47';})},text:components.map(function(item){return signedOne(item.value);}),textposition:'auto',hovertemplate:'%{y}<br>贡献 %{x:.1f}<extra></extra>'}],{height:330,showlegend:false,margin:{l:92,r:18,t:12,b:42},xaxis:{title:'贡献',gridcolor:'#edf0f2',zerolinecolor:'#98a2b3'},yaxis:{autorange:'reversed',showgrid:false}});
+    const refreshButton=$('trump-index-refresh');
+    if(refreshButton)refreshButton.onclick=async function(){
+      this.disabled=true;this.textContent='更新中';
+      try{await workspaceTrumpIndex(true);}catch(error){this.disabled=false;this.textContent='刷新数据';conclusion('川普指数刷新失败：'+esc(error.message));}
+    };
+  }
   function workspaceTopBy(rows,key){return arr(rows).slice().sort(function(a,b){return Number(b[key]||-1e12)-Number(a[key]||-1e12);})[0]||{};}
   function workspaceWeightChips(rows,nameKey,weightKey){
     const shown=arr(rows).filter(function(row){return Number(row[weightKey])>.0005;}).slice(0,12);
@@ -3114,6 +3170,7 @@
   async function workspaceRenderSection(section){
     if(section.kind==='home')return workspaceHome();
     if(section.kind==='ai-monitor')return workspaceAiMonitor();
+    if(section.kind==='trump-index')return workspaceTrumpIndex(false);
     if(section.kind==='data')return renderData(section.page);
     if(section.kind==='allocation')return renderAllocation(section.page);
     if(section.kind==='liquidity')return renderLiquidity(section.page);

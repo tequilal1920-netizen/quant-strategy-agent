@@ -24,7 +24,7 @@ import research_evidence_backend
 import rotation_app as rotation
 
 
-APP_VERSION = "2026.07.27-five-panel-dense-vnext-r25.4"
+APP_VERSION = "2026.07.28-trump-index-vnext-r26.0"
 legacy.APP_VERSION = APP_VERSION
 rotation.APP_VERSION = APP_VERSION
 
@@ -85,6 +85,7 @@ def _service_payload() -> dict[str, Any]:
         "kline": lambda: legacy.safe_proxy("kline", "/health"),
         "factor": lambda: legacy.safe_proxy("factor", "/api/status"),
         "ai_monitor": lambda: legacy.safe_proxy("ai_monitor", "/healthz"),
+        "trump": lambda: legacy.safe_proxy("trump", "/api/tracker/health"),
         "allocation": legacy.allocation_health_payload,
         "liquidity": legacy.liquidity_health_payload,
         "index_enhancement": legacy.index_enhancement_health_payload,
@@ -182,6 +183,33 @@ def ai_monitor_proxy(upstream_path: str) -> Response:
 
     return jsonify(legacy.cached_data(cache_key, ttl, load))
 
+
+@app.get("/api/trump/core")
+def trump_core_proxy() -> Response:
+    """Expose the verified Trump policy pressure payload in this app."""
+    refresh = request.args.get("refresh") == "1"
+    query = {"scope": "core"}
+    if refresh:
+        query["refresh"] = "1"
+
+    def load() -> Any:
+        payload = legacy.proxy_json(
+            "trump",
+            "/api/tracker",
+            query=query,
+            timeout=70,
+        )
+        if not isinstance(payload, dict) or payload.get("status") != "ok":
+            raise legacy.ProxyError("trump", 502, "upstream_payload_unavailable")
+        pressure = payload.get("pressure") or {}
+        if pressure.get("available") is not True:
+            raise legacy.ProxyError("trump", 503, "pressure_index_unavailable")
+        return payload
+
+    payload = load() if refresh else legacy.cached_data("trump:core:r26", 300, load)
+    return jsonify(payload)
+
+
 _CACHEABLE_API_ENDPOINTS = {
     "allocation_snapshot",
     "liquidity_snapshot",
@@ -209,6 +237,7 @@ _CACHEABLE_API_ENDPOINTS = {
     "factor_history",
     "factor_history_detail",
     "ai_monitor_proxy",
+    "trump_core_proxy",
 }
 
 
@@ -220,7 +249,8 @@ def optimize_transport(response: Response) -> Response:
 
     endpoint = request.endpoint or ""
     is_cacheable_api = endpoint in _CACHEABLE_API_ENDPOINTS and not (
-        endpoint == "kline_job" and request.args.get("live") == "1"
+        (endpoint == "kline_job" and request.args.get("live") == "1")
+        or (endpoint == "trump_core_proxy" and request.args.get("refresh") == "1")
     )
     if is_cacheable_api:
         response.headers["Cache-Control"] = "private, max-age=300, stale-while-revalidate=86400"

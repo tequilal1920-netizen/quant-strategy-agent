@@ -237,6 +237,7 @@ class CanonicalAppTest(unittest.TestCase):
                 "home:overview",
                 "data:macro", "data:global_markets", "data:sw_industries",
                 "data:commodities", "data:stock", "data:news_events", "data:ai_monitor",
+                "data:trump_index",
                 "allocation:cycle", "allocation:strategy",
                 "liquidity:retail", "liquidity:public", "liquidity:private",
                 "liquidity:foreign", "liquidity:etf", "liquidity:primary", "liquidity:margin",
@@ -292,7 +293,7 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertEqual(
             set(payload["services"]),
             {
-                "board", "kline", "factor", "ai_monitor", "allocation", "liquidity",
+                "board", "kline", "factor", "ai_monitor", "trump", "allocation", "liquidity",
                 "index_enhancement", "portfolio", "rotation", "factor_lab",
             },
         )
