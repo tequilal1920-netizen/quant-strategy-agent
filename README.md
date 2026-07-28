@@ -90,8 +90,21 @@ python -m agent_runtime remote GET /api/factor/status
 powershell -ExecutionPolicy Bypass -File environment/deployment/deploy_agent_runtime_remote.ps1 `
   -SnapshotRoot "<R25.4部署目录>\board\quant_strategy_agent_vnext\data" `
   -ResearchWarehouseDb "<研究数据库路径>" `
-  -FactorStateDb "<因子状态库路径>"
+  -FactorStateDb "<因子状态库路径>" `
+  -OutputRoot "<模型输出目录>" `
+  -Serve `
+  -Persistent
 ```
+
+远程主机无法直接连接 GitHub 时，先下载该分支的官方 ZIP 并解压到固定目录，再复用同一脚本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File environment/deployment/deploy_agent_runtime_remote.ps1 `
+  -InstallRoot "<GitHub归档解压目录>" `
+  -SnapshotRoot "<R25.4部署目录>\board\quant_strategy_agent_vnext\data" `
+  -UseExisting -SourceCommit "<GitHub提交SHA>" -Serve -Persistent
+```
+
 本仓库保存当前生产源码、可复现配置、模型说明和标准化 Skill。数据库、运行输出、缓存、私密凭据、正式研究文档及历史备份不进入公开仓库。
 
 ## 目录结构
