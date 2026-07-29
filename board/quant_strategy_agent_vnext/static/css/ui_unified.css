@@ -122,96 +122,128 @@ body.is-authenticated .app-shell tr {
   font-size: 14px !important;
 }
 
-/* Trump index compact integration: source contract lives in board/trump. */
-.trump-index-dashboard { display: grid; gap: 16px; }
-.trump-index-status-card {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
-  align-items: end;
-  gap: 14px;
-  padding: 16px 18px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius);
-  background: #fff;
-  box-shadow: var(--ui-shadow);
+/* Trump index full research integration v3. */
+.trump-v3-dashboard { display: grid; gap: 16px; }
+.trump-v3-status {
+  display: grid; grid-template-columns: repeat(2,minmax(0,1fr)) auto; align-items: end; gap: 14px;
+  padding: 15px 17px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius);
+  background: #fff; box-shadow: var(--ui-shadow);
 }
-.trump-index-status-card > div { display: grid; gap: 5px; }
-.trump-index-status-card span { color: var(--muted); }
-.trump-index-status-card strong { color: var(--ink); }
-.trump-index-status-card strong.is-ok { color: var(--ui-green); }
-.trump-index-status-card strong.is-warning { color: var(--ui-blue); }
+.trump-v3-status > div { display: grid; gap: 5px; }
+.trump-v3-status span { color: var(--muted); }
+.trump-v3-status strong.is-ok { color: var(--ui-green); }
+.trump-v3-status strong.is-warning { color: var(--ui-blue); }
 .trump-index-emphasis { color: var(--ui-red); }
-.trump-index-chart-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(320px, .85fr); gap: 14px; }
-.trump-index-chart-grid .chart-panel { min-width: 0; }
-.trump-index-topics,
-.trump-index-events,
-.trump-index-sources {
-  padding: 18px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius);
-  background: #fff;
-  box-shadow: var(--ui-shadow);
+.trump-v3-section {
+  scroll-margin-top: 138px; min-width: 0; padding: 18px; border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius); background: #fff; box-shadow: var(--ui-shadow);
 }
-.trump-index-topics > header,
-.trump-index-events > header,
-.trump-index-sources > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--soft-border);
+.trump-v3-section > header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
+  margin-bottom: 13px; border-bottom: 1px solid var(--soft-border); padding-bottom: 11px;
 }
-.trump-index-topics h2,
-.trump-index-events h2,
-.trump-index-sources h2 { margin: 0; color: var(--ink); }
-.trump-index-topics header span,
-.trump-index-events header span,
-.trump-index-sources header span { color: var(--muted); }
-.trump-index-topics > div { display: flex; flex-wrap: wrap; gap: 8px; }
-.trump-index-topics > div > span {
-  display: inline-flex;
-  gap: 7px;
-  padding: 8px 10px;
-  border: 1px solid var(--soft-border);
-  border-radius: 5px;
-  background: var(--brand-soft);
-  color: var(--brand);
+.trump-v3-section > header small { color: var(--ui-red); font: 800 10px/1.2 Arial,"KaiTi",serif; letter-spacing: .1em; }
+.trump-v3-section > header h2 { margin: 5px 0 4px; color: var(--ink); }
+.trump-v3-section > header p { margin: 0; color: var(--muted); line-height: 1.65; }
+.trump-v3-section > header > span { color: var(--muted); white-space: nowrap; }
+.trump-v3-chart { min-height: 350px; min-width: 0; border: 1px solid var(--soft-border); border-radius: 8px; overflow: hidden; }
+.trump-v3-factors { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 8px; margin-top: 10px; }
+.trump-v3-factors article {
+  display: grid; grid-template-columns: 8px minmax(0,1fr) auto; align-items: center; gap: 5px 7px;
+  min-width: 0; padding: 11px; border: 1px solid var(--soft-border); border-radius: 7px; background: #fbfcfd;
 }
-.trump-index-event-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.trump-index-event {
-  min-width: 0;
-  padding: 14px;
-  border: 1px solid var(--soft-border);
-  border-left: 4px solid var(--ui-blue);
-  border-radius: 7px;
-  background: #fbfcfd;
+.trump-v3-factors i { width: 8px; height: 8px; border-radius: 50%; }
+.trump-v3-factors span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trump-v3-factors strong { font: 800 13px/1 Arial,sans-serif; }
+.trump-v3-factors small { grid-column: 2/4; color: var(--muted); }
+.trump-v3-note { margin: 12px 0 0; color: var(--muted); line-height: 1.7; }
+.trump-v3-taco-list { display: grid; gap: 8px; }
+.trump-v3-taco { border: 1px solid var(--soft-border); border-left: 4px solid var(--ui-red); border-radius: 8px; overflow: hidden; }
+.trump-v3-taco summary {
+  display: grid; grid-template-columns: 150px 46px minmax(0,1fr) auto; gap: 10px; align-items: center;
+  min-height: 54px; padding: 10px 13px; cursor: pointer; list-style: none;
 }
-.trump-index-event.is-tight { border-left-color: var(--ui-red); }
-.trump-index-event.is-easing { border-left-color: var(--ui-green); }
-.trump-index-event > header { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); }
-.trump-index-event > header span { font-weight: 800; }
-.trump-index-event.is-tight > header span { color: var(--ui-red); }
-.trump-index-event.is-easing > header span { color: var(--ui-green); }
-.trump-index-event h3 { margin: 10px 0 6px; color: var(--ink); }
-.trump-index-event p { margin: 0 0 9px; color: var(--muted); line-height: 1.65; }
-.trump-index-event a { color: var(--brand); font-weight: 800; text-decoration: none; }
-.trump-index-sources > div { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
-.trump-index-sources article { display: flex; align-items: flex-start; gap: 8px; padding: 11px; border: 1px solid var(--soft-border); border-radius: 6px; background: #fbfcfd; }
-.trump-index-sources article i { flex: 0 0 8px; width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: var(--ui-blue); }
-.trump-index-sources article.is-ok i { background: var(--ui-green); }
-.trump-index-sources article > div { display: grid; gap: 4px; min-width: 0; }
-.trump-index-sources article strong { color: var(--ink); }
-.trump-index-sources article span { color: var(--muted); line-height: 1.45; }
-.trump-index-sources > p { margin: 12px 0 0; color: var(--muted); line-height: 1.7; }
-@media (max-width: 1100px) {
-  .trump-index-chart-grid { grid-template-columns: minmax(0, 1fr); }
-  .trump-index-event-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .trump-index-sources > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.trump-v3-taco summary::-webkit-details-marker { display: none; }
+.trump-v3-taco summary:hover { background: #fbfcfd; }
+.trump-v3-taco time { color: var(--muted); font: 700 11px/1.2 Arial,sans-serif; }
+.trump-v3-taco summary strong { color: var(--ink); }
+.trump-v3-taco summary em { color: var(--ui-red); font-style: normal; }
+.strength { display: inline-grid; min-width: 38px; place-items: center; border-radius: 999px; padding: 5px 7px; color:#fff; background:var(--ui-blue); font-weight:800; }
+.strength-中强 { background:#c46a08; }
+.strength-强,.strength-最强 { background:var(--ui-red); }
+.trump-v3-flow { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; padding: 0 13px 12px; }
+.trump-v3-flow article { display:grid; grid-template-columns:42px minmax(0,1fr); gap:9px; padding:12px; border-radius:7px; background:#fff5f3; }
+.trump-v3-flow article+article { background:#f1f8f4; }
+.trump-v3-flow b { display:grid; height:26px; place-items:center; border-radius:4px; color:#fff; background:var(--ui-red); }
+.trump-v3-flow article+article b { background:var(--ui-green); }
+.trump-v3-flow p { margin:0; color:var(--muted); line-height:1.75; }
+.trump-v3-judgement { display:grid; gap:7px; border-top:1px solid var(--soft-border); padding:12px 13px; background:#fbfcfd; }
+.trump-v3-judgement p { margin:0; color:var(--muted); line-height:1.75; }
+.trump-v3-judgement p b { display:inline-block; min-width:68px; color:var(--ui-red); }
+.trump-v3-judgement a { justify-self:start; color:var(--ui-red); font-weight:800; text-decoration:none; }
+.trump-v3-tabs,.trump-v3-filter { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px; }
+.trump-v3-tabs button,.trump-v3-filter button,.trump-v3-truth-controls button {
+  border:1px solid var(--ui-border); border-radius:999px; padding:7px 11px; color:var(--muted); background:#fff; cursor:pointer;
 }
-@media (max-width: 720px) {
-  .trump-index-status-card { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
-  .trump-index-event-grid,
-  .trump-index-sources > div { grid-template-columns: minmax(0, 1fr); }
+.trump-v3-tabs button.is-active,.trump-v3-filter button.is-active,.trump-v3-truth-controls button.is-active { border-color:var(--ui-red); color:#fff; background:var(--ui-red); }
+.trump-v3-approval-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:9px; }
+.trump-v3-approval-summary span { padding:10px 12px; border:1px solid var(--soft-border); border-radius:6px; color:var(--muted); background:#fbfcfd; }
+.trump-v3-approval-summary strong { margin-left:6px; color:var(--ink); }
+.trump-v3-ranking { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; max-height:620px; overflow:auto; }
+.trump-v3-ranking article { display:grid; gap:7px; padding:11px 12px; border:1px solid var(--soft-border); border-radius:7px; background:#fbfcfd; }
+.trump-v3-ranking header { display:flex; justify-content:space-between; gap:10px; }
+.trump-v3-ranking article>div { height:5px; border-radius:999px; background:#e9edf1; overflow:hidden; }
+.trump-v3-ranking article>div i { display:block; height:100%; border-radius:inherit; }
+.trump-v3-ranking i.negative { margin-left:auto; background:var(--ui-red); }
+.trump-v3-ranking i.positive { background:var(--ui-green); }
+.trump-v3-ranking small { color:var(--muted); }
+.trump-v3-truth-controls { display:grid; grid-template-columns:minmax(260px,1fr) 180px auto; gap:10px; align-items:end; margin-bottom:10px; }
+.trump-v3-truth-controls label { display:grid; gap:5px; color:var(--muted); }
+.trump-v3-truth-controls input,.trump-v3-truth-controls select { min-height:40px; border:1px solid var(--ui-border); border-radius:6px; padding:0 11px; background:#fff; }
+.trump-v3-truth-controls>div { display:grid; grid-template-columns:repeat(2,auto); gap:6px; }
+.trump-v3-truth-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+.trump-v3-truth-list article { min-width:0; border:1px solid var(--ui-border); border-left:4px solid var(--ui-red); border-radius:8px; padding:13px 14px; }
+.trump-v3-truth-list article>header,.trump-v3-truth-list article>footer { display:flex; flex-wrap:wrap; align-items:center; gap:7px; }
+.trump-v3-truth-list article>header { justify-content:space-between; }
+.trump-v3-truth-list article>header>div { display:flex; gap:6px; }
+.trump-v3-truth-list article>header span { border-radius:999px; padding:4px 7px; color:var(--ui-red); background:var(--brand-soft); }
+.trump-v3-truth-list time { color:var(--muted); }
+.trump-v3-truth-list h3 { margin:9px 0 6px; line-height:1.5; }
+.trump-v3-truth-list h3 a { color:var(--ink); text-decoration:none; }
+.trump-v3-truth-list p { display:-webkit-box; min-height:72px; margin:0 0 10px; overflow:hidden; color:var(--muted); line-height:1.75; -webkit-box-orient:vertical; -webkit-line-clamp:4; }
+.trump-v3-truth-list article>footer { border-top:1px solid var(--soft-border); padding-top:9px; color:var(--muted); }
+.trump-v3-truth-list footer a { margin-left:auto; color:var(--ui-red); font-weight:800; text-decoration:none; }
+.trump-v3-loading { grid-column:1/-1; padding:28px; text-align:center; color:var(--muted); }
+.trump-v3-load-more { display:flex; justify-content:center; padding:14px 0 2px; }
+.trump-v3-audits { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+.trump-v3-audit { padding:11px; border:1px solid var(--soft-border); border-top:3px solid var(--ui-blue); border-radius:7px; background:#fbfcfd; }
+.trump-v3-audit.audit-pass { border-top-color:var(--ui-green); }
+.trump-v3-audit.audit-fail { border-top-color:var(--ui-red); }
+.trump-v3-audit header { display:flex; align-items:center; gap:7px; }
+.trump-v3-audit header i { width:8px; height:8px; border-radius:50%; background:var(--ui-blue); }
+.trump-v3-audit.audit-pass header i { background:var(--ui-green); }
+.trump-v3-audit.audit-fail header i { background:var(--ui-red); }
+.trump-v3-audit p { display:grid; grid-template-columns:70px minmax(0,1fr); margin:8px 0 0; color:var(--ink); }
+.trump-v3-audit p span,.trump-v3-audit small { color:var(--muted); }
+.trump-v3-sources { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin-top:10px; }
+.trump-v3-sources article { display:flex; align-items:flex-start; gap:8px; padding:11px; border:1px solid var(--soft-border); border-radius:7px; background:#fbfcfd; }
+.trump-v3-sources article>i { flex:0 0 8px; width:8px; height:8px; margin-top:5px; border-radius:50%; background:var(--ui-blue); }
+.trump-v3-sources article.is-ok>i { background:var(--ui-green); }
+.trump-v3-sources article>div { display:grid; gap:4px; min-width:0; }
+.trump-v3-sources span,.trump-v3-sources p { margin:0; color:var(--muted); line-height:1.5; }
+.trump-v3-sources a { color:var(--ui-red); font-weight:800; text-decoration:none; }
+.trump-v3-method { margin-top:12px; border-left:4px solid var(--ui-blue); border-radius:7px; padding:12px 14px; background:#eef5fb; }
+.trump-v3-method p { margin:5px 0 0; color:var(--muted); line-height:1.7; }
+@media (max-width:1180px){
+  .trump-v3-factors{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .trump-v3-audits{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .trump-v3-sources{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .trump-v3-truth-list{grid-template-columns:1fr}
+}
+@media (max-width:720px){
+  .trump-v3-status,.trump-v3-truth-controls,.trump-v3-ranking,.trump-v3-flow,.trump-v3-approval-summary{grid-template-columns:1fr}
+  .trump-v3-factors,.trump-v3-audits,.trump-v3-sources{grid-template-columns:1fr}
+  .trump-v3-taco summary{grid-template-columns:1fr auto}
+  .trump-v3-taco summary strong{grid-column:1/3}
+  .trump-v3-taco summary em{display:none}
 }

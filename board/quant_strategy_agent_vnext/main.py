@@ -24,7 +24,7 @@ import research_evidence_backend
 import rotation_app as rotation
 
 
-APP_VERSION = "2026.07.28-trump-index-vnext-r26.0"
+APP_VERSION = "2026.07.29-trump-research-v3-r27.0"
 legacy.APP_VERSION = APP_VERSION
 rotation.APP_VERSION = APP_VERSION
 
@@ -186,19 +186,14 @@ def ai_monitor_proxy(upstream_path: str) -> Response:
 
 @app.get("/api/trump/core")
 def trump_core_proxy() -> Response:
-    """Expose the verified Trump policy pressure payload in this app."""
+    """Expose the verified Trump policy research payload."""
     refresh = request.args.get("refresh") == "1"
     query = {"scope": "core"}
     if refresh:
         query["refresh"] = "1"
 
     def load() -> Any:
-        payload = legacy.proxy_json(
-            "trump",
-            "/api/tracker",
-            query=query,
-            timeout=70,
-        )
+        payload = legacy.proxy_json("trump", "/api/tracker", query=query, timeout=70)
         if not isinstance(payload, dict) or payload.get("status") != "ok":
             raise legacy.ProxyError("trump", 502, "upstream_payload_unavailable")
         pressure = payload.get("pressure") or {}
@@ -206,9 +201,30 @@ def trump_core_proxy() -> Response:
             raise legacy.ProxyError("trump", 503, "pressure_index_unavailable")
         return payload
 
-    payload = load() if refresh else legacy.cached_data("trump:core:r26", 300, load)
+    payload = load() if refresh else legacy.cached_data("trump:core:v3", 300, load)
     return jsonify(payload)
 
+
+@app.get("/api/trump/truths")
+def trump_truths_proxy() -> Response:
+    """Proxy the validated public Truth Social archive without exposing a second origin."""
+    allowed = ("category", "limit", "offset", "period", "search", "sort", "topic", "type")
+    query = {"scope": "truths"}
+    for key in allowed:
+        if key in request.args:
+            query[key] = request.args.get(key, "")
+    fingerprint = hashlib.sha256(repr(sorted(query.items())).encode("utf-8")).hexdigest()[:16]
+
+    def load() -> Any:
+        payload = legacy.proxy_json("trump", "/api/tracker", query=query, timeout=35)
+        if not isinstance(payload, dict) or payload.get("status") != "ok":
+            raise legacy.ProxyError("trump", 502, "truth_archive_unavailable")
+        source = payload.get("source") or {}
+        if source.get("verifiedSource") is not True:
+            raise legacy.ProxyError("trump", 503, "truth_archive_unverified")
+        return payload
+
+    return jsonify(legacy.cached_data("trump:truths:" + fingerprint, 300, load))
 
 _CACHEABLE_API_ENDPOINTS = {
     "allocation_snapshot",
@@ -238,6 +254,7 @@ _CACHEABLE_API_ENDPOINTS = {
     "factor_history_detail",
     "ai_monitor_proxy",
     "trump_core_proxy",
+    "trump_truths_proxy",
 }
 
 

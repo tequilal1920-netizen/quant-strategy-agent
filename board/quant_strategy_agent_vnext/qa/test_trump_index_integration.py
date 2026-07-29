@@ -31,7 +31,7 @@ class TrumpIndexIntegrationTest(unittest.TestCase):
         )
         self.assertIn(response.status_code, {302, 303})
 
-    def test_navigation_and_compact_renderer_contract(self) -> None:
+    def test_navigation_and_full_renderer_contract(self) -> None:
         template = (APP_ROOT / "templates" / "index_rotation_factor_lab.html").read_text(encoding="utf-8")
         script = (APP_ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
         style = (APP_ROOT / "static" / "css" / "ui_unified.css").read_text(encoding="utf-8")
@@ -40,40 +40,67 @@ class TrumpIndexIntegrationTest(unittest.TestCase):
             template.index('data-target="data:ai_monitor"'),
             template.index('data-target="data:trump_index"'),
         )
-        self.assertIn("'data:trump_index'", script)
         self.assertIn("async function workspaceTrumpIndex", script)
-        self.assertIn("kind:'trump-index'", script)
-        self.assertNotIn("<table", script[script.index("async function workspaceTrumpIndex"):script.index("function workspaceTopBy")])
-        self.assertIn(".trump-index-dashboard", style)
+        self.assertIn("TACO事件复盘", script)
+        self.assertIn("川普支持率六视图", script)
+        self.assertIn("川普 Truths 全量跟踪", script)
+        self.assertIn("/api/trump/truths", script)
+        self.assertIn("section.id", script)
+        self.assertIn("Trump index full research integration v3", style)
+        self.assertIn(".trump-v3-taco", style)
+        self.assertIn(".trump-v3-truth-list", style)
         self.assertIn("var(--ui-red)", style)
         self.assertIn("var(--ui-green)", style)
         self.assertIn("var(--ui-blue)", style)
 
-    def test_authenticated_proxy_preserves_verified_score(self) -> None:
+    def test_authenticated_core_proxy_preserves_verified_payload(self) -> None:
         payload = {
             "status": "ok",
-            "asOf": "2026-07-27",
             "pressure": {
                 "available": True,
-                "value": 3.9,
-                "change20d": 10.0,
+                "value": 3.7,
+                "change20d": 9.8,
                 "audit": {"status": "warn", "passed": 6, "total": 8},
+            },
+            "tacoEvents": [{"id": "taco-1"}] * 27,
+            "approval": {
+                "series": [{}] * 554,
+                "termSeries": [{}] * 4,
+                "issues": [{}] * 26,
+                "states": [{}] * 51,
+                "demographics": [{}] * 18,
             },
         }
         with mock.patch.object(main.legacy, "proxy_json", return_value=payload) as proxy:
             response = self.client.get("/api/trump/core?refresh=1")
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
-        self.assertEqual(body["pressure"]["value"], 3.9)
-        self.assertEqual(body["pressure"]["change20d"], 10.0)
-        self.assertEqual(body["pressure"]["audit"]["passed"], 6)
+        self.assertEqual(body["pressure"]["value"], 3.7)
+        self.assertEqual(len(body["tacoEvents"]), 27)
+        self.assertEqual(len(body["approval"]["states"]), 51)
         proxy.assert_called_once()
         self.assertEqual(proxy.call_args.args[:2], ("trump", "/api/tracker"))
         self.assertEqual(proxy.call_args.kwargs["query"], {"scope": "core", "refresh": "1"})
 
-    def test_anonymous_proxy_is_rejected(self) -> None:
+    def test_authenticated_truths_proxy_requires_verified_archive(self) -> None:
+        payload = {
+            "status": "ok",
+            "truths": [{"id": "1", "url": "https://truthsocial.com/@realDonaldTrump/1"}],
+            "source": {"verifiedSource": True, "resultCount": 35004},
+        }
+        with mock.patch.object(main.legacy, "proxy_json", return_value=payload) as proxy:
+            response = self.client.get("/api/trump/truths?category=trade&limit=20&offset=0")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["source"]["resultCount"], 35004)
+        query = proxy.call_args.kwargs["query"]
+        self.assertEqual(query["scope"], "truths")
+        self.assertEqual(query["category"], "trade")
+        self.assertEqual(query["limit"], "20")
+
+    def test_anonymous_proxies_are_rejected(self) -> None:
         anonymous = main.app.test_client()
         self.assertEqual(anonymous.get("/api/trump/core").status_code, 401)
+        self.assertEqual(anonymous.get("/api/trump/truths").status_code, 401)
 
 
 if __name__ == "__main__":
