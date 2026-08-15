@@ -14,18 +14,21 @@
     "operations":  [
                        "ranking",
                        "drivers",
+                       "dimensions",
                        "style",
                        "backtest"
                    ],
     "question_examples":  [
                               "哪个行业景气度最高",
-                              "电子行业的高频景气由哪些指标驱动"
+                              "电子行业的高频景气由哪些指标驱动",
+                              "六维行业轮动当前看好哪些行业",
+                              "电子行业的六维得分如何分解"
                           ],
     "standalone_with_environment":  true,
     "shared_repository_dependencies":  [
-                                           "澶栭儴妯″瀷蹇収鐩綍",
-                                           "鐮旂┒鏁版嵁搴撲笌鍥犲瓙鐘舵€佸簱",
-                                           "杩滅▼妯″瀷鏈嶅姟鍙婂叾鍑嵁"
+                                           "外部模型快照目录",
+                                           "研究数据库与因子状态库",
+                                           "远程模型服务及其凭据"
                                        ],
     "required_environment":  [
                                  "QUANT_AGENT_SNAPSHOT_ROOT",
@@ -44,10 +47,10 @@
                        "authenticated_service":  "http://127.0.0.1:8076/quant-agent-vnext"
                    },
     "inventory":  {
-                      "skill_files":  4,
-                      "source_files":  12,
+                      "skill_files":  5,
+                      "source_files":  17,
                       "component_files":  0,
                       "runtime_files":  8,
-                      "total_files":  25
+                      "total_files":  31
                   }
 }

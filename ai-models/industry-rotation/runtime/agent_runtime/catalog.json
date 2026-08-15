@@ -1,6 +1,6 @@
 {
   "schema_version": "quant-agent-catalog/1.0",
-  "runtime_version": "2026.07.28-agent-runtime-r1",
+  "runtime_version": "2026.08.13-agent-runtime-r3-champion-anchor",
   "modules": [
     {
       "title": "主页",
@@ -43,9 +43,9 @@
       "skill": "industry-rotation",
       "model_path": "model/industry_rotation",
       "skill_path": "skill/industry-rotation",
-      "summary": "查询31个申万一级行业的高频景气排名、驱动贡献、月周轮动结果和3×4风格箱。",
-      "operations": ["ranking", "drivers", "style", "backtest"],
-      "questions": ["哪个行业景气度最高", "电子行业的高频景气由哪些指标驱动"]
+      "summary": "查询31个申万一级行业的高频景气、53因子六维研究排名与单行业分解、生产冠军月周轮动结果和3×4风格箱。",
+      "operations": ["ranking", "drivers", "dimensions", "style", "backtest"],
+      "questions": ["哪个行业景气度最高", "电子行业的高频景气由哪些指标驱动", "六维行业轮动当前看好哪些行业", "电子行业的六维得分如何分解"]
     },
     {
       "title": "因子实验室",

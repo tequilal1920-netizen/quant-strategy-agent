@@ -100,6 +100,42 @@ class PriceRotationCandidateTests(unittest.TestCase):
             values = baseline[key].stack().dropna()
             self.assertTrue(values.between(0.0, 1.0).all())
 
+    def test_cross_sectional_residual_rank_is_causal_and_bounded(self):
+        rng = np.random.default_rng(20260801)
+        nuisance = pd.DataFrame(
+            rng.normal(size=(len(self.index), len(self.columns))),
+            index=self.index,
+            columns=self.columns,
+        )
+        signal = 0.8 * nuisance + pd.DataFrame(
+            rng.normal(scale=0.2, size=nuisance.shape),
+            index=self.index,
+            columns=self.columns,
+        )
+        cutoff = self.index[330]
+        baseline = build_snapshot._cross_sectional_residual_rank(signal, nuisance)
+        changed = signal.copy()
+        changed.loc[changed.index > cutoff] *= 7.0
+        perturbed = build_snapshot._cross_sectional_residual_rank(changed, nuisance)
+        pd.testing.assert_frame_equal(
+            baseline.loc[:cutoff], perturbed.loc[:cutoff], check_exact=True
+        )
+        values = baseline.stack().dropna()
+        self.assertTrue(values.between(0.0, 1.0).all())
+
+    def test_diagnostic_candidate_has_chinese_label_and_buffered_top_five(self):
+        candidate = (
+            "C23_monthly_post_test_diagnostic_acceleration_confirmed_"
+            "crowding_residual_top5_buffered"
+        )
+        policy = engine._candidate_target_policy(candidate)
+        self.assertEqual(policy["top_n"], 5)
+        self.assertEqual(policy["buffer_size"], 3)
+        self.assertEqual(
+            engine._candidate_label(candidate),
+            "景气加速度确认与拥挤残差前五",
+        )
+
     def test_electronics_has_a_distinct_pcb_contract_for_strict_reproduction(self):
         blueprints = event_cache.ROBUST_EVENTS["电子"]
         self.assertGreaterEqual(len(blueprints), 6)

@@ -1,0 +1,1746 @@
+{
+    "schema_version":  "1.0",
+    "source_release":  "2026.08.05-kline-deployment-split-vnext-r32.0",
+    "archive_sha256":  "BA03C519D01A2D5D076FF0484172BC799C4DAC003C3ADF1196EA0BB1564BE466",
+    "source_snapshot":  "board/quant_strategy_agent_vnext/data/rotation_snapshot.json",
+    "source_generated_at":  "2026-07-31T19:48:00.317713Z",
+    "contract_count":  248,
+    "contracts":  {
+                      "农林牧渔|cmb_农林牧渔_01":  {
+                                               "industry":  "农林牧渔",
+                                               "variable":  "cmb_农林牧渔_01",
+                                               "name":  "玉米主力连续收盘价",
+                                               "train_spearman_ic":  0.119898,
+                                               "sign":  1
+                                           },
+                      "农林牧渔|cmb_农林牧渔_02":  {
+                                               "industry":  "农林牧渔",
+                                               "variable":  "cmb_农林牧渔_02",
+                                               "name":  "豆粕主力连续收盘价",
+                                               "train_spearman_ic":  -0.202192,
+                                               "sign":  -1
+                                           },
+                      "农林牧渔|cmb_农林牧渔_03":  {
+                                               "industry":  "农林牧渔",
+                                               "variable":  "cmb_农林牧渔_03",
+                                               "name":  "饲料 · 饲料产量当期值(万吨)",
+                                               "train_spearman_ic":  0.256487,
+                                               "sign":  1
+                                           },
+                      "农林牧渔|cmb_农林牧渔_04":  {
+                                               "industry":  "农林牧渔",
+                                               "variable":  "cmb_农林牧渔_04",
+                                               "name":  "农产品价格指数",
+                                               "train_spearman_ic":  0.143218,
+                                               "sign":  1
+                                           },
+                      "农林牧渔|event_农林牧渔_01":  {
+                                                 "industry":  "农林牧渔",
+                                                 "variable":  "event_农林牧渔_01",
+                                                 "name":  "生猪产能去化事件",
+                                                 "train_spearman_ic":  0.104702,
+                                                 "sign":  1
+                                             },
+                      "农林牧渔|event_农林牧渔_02":  {
+                                                 "industry":  "农林牧渔",
+                                                 "variable":  "event_农林牧渔_02",
+                                                 "name":  "禽链补栏与鸡苗事件",
+                                                 "train_spearman_ic":  0,
+                                                 "sign":  1
+                                             },
+                      "农林牧渔|event_农林牧渔_03":  {
+                                                 "industry":  "农林牧渔",
+                                                 "variable":  "event_农林牧渔_03",
+                                                 "name":  "种业审定与推广事件",
+                                                 "train_spearman_ic":  -0.039475,
+                                                 "sign":  -1
+                                             },
+                      "农林牧渔|event_农林牧渔_04":  {
+                                                 "industry":  "农林牧渔",
+                                                 "variable":  "event_农林牧渔_04",
+                                                 "name":  "农产品供需与收储事件",
+                                                 "train_spearman_ic":  -0.078538,
+                                                 "sign":  -1
+                                             },
+                      "基础化工|cmb_基础化工_01":  {
+                                               "industry":  "基础化工",
+                                               "variable":  "cmb_基础化工_01",
+                                               "name":  "PVC主力连续收盘价",
+                                               "train_spearman_ic":  -0.198205,
+                                               "sign":  -1
+                                           },
+                      "基础化工|cmb_基础化工_02":  {
+                                               "industry":  "基础化工",
+                                               "variable":  "cmb_基础化工_02",
+                                               "name":  "甲醇主力连续收盘价",
+                                               "train_spearman_ic":  -0.049734,
+                                               "sign":  -1
+                                           },
+                      "基础化工|cmb_基础化工_03":  {
+                                               "industry":  "基础化工",
+                                               "variable":  "cmb_基础化工_03",
+                                               "name":  "合成橡胶 · 合成橡胶产量当期值(万吨)",
+                                               "train_spearman_ic":  0.20829,
+                                               "sign":  1
+                                           },
+                      "基础化工|cmb_基础化工_04":  {
+                                               "industry":  "基础化工",
+                                               "variable":  "cmb_基础化工_04",
+                                               "name":  "烧碱（折100％） · 烧碱（折100％）产量当期值(万吨)",
+                                               "train_spearman_ic":  0.162682,
+                                               "sign":  1
+                                           },
+                      "基础化工|cmb_基础化工_05":  {
+                                               "industry":  "基础化工",
+                                               "variable":  "cmb_基础化工_05",
+                                               "name":  "纯碱（碳酸钠） · 纯碱（碳酸钠）产量当期值(万吨)",
+                                               "train_spearman_ic":  0.204447,
+                                               "sign":  1
+                                           },
+                      "基础化工|cmb_基础化工_06":  {
+                                               "industry":  "基础化工",
+                                               "variable":  "cmb_基础化工_06",
+                                               "name":  "化学农药原药（折有效成分100％） · 化学农药原药（折有效成分100％）产量当期值(万吨)",
+                                               "train_spearman_ic":  0.137464,
+                                               "sign":  1
+                                           },
+                      "基础化工|event_基础化工_01":  {
+                                                 "industry":  "基础化工",
+                                                 "variable":  "event_基础化工_01",
+                                                 "name":  "化工装置检修复产事件",
+                                                 "train_spearman_ic":  0.079149,
+                                                 "sign":  1
+                                             },
+                      "基础化工|event_基础化工_05":  {
+                                                 "industry":  "基础化工",
+                                                 "variable":  "event_基础化工_05",
+                                                 "name":  "化工新材料投产事件",
+                                                 "train_spearman_ic":  -0.260556,
+                                                 "sign":  -1
+                                             },
+                      "钢铁|cmb_钢铁_01":  {
+                                           "industry":  "钢铁",
+                                           "variable":  "cmb_钢铁_01",
+                                           "name":  "螺纹钢主力连续收盘价",
+                                           "train_spearman_ic":  -0.047733,
+                                           "sign":  -1
+                                       },
+                      "钢铁|cmb_钢铁_02":  {
+                                           "industry":  "钢铁",
+                                           "variable":  "cmb_钢铁_02",
+                                           "name":  "铁矿石主力连续收盘价",
+                                           "train_spearman_ic":  -0.090672,
+                                           "sign":  -1
+                                       },
+                      "钢铁|cmb_钢铁_03":  {
+                                           "industry":  "钢铁",
+                                           "variable":  "cmb_钢铁_03",
+                                           "name":  "粗钢 · 粗钢产量当期值(万吨)",
+                                           "train_spearman_ic":  -0.023544,
+                                           "sign":  -1
+                                       },
+                      "钢铁|cmb_钢铁_04":  {
+                                           "industry":  "钢铁",
+                                           "variable":  "cmb_钢铁_04",
+                                           "name":  "生铁 · 生铁产量当期值(万吨)",
+                                           "train_spearman_ic":  -0.016494,
+                                           "sign":  -1
+                                       },
+                      "钢铁|cmb_钢铁_05":  {
+                                           "industry":  "钢铁",
+                                           "variable":  "cmb_钢铁_05",
+                                           "name":  "钢材 · 钢材产量当期值(万吨)",
+                                           "train_spearman_ic":  -0.153373,
+                                           "sign":  -1
+                                       },
+                      "钢铁|cmb_钢铁_06":  {
+                                           "industry":  "钢铁",
+                                           "variable":  "cmb_钢铁_06",
+                                           "name":  "钢筋 · 钢筋产量当期值(万吨)",
+                                           "train_spearman_ic":  0.337576,
+                                           "sign":  1
+                                       },
+                      "钢铁|event_钢铁_09":  {
+                                             "industry":  "钢铁",
+                                             "variable":  "event_钢铁_09",
+                                             "name":  "钢铁生产经营事件",
+                                             "train_spearman_ic":  0.193338,
+                                             "sign":  1
+                                         },
+                      "钢铁|event_钢铁_10":  {
+                                             "industry":  "钢铁",
+                                             "variable":  "event_钢铁_10",
+                                             "name":  "钢材产销交付事件",
+                                             "train_spearman_ic":  -0.181047,
+                                             "sign":  -1
+                                         },
+                      "有色金属|cmb_有色金属_01":  {
+                                               "industry":  "有色金属",
+                                               "variable":  "cmb_有色金属_01",
+                                               "name":  "铜主力连续收盘价",
+                                               "train_spearman_ic":  -0.18806,
+                                               "sign":  -1
+                                           },
+                      "有色金属|cmb_有色金属_02":  {
+                                               "industry":  "有色金属",
+                                               "variable":  "cmb_有色金属_02",
+                                               "name":  "铝主力连续收盘价",
+                                               "train_spearman_ic":  -0.199724,
+                                               "sign":  -1
+                                           },
+                      "有色金属|cmb_有色金属_03":  {
+                                               "industry":  "有色金属",
+                                               "variable":  "cmb_有色金属_03",
+                                               "name":  "锌主力连续收盘价",
+                                               "train_spearman_ic":  -0.027641,
+                                               "sign":  -1
+                                           },
+                      "有色金属|cmb_有色金属_04":  {
+                                               "industry":  "有色金属",
+                                               "variable":  "cmb_有色金属_04",
+                                               "name":  "黄金主力连续收盘价",
+                                               "train_spearman_ic":  0.016291,
+                                               "sign":  1
+                                           },
+                      "有色金属|cmb_有色金属_05":  {
+                                               "industry":  "有色金属",
+                                               "variable":  "cmb_有色金属_05",
+                                               "name":  "精炼铜（电解铜） · 精炼铜（电解铜）产量当期值(万吨)",
+                                               "train_spearman_ic":  0.051609,
+                                               "sign":  1
+                                           },
+                      "有色金属|cmb_有色金属_06":  {
+                                               "industry":  "有色金属",
+                                               "variable":  "cmb_有色金属_06",
+                                               "name":  "原铝（电解铝） · 原铝（电解铝）产量当期值(万吨)",
+                                               "train_spearman_ic":  -0.046611,
+                                               "sign":  -1
+                                           },
+                      "有色金属|cmb_有色金属_07":  {
+                                               "industry":  "有色金属",
+                                               "variable":  "cmb_有色金属_07",
+                                               "name":  "氧化铝 · 氧化铝产量当期值(万吨)",
+                                               "train_spearman_ic":  0.135367,
+                                               "sign":  1
+                                           },
+                      "有色金属|cmb_有色金属_08":  {
+                                               "industry":  "有色金属",
+                                               "variable":  "cmb_有色金属_08",
+                                               "name":  "十种有色金属 · 十种有色金属产量当期值(万吨)",
+                                               "train_spearman_ic":  0.322871,
+                                               "sign":  1
+                                           },
+                      "电子|cmb_电子_01":  {
+                                           "industry":  "电子",
+                                           "variable":  "cmb_电子_01",
+                                           "name":  "移动通信手持机（手机） · 移动通信手持机（手机）产量当期值(万台)",
+                                           "train_spearman_ic":  0.053327,
+                                           "sign":  1
+                                       },
+                      "电子|cmb_电子_02":  {
+                                           "industry":  "电子",
+                                           "variable":  "cmb_电子_02",
+                                           "name":  "集成电路 · 集成电路产量当期值(亿块)",
+                                           "train_spearman_ic":  0.134412,
+                                           "sign":  1
+                                       },
+                      "电子|cmb_电子_03":  {
+                                           "industry":  "电子",
+                                           "variable":  "cmb_电子_03",
+                                           "name":  "手机出货量当月值",
+                                           "train_spearman_ic":  0,
+                                           "sign":  1
+                                       },
+                      "电子|event_电子_01":  {
+                                             "industry":  "电子",
+                                             "variable":  "event_电子_01",
+                                             "name":  "半导体扩产事件",
+                                             "train_spearman_ic":  -0.074803,
+                                             "sign":  -1
+                                         },
+                      "电子|event_电子_02":  {
+                                             "industry":  "电子",
+                                             "variable":  "event_电子_02",
+                                             "name":  "集成电路订单事件",
+                                             "train_spearman_ic":  0.096823,
+                                             "sign":  1
+                                         },
+                      "电子|event_电子_03":  {
+                                             "industry":  "电子",
+                                             "variable":  "event_电子_03",
+                                             "name":  "消费电子新品事件",
+                                             "train_spearman_ic":  0.077027,
+                                             "sign":  1
+                                         },
+                      "电子|event_电子_04":  {
+                                             "industry":  "电子",
+                                             "variable":  "event_电子_04",
+                                             "name":  "面板稼动价格事件",
+                                             "train_spearman_ic":  0.110613,
+                                             "sign":  1
+                                         },
+                      "电子|event_电子_05":  {
+                                             "industry":  "电子",
+                                             "variable":  "event_电子_05",
+                                             "name":  "芯片供需事件",
+                                             "train_spearman_ic":  0.127432,
+                                             "sign":  1
+                                         },
+                      "家用电器|cmb_家用电器_01":  {
+                                               "industry":  "家用电器",
+                                               "variable":  "cmb_家用电器_01",
+                                               "name":  "家电音像器材 · 家用电器和音像器材类商品零售类值当期值(亿元)",
+                                               "train_spearman_ic":  -0.000364,
+                                               "sign":  -1
+                                           },
+                      "家用电器|cmb_家用电器_02":  {
+                                               "industry":  "家用电器",
+                                               "variable":  "cmb_家用电器_02",
+                                               "name":  "家用电冰箱（家用冷冻冷藏箱） · 家用电冰箱（家用冷冻冷藏箱）产量当期值(万台)",
+                                               "train_spearman_ic":  0.03521,
+                                               "sign":  1
+                                           },
+                      "家用电器|cmb_家用电器_03":  {
+                                               "industry":  "家用电器",
+                                               "variable":  "cmb_家用电器_03",
+                                               "name":  "家用洗衣机 · 家用洗衣机产量当期值(万台)",
+                                               "train_spearman_ic":  0.258128,
+                                               "sign":  1
+                                           },
+                      "家用电器|cmb_家用电器_04":  {
+                                               "industry":  "家用电器",
+                                               "variable":  "cmb_家用电器_04",
+                                               "name":  "彩色电视机 · 彩色电视机产量当期值(万台)",
+                                               "train_spearman_ic":  0.236065,
+                                               "sign":  1
+                                           },
+                      "家用电器|event_家用电器_01":  {
+                                                 "industry":  "家用电器",
+                                                 "variable":  "event_家用电器_01",
+                                                 "name":  "空调排产渠道事件",
+                                                 "train_spearman_ic":  -0.0909,
+                                                 "sign":  -1
+                                             },
+                      "家用电器|event_家用电器_02":  {
+                                                 "industry":  "家用电器",
+                                                 "variable":  "event_家用电器_02",
+                                                 "name":  "冰箱冷链产品事件",
+                                                 "train_spearman_ic":  -0.351389,
+                                                 "sign":  -1
+                                             },
+                      "家用电器|event_家用电器_03":  {
+                                                 "industry":  "家用电器",
+                                                 "variable":  "event_家用电器_03",
+                                                 "name":  "洗衣机产品事件",
+                                                 "train_spearman_ic":  -0.278297,
+                                                 "sign":  -1
+                                             },
+                      "家用电器|event_家用电器_04":  {
+                                                 "industry":  "家用电器",
+                                                 "variable":  "event_家用电器_04",
+                                                 "name":  "家电换新出口事件",
+                                                 "train_spearman_ic":  0.01171,
+                                                 "sign":  1
+                                             },
+                      "食品饮料|cmb_食品饮料_01":  {
+                                               "industry":  "食品饮料",
+                                               "variable":  "cmb_食品饮料_01",
+                                               "name":  "乳制品 · 乳制品产量当期值(万吨)",
+                                               "train_spearman_ic":  0.02261,
+                                               "sign":  1
+                                           },
+                      "食品饮料|cmb_食品饮料_02":  {
+                                               "industry":  "食品饮料",
+                                               "variable":  "cmb_食品饮料_02",
+                                               "name":  "白酒（折65度，商品量） · 白酒（折65度，商品量）产量当期值(万千升)",
+                                               "train_spearman_ic":  0.32011,
+                                               "sign":  1
+                                           },
+                      "食品饮料|cmb_食品饮料_03":  {
+                                               "industry":  "食品饮料",
+                                               "variable":  "cmb_食品饮料_03",
+                                               "name":  "啤酒 · 啤酒产量当期值(万千升)",
+                                               "train_spearman_ic":  -0.221436,
+                                               "sign":  -1
+                                           },
+                      "食品饮料|cmb_食品饮料_04":  {
+                                               "industry":  "食品饮料",
+                                               "variable":  "cmb_食品饮料_04",
+                                               "name":  "粮油食品饮料烟酒 · 烟酒类商品零售类值当期值(亿元)",
+                                               "train_spearman_ic":  0.111549,
+                                               "sign":  1
+                                           },
+                      "食品饮料|cmb_食品饮料_05":  {
+                                               "industry":  "食品饮料",
+                                               "variable":  "cmb_食品饮料_05",
+                                               "name":  "粮油食品饮料烟酒 · 粮油、食品类商品零售类值当期值(亿元)",
+                                               "train_spearman_ic":  0.160465,
+                                               "sign":  1
+                                           },
+                      "食品饮料|cmb_食品饮料_06":  {
+                                               "industry":  "食品饮料",
+                                               "variable":  "cmb_食品饮料_06",
+                                               "name":  "粮油食品饮料烟酒 · 饮料类商品零售类值当期值(亿元)",
+                                               "train_spearman_ic":  0.024825,
+                                               "sign":  1
+                                           },
+                      "食品饮料|cmb_食品饮料_07":  {
+                                               "industry":  "食品饮料",
+                                               "variable":  "cmb_食品饮料_07",
+                                               "name":  "成品糖 · 成品糖产量当期值(万吨)",
+                                               "train_spearman_ic":  0.357418,
+                                               "sign":  1
+                                           },
+                      "食品饮料|cmb_食品饮料_08":  {
+                                               "industry":  "食品饮料",
+                                               "variable":  "cmb_食品饮料_08",
+                                               "name":  "饮料 · 饮料产量当期值(万吨)",
+                                               "train_spearman_ic":  0.017809,
+                                               "sign":  1
+                                           },
+                      "纺织服饰|cmb_纺织服饰_01":  {
+                                               "industry":  "纺织服饰",
+                                               "variable":  "cmb_纺织服饰_01",
+                                               "name":  "棉花主力连续收盘价",
+                                               "train_spearman_ic":  -0.410046,
+                                               "sign":  -1
+                                           },
+                      "纺织服饰|cmb_纺织服饰_02":  {
+                                               "industry":  "纺织服饰",
+                                               "variable":  "cmb_纺织服饰_02",
+                                               "name":  "PTA主力连续收盘价",
+                                               "train_spearman_ic":  -0.358278,
+                                               "sign":  -1
+                                           },
+                      "纺织服饰|cmb_纺织服饰_03":  {
+                                               "industry":  "纺织服饰",
+                                               "variable":  "cmb_纺织服饰_03",
+                                               "name":  "服装鞋帽针纺织品 · 服装类商品零售类值当期值(亿元)",
+                                               "train_spearman_ic":  0.315552,
+                                               "sign":  1
+                                           },
+                      "纺织服饰|cmb_纺织服饰_04":  {
+                                               "industry":  "纺织服饰",
+                                               "variable":  "cmb_纺织服饰_04",
+                                               "name":  "服装鞋帽针纺织品 · 服装鞋帽、针、纺织品类商品零售类值当期值(亿元)",
+                                               "train_spearman_ic":  0.315552,
+                                               "sign":  1
+                                           },
+                      "纺织服饰|cmb_纺织服饰_05":  {
+                                               "industry":  "纺织服饰",
+                                               "variable":  "cmb_纺织服饰_05",
+                                               "name":  "纱 · 纱产量当期值(万吨)",
+                                               "train_spearman_ic":  0.079209,
+                                               "sign":  1
+                                           },
+                      "纺织服饰|cmb_纺织服饰_06":  {
+                                               "industry":  "纺织服饰",
+                                               "variable":  "cmb_纺织服饰_06",
+                                               "name":  "布 · 布产量当期值(亿米)",
+                                               "train_spearman_ic":  0.322534,
+                                               "sign":  1
+                                           },
+                      "纺织服饰|cmb_纺织服饰_07":  {
+                                               "industry":  "纺织服饰",
+                                               "variable":  "cmb_纺织服饰_07",
+                                               "name":  "化学纤维 · 化学纤维产量当期值(万吨)",
+                                               "train_spearman_ic":  -0.036301,
+                                               "sign":  -1
+                                           },
+                      "纺织服饰|event_纺织服饰_01":  {
+                                                 "industry":  "纺织服饰",
+                                                 "variable":  "event_纺织服饰_01",
+                                                 "name":  "纺织服装出口订单事件",
+                                                 "train_spearman_ic":  0.092953,
+                                                 "sign":  1
+                                             },
+                      "轻工制造|cmb_轻工制造_01":  {
+                                               "industry":  "轻工制造",
+                                               "variable":  "cmb_轻工制造_01",
+                                               "name":  "家具 · 家具类商品零售类值当期值(亿元)",
+                                               "train_spearman_ic":  0.303551,
+                                               "sign":  1
+                                           },
+                      "轻工制造|cmb_轻工制造_02":  {
+                                               "industry":  "轻工制造",
+                                               "variable":  "cmb_轻工制造_02",
+                                               "name":  "机制纸及纸板（外购原纸加工除外） · 机制纸及纸板（外购原纸加工除外）产量当期值(万吨)",
+                                               "train_spearman_ic":  0.157177,
+                                               "sign":  1
+                                           },
+                      "轻工制造|cmb_轻工制造_03":  {
+                                               "industry":  "轻工制造",
+                                               "variable":  "cmb_轻工制造_03",
+                                               "name":  "塑料制品 · 塑料制品产量当期值(万吨)",
+                                               "train_spearman_ic":  0.315121,
+                                               "sign":  1
+                                           },
+                      "轻工制造|event_轻工制造_01":  {
+                                                 "industry":  "轻工制造",
+                                                 "variable":  "event_轻工制造_01",
+                                                 "name":  "家具订单事件",
+                                                 "train_spearman_ic":  -0.077268,
+                                                 "sign":  -1
+                                             },
+                      "轻工制造|event_轻工制造_02":  {
+                                                 "industry":  "轻工制造",
+                                                 "variable":  "event_轻工制造_02",
+                                                 "name":  "造纸供需事件",
+                                                 "train_spearman_ic":  -0.091653,
+                                                 "sign":  -1
+                                             },
+                      "轻工制造|event_轻工制造_03":  {
+                                                 "industry":  "轻工制造",
+                                                 "variable":  "event_轻工制造_03",
+                                                 "name":  "包装订单事件",
+                                                 "train_spearman_ic":  0.092697,
+                                                 "sign":  1
+                                             },
+                      "轻工制造|event_轻工制造_04":  {
+                                                 "industry":  "轻工制造",
+                                                 "variable":  "event_轻工制造_04",
+                                                 "name":  "玩具出口事件",
+                                                 "train_spearman_ic":  -0.326337,
+                                                 "sign":  -1
+                                             },
+                      "轻工制造|event_轻工制造_06":  {
+                                                 "industry":  "轻工制造",
+                                                 "variable":  "event_轻工制造_06",
+                                                 "name":  "生活用纸需求事件",
+                                                 "train_spearman_ic":  0.024058,
+                                                 "sign":  1
+                                             },
+                      "医药生物|cmb_医药生物_01":  {
+                                               "industry":  "医药生物",
+                                               "variable":  "cmb_医药生物_01",
+                                               "name":  "化学药品原药 · 化学药品原药产量当期值(万吨)",
+                                               "train_spearman_ic":  0.448107,
+                                               "sign":  1
+                                           },
+                      "医药生物|cmb_医药生物_02":  {
+                                               "industry":  "医药生物",
+                                               "variable":  "cmb_医药生物_02",
+                                               "name":  "中成药 · 中成药产量当期值(万吨)",
+                                               "train_spearman_ic":  0.415951,
+                                               "sign":  1
+                                           },
+                      "医药生物|cmb_医药生物_03":  {
+                                               "industry":  "医药生物",
+                                               "variable":  "cmb_医药生物_03",
+                                               "name":  "中西药品 · 中西药品类商品零售类值当期值(亿元)",
+                                               "train_spearman_ic":  0.449639,
+                                               "sign":  1
+                                           },
+                      "医药生物|event_医药生物_01":  {
+                                                 "industry":  "医药生物",
+                                                 "variable":  "event_医药生物_01",
+                                                 "name":  "新药审批事件",
+                                                 "train_spearman_ic":  0.138783,
+                                                 "sign":  1
+                                             },
+                      "医药生物|event_医药生物_02":  {
+                                                 "industry":  "医药生物",
+                                                 "variable":  "event_医药生物_02",
+                                                 "name":  "医疗器械注册事件",
+                                                 "train_spearman_ic":  -0.159863,
+                                                 "sign":  -1
+                                             },
+                      "医药生物|event_医药生物_03":  {
+                                                 "industry":  "医药生物",
+                                                 "variable":  "event_医药生物_03",
+                                                 "name":  "药械集采事件",
+                                                 "train_spearman_ic":  -0.0191,
+                                                 "sign":  -1
+                                             },
+                      "医药生物|event_医药生物_04":  {
+                                                 "industry":  "医药生物",
+                                                 "variable":  "event_医药生物_04",
+                                                 "name":  "疫苗批签发事件",
+                                                 "train_spearman_ic":  -0.059837,
+                                                 "sign":  -1
+                                             },
+                      "医药生物|event_医药生物_05":  {
+                                                 "industry":  "医药生物",
+                                                 "variable":  "event_医药生物_05",
+                                                 "name":  "临床试验事件",
+                                                 "train_spearman_ic":  -0.043716,
+                                                 "sign":  -1
+                                             },
+                      "公用事业|cmb_公用事业_01":  {
+                                               "industry":  "公用事业",
+                                               "variable":  "cmb_公用事业_01",
+                                               "name":  "全社会用电量",
+                                               "train_spearman_ic":  -0.142693,
+                                               "sign":  -1
+                                           },
+                      "公用事业|cmb_公用事业_02":  {
+                                               "industry":  "公用事业",
+                                               "variable":  "cmb_公用事业_02",
+                                               "name":  "第二产业用电量",
+                                               "train_spearman_ic":  -0.126049,
+                                               "sign":  -1
+                                           },
+                      "公用事业|cmb_公用事业_03":  {
+                                               "industry":  "公用事业",
+                                               "variable":  "cmb_公用事业_03",
+                                               "name":  "第三产业用电量",
+                                               "train_spearman_ic":  -0.138821,
+                                               "sign":  -1
+                                           },
+                      "公用事业|cmb_公用事业_04":  {
+                                               "industry":  "公用事业",
+                                               "variable":  "cmb_公用事业_04",
+                                               "name":  "城乡居民生活用电量合计",
+                                               "train_spearman_ic":  -0.195527,
+                                               "sign":  -1
+                                           },
+                      "公用事业|event_公用事业_01":  {
+                                                 "industry":  "公用事业",
+                                                 "variable":  "event_公用事业_01",
+                                                 "name":  "火电机组运营事件",
+                                                 "train_spearman_ic":  0.083226,
+                                                 "sign":  1
+                                             },
+                      "公用事业|event_公用事业_02":  {
+                                                 "industry":  "公用事业",
+                                                 "variable":  "event_公用事业_02",
+                                                 "name":  "水电来水发电事件",
+                                                 "train_spearman_ic":  -0.238511,
+                                                 "sign":  -1
+                                             },
+                      "公用事业|event_公用事业_03":  {
+                                                 "industry":  "公用事业",
+                                                 "variable":  "event_公用事业_03",
+                                                 "name":  "燃气供应负荷事件",
+                                                 "train_spearman_ic":  0,
+                                                 "sign":  1
+                                             },
+                      "公用事业|event_公用事业_04":  {
+                                                 "industry":  "公用事业",
+                                                 "variable":  "event_公用事业_04",
+                                                 "name":  "水务供水运营事件",
+                                                 "train_spearman_ic":  -0.009807,
+                                                 "sign":  -1
+                                             },
+                      "交通运输|cmb_交通运输_01":  {
+                                               "industry":  "交通运输",
+                                               "variable":  "cmb_交通运输_01",
+                                               "name":  "波罗的海干散货指数BDI · 2",
+                                               "train_spearman_ic":  -0.176768,
+                                               "sign":  -1
+                                           },
+                      "交通运输|cmb_交通运输_02":  {
+                                               "industry":  "交通运输",
+                                               "variable":  "cmb_交通运输_02",
+                                               "name":  "成品油运价指数BCTI",
+                                               "train_spearman_ic":  0.0534,
+                                               "sign":  1
+                                           },
+                      "交通运输|cmb_交通运输_03":  {
+                                               "industry":  "交通运输",
+                                               "variable":  "cmb_交通运输_03",
+                                               "name":  "公路货运量当月值",
+                                               "train_spearman_ic":  -0.289921,
+                                               "sign":  -1
+                                           },
+                      "交通运输|cmb_交通运输_04":  {
+                                               "industry":  "交通运输",
+                                               "variable":  "cmb_交通运输_04",
+                                               "name":  "货物运输量 · 民航货运量 · 当期值(万吨)",
+                                               "train_spearman_ic":  0.005758,
+                                               "sign":  1
+                                           },
+                      "交通运输|cmb_交通运输_05":  {
+                                               "industry":  "交通运输",
+                                               "variable":  "cmb_交通运输_05",
+                                               "name":  "货物运输量 · 水运货运量 · 当期值(万吨)",
+                                               "train_spearman_ic":  0.355269,
+                                               "sign":  1
+                                           },
+                      "交通运输|cmb_交通运输_06":  {
+                                               "industry":  "交通运输",
+                                               "variable":  "cmb_交通运输_06",
+                                               "name":  "货物运输量 · 铁路货运量 · 当期值(万吨)",
+                                               "train_spearman_ic":  0.231136,
+                                               "sign":  1
+                                           },
+                      "交通运输|event_交通运输_01":  {
+                                                 "industry":  "交通运输",
+                                                 "variable":  "event_交通运输_01",
+                                                 "name":  "港口吞吐与靠泊事件",
+                                                 "train_spearman_ic":  0.023691,
+                                                 "sign":  1
+                                             },
+                      "交通运输|event_交通运输_03":  {
+                                                 "industry":  "交通运输",
+                                                 "variable":  "event_交通运输_03",
+                                                 "name":  "航空客座率与航班恢复事件",
+                                                 "train_spearman_ic":  0,
+                                                 "sign":  1
+                                             },
+                      "房地产|cmb_房地产_01":  {
+                                             "industry":  "房地产",
+                                             "variable":  "cmb_房地产_01",
+                                             "name":  "房地产开发投资 · 房地产住宅投资 · 累计值(亿元)",
+                                             "train_spearman_ic":  -0.169613,
+                                             "sign":  -1
+                                         },
+                      "房地产|cmb_房地产_02":  {
+                                             "industry":  "房地产",
+                                             "variable":  "cmb_房地产_02",
+                                             "name":  "房地产开发投资 · 房地产办公楼投资累计值(亿元)",
+                                             "train_spearman_ic":  -0.278057,
+                                             "sign":  -1
+                                         },
+                      "房地产|cmb_房地产_03":  {
+                                             "industry":  "房地产",
+                                             "variable":  "cmb_房地产_03",
+                                             "name":  "房地产开发投资 · 房地产商业营业用房投资累计值(亿元)",
+                                             "train_spearman_ic":  -0.079887,
+                                             "sign":  -1
+                                         },
+                      "房地产|cmb_房地产_04":  {
+                                             "industry":  "房地产",
+                                             "variable":  "cmb_房地产_04",
+                                             "name":  "房地产资金来源 · 房地产投资国内贷款累计值(亿元)",
+                                             "train_spearman_ic":  -0.005113,
+                                             "sign":  -1
+                                         },
+                      "房地产|cmb_房地产_05":  {
+                                             "industry":  "房地产",
+                                             "variable":  "cmb_房地产_05",
+                                             "name":  "房地产施工竣工面积 · 房地产新开工施工面积累计值(万平方米)",
+                                             "train_spearman_ic":  -0.184822,
+                                             "sign":  -1
+                                         },
+                      "房地产|cmb_房地产_06":  {
+                                             "industry":  "房地产",
+                                             "variable":  "cmb_房地产_06",
+                                             "name":  "房地产施工竣工面积 · 房地产施工面积累计值(万平方米)",
+                                             "train_spearman_ic":  0.05703,
+                                             "sign":  1
+                                         },
+                      "房地产|cmb_房地产_07":  {
+                                             "industry":  "房地产",
+                                             "variable":  "cmb_房地产_07",
+                                             "name":  "房地产施工竣工面积 · 房地产竣工面积累计值(万平方米)",
+                                             "train_spearman_ic":  -0.089833,
+                                             "sign":  -1
+                                         },
+                      "房地产|cmb_房地产_08":  {
+                                             "industry":  "房地产",
+                                             "variable":  "cmb_房地产_08",
+                                             "name":  "新建商品房销售面积 · 新建商品房销售面积累计值(万平方米)",
+                                             "train_spearman_ic":  -0.143821,
+                                             "sign":  -1
+                                         },
+                      "商贸零售|cmb_商贸零售_01":  {
+                                               "industry":  "商贸零售",
+                                               "variable":  "cmb_商贸零售_01",
+                                               "name":  "社会消费品零售总额 · 限上单位消费品零售额当期值(亿元)",
+                                               "train_spearman_ic":  0,
+                                               "sign":  1
+                                           },
+                      "商贸零售|cmb_商贸零售_02":  {
+                                               "industry":  "商贸零售",
+                                               "variable":  "cmb_商贸零售_02",
+                                               "name":  "物流景气指数",
+                                               "train_spearman_ic":  0,
+                                               "sign":  1
+                                           },
+                      "商贸零售|cmb_商贸零售_03":  {
+                                               "industry":  "商贸零售",
+                                               "variable":  "cmb_商贸零售_03",
+                                               "name":  "邮政业务量 · 快递量 · 当期值(万件)",
+                                               "train_spearman_ic":  -0.150184,
+                                               "sign":  -1
+                                           },
+                      "商贸零售|cmb_商贸零售_04":  {
+                                               "industry":  "商贸零售",
+                                               "variable":  "cmb_商贸零售_04",
+                                               "name":  "邮政业务量 · 包件数 · 当期值(万件)",
+                                               "train_spearman_ic":  -0.05123,
+                                               "sign":  -1
+                                           },
+                      "商贸零售|cmb_商贸零售_05":  {
+                                               "industry":  "商贸零售",
+                                               "variable":  "cmb_商贸零售_05",
+                                               "name":  "邮政业务量 · 函件数 · 当期值(亿件)",
+                                               "train_spearman_ic":  0.179793,
+                                               "sign":  1
+                                           },
+                      "商贸零售|event_商贸零售_01":  {
+                                                 "industry":  "商贸零售",
+                                                 "variable":  "event_商贸零售_01",
+                                                 "name":  "商超门店运营事件",
+                                                 "train_spearman_ic":  0.20157,
+                                                 "sign":  1
+                                             },
+                      "商贸零售|event_商贸零售_02":  {
+                                                 "industry":  "商贸零售",
+                                                 "variable":  "event_商贸零售_02",
+                                                 "name":  "电商平台交易事件",
+                                                 "train_spearman_ic":  0.047002,
+                                                 "sign":  1
+                                             },
+                      "商贸零售|event_商贸零售_03":  {
+                                                 "industry":  "商贸零售",
+                                                 "variable":  "event_商贸零售_03",
+                                                 "name":  "免税渠道客流事件",
+                                                 "train_spearman_ic":  0.145358,
+                                                 "sign":  1
+                                             },
+                      "社会服务|cmb_社会服务_01":  {
+                                               "industry":  "社会服务",
+                                               "variable":  "cmb_社会服务_01",
+                                               "name":  "民航客运量当月值",
+                                               "train_spearman_ic":  0.231322,
+                                               "sign":  1
+                                           },
+                      "社会服务|cmb_社会服务_02":  {
+                                               "industry":  "社会服务",
+                                               "variable":  "cmb_社会服务_02",
+                                               "name":  "公路客运量当月值",
+                                               "train_spearman_ic":  -0.097074,
+                                               "sign":  -1
+                                           },
+                      "社会服务|cmb_社会服务_03":  {
+                                               "industry":  "社会服务",
+                                               "variable":  "cmb_社会服务_03",
+                                               "name":  "旅客运输量 · 铁路客运量 · 当期值(万人)",
+                                               "train_spearman_ic":  0.151614,
+                                               "sign":  1
+                                           },
+                      "社会服务|cmb_社会服务_04":  {
+                                               "industry":  "社会服务",
+                                               "variable":  "cmb_社会服务_04",
+                                               "name":  "旅客运输量 · 水运客运量 · 当期值(万人)",
+                                               "train_spearman_ic":  0.275189,
+                                               "sign":  1
+                                           },
+                      "社会服务|cmb_社会服务_05":  {
+                                               "industry":  "社会服务",
+                                               "variable":  "cmb_社会服务_05",
+                                               "name":  "客运量总计当月值",
+                                               "train_spearman_ic":  -0.055971,
+                                               "sign":  -1
+                                           },
+                      "社会服务|cmb_社会服务_06":  {
+                                               "industry":  "社会服务",
+                                               "variable":  "cmb_社会服务_06",
+                                               "name":  "体育娱乐用品 · 体育、娱乐用品类商品零售类值当期值(亿元)",
+                                               "train_spearman_ic":  0.158988,
+                                               "sign":  1
+                                           },
+                      "社会服务|event_社会服务_01":  {
+                                                 "industry":  "社会服务",
+                                                 "variable":  "event_社会服务_01",
+                                                 "name":  "旅游客流恢复事件",
+                                                 "train_spearman_ic":  -0.040513,
+                                                 "sign":  -1
+                                             },
+                      "社会服务|event_社会服务_02":  {
+                                                 "industry":  "社会服务",
+                                                 "variable":  "event_社会服务_02",
+                                                 "name":  "酒店入住经营事件",
+                                                 "train_spearman_ic":  0.020572,
+                                                 "sign":  1
+                                             },
+                      "综合|event_综合_01":  {
+                                             "industry":  "综合",
+                                             "variable":  "event_综合_01",
+                                             "name":  "多元业务合同事件",
+                                             "train_spearman_ic":  -0.203494,
+                                             "sign":  -1
+                                         },
+                      "综合|event_综合_02":  {
+                                             "industry":  "综合",
+                                             "variable":  "event_综合_02",
+                                             "name":  "跨行业收购事件",
+                                             "train_spearman_ic":  0.150423,
+                                             "sign":  1
+                                         },
+                      "综合|event_综合_03":  {
+                                             "industry":  "综合",
+                                             "variable":  "event_综合_03",
+                                             "name":  "资产重组事件",
+                                             "train_spearman_ic":  0.102235,
+                                             "sign":  1
+                                         },
+                      "综合|event_综合_04":  {
+                                             "industry":  "综合",
+                                             "variable":  "event_综合_04",
+                                             "name":  "新业务落地事件",
+                                             "train_spearman_ic":  0.036357,
+                                             "sign":  1
+                                         },
+                      "综合|event_综合_05":  {
+                                             "industry":  "综合",
+                                             "variable":  "event_综合_05",
+                                             "name":  "多元项目投产事件",
+                                             "train_spearman_ic":  0.030418,
+                                             "sign":  1
+                                         },
+                      "综合|event_综合_06":  {
+                                             "industry":  "综合",
+                                             "variable":  "event_综合_06",
+                                             "name":  "政府项目中标事件",
+                                             "train_spearman_ic":  -0.024415,
+                                             "sign":  -1
+                                         },
+                      "综合|event_综合_07":  {
+                                             "industry":  "综合",
+                                             "variable":  "event_综合_07",
+                                             "name":  "产业园运营事件",
+                                             "train_spearman_ic":  0.055448,
+                                             "sign":  1
+                                         },
+                      "综合|event_综合_08":  {
+                                             "industry":  "综合",
+                                             "variable":  "event_综合_08",
+                                             "name":  "混合业务订单事件",
+                                             "train_spearman_ic":  -0.103248,
+                                             "sign":  -1
+                                         },
+                      "建筑材料|cmb_建筑材料_01":  {
+                                               "industry":  "建筑材料",
+                                               "variable":  "cmb_建筑材料_01",
+                                               "name":  "玻璃主力连续收盘价",
+                                               "train_spearman_ic":  -0.145368,
+                                               "sign":  -1
+                                           },
+                      "建筑材料|cmb_建筑材料_02":  {
+                                               "industry":  "建筑材料",
+                                               "variable":  "cmb_建筑材料_02",
+                                               "name":  "沥青主力连续收盘价",
+                                               "train_spearman_ic":  -0.282754,
+                                               "sign":  -1
+                                           },
+                      "建筑材料|cmb_建筑材料_03":  {
+                                               "industry":  "建筑材料",
+                                               "variable":  "cmb_建筑材料_03",
+                                               "name":  "钢化玻璃 · 钢化玻璃产量当期值(万平方米)",
+                                               "train_spearman_ic":  0.292762,
+                                               "sign":  1
+                                           },
+                      "建筑材料|cmb_建筑材料_04":  {
+                                               "industry":  "建筑材料",
+                                               "variable":  "cmb_建筑材料_04",
+                                               "name":  "中空玻璃 · 中空玻璃产量当期值(万平方米)",
+                                               "train_spearman_ic":  0.354913,
+                                               "sign":  1
+                                           },
+                      "建筑材料|cmb_建筑材料_05":  {
+                                               "industry":  "建筑材料",
+                                               "variable":  "cmb_建筑材料_05",
+                                               "name":  "水泥 · 水泥产量当期值(万吨)",
+                                               "train_spearman_ic":  0.198618,
+                                               "sign":  1
+                                           },
+                      "建筑材料|cmb_建筑材料_06":  {
+                                               "industry":  "建筑材料",
+                                               "variable":  "cmb_建筑材料_06",
+                                               "name":  "平板玻璃 · 平板玻璃产量当期值(万重量箱)",
+                                               "train_spearman_ic":  -0.171716,
+                                               "sign":  -1
+                                           },
+                      "建筑材料|event_建筑材料_01":  {
+                                                 "industry":  "建筑材料",
+                                                 "variable":  "event_建筑材料_01",
+                                                 "name":  "水泥错峰供给事件",
+                                                 "train_spearman_ic":  -0.055114,
+                                                 "sign":  -1
+                                             },
+                      "建筑材料|event_建筑材料_02":  {
+                                                 "industry":  "建筑材料",
+                                                 "variable":  "event_建筑材料_02",
+                                                 "name":  "玻璃冷修复产事件",
+                                                 "train_spearman_ic":  0.01961,
+                                                 "sign":  1
+                                             },
+                      "建筑装饰|cmb_建筑装饰_01":  {
+                                               "industry":  "建筑装饰",
+                                               "variable":  "cmb_建筑装饰_01",
+                                               "name":  "建筑业景气指数",
+                                               "train_spearman_ic":  -0.141893,
+                                               "sign":  -1
+                                           },
+                      "建筑装饰|event_建筑装饰_01":  {
+                                                 "industry":  "建筑装饰",
+                                                 "variable":  "event_建筑装饰_01",
+                                                 "name":  "基建项目中标事件",
+                                                 "train_spearman_ic":  -0.187677,
+                                                 "sign":  -1
+                                             },
+                      "建筑装饰|event_建筑装饰_02":  {
+                                                 "industry":  "建筑装饰",
+                                                 "variable":  "event_建筑装饰_02",
+                                                 "name":  "城市更新订单事件",
+                                                 "train_spearman_ic":  -0.184203,
+                                                 "sign":  -1
+                                             },
+                      "建筑装饰|event_建筑装饰_03":  {
+                                                 "industry":  "建筑装饰",
+                                                 "variable":  "event_建筑装饰_03",
+                                                 "name":  "装配式建筑订单事件",
+                                                 "train_spearman_ic":  -0.151055,
+                                                 "sign":  -1
+                                             },
+                      "建筑装饰|event_建筑装饰_04":  {
+                                                 "industry":  "建筑装饰",
+                                                 "variable":  "event_建筑装饰_04",
+                                                 "name":  "海外工程签约事件",
+                                                 "train_spearman_ic":  0.035072,
+                                                 "sign":  1
+                                             },
+                      "建筑装饰|event_建筑装饰_07":  {
+                                                 "industry":  "建筑装饰",
+                                                 "variable":  "event_建筑装饰_07",
+                                                 "name":  "建筑EPC总包事件",
+                                                 "train_spearman_ic":  -0.098945,
+                                                 "sign":  -1
+                                             },
+                      "建筑装饰|event_建筑装饰_08":  {
+                                                 "industry":  "建筑装饰",
+                                                 "variable":  "event_建筑装饰_08",
+                                                 "name":  "专业工程新签订单事件",
+                                                 "train_spearman_ic":  0.087025,
+                                                 "sign":  1
+                                             },
+                      "建筑装饰|event_建筑装饰_09":  {
+                                                 "industry":  "建筑装饰",
+                                                 "variable":  "event_建筑装饰_09",
+                                                 "name":  "建筑施工进度事件",
+                                                 "train_spearman_ic":  0.085942,
+                                                 "sign":  1
+                                             },
+                      "电力设备|cmb_电力设备_01":  {
+                                               "industry":  "电力设备",
+                                               "variable":  "cmb_电力设备_01",
+                                               "name":  "发电机组（发电设备） · 发电机组（发电设备）产量当期值(万千瓦)",
+                                               "train_spearman_ic":  0.373938,
+                                               "sign":  1
+                                           },
+                      "电力设备|cmb_电力设备_02":  {
+                                               "industry":  "电力设备",
+                                               "variable":  "cmb_电力设备_02",
+                                               "name":  "交流电动机 · 交流电动机产量当期值(万千瓦)",
+                                               "train_spearman_ic":  0.008151,
+                                               "sign":  1
+                                           },
+                      "电力设备|cmb_电力设备_03":  {
+                                               "industry":  "电力设备",
+                                               "variable":  "cmb_电力设备_03",
+                                               "name":  "太阳能电池（光伏电池） · 太阳能电池（光伏电池）产量当期值(万千瓦)",
+                                               "train_spearman_ic":  0,
+                                               "sign":  1
+                                           },
+                      "电力设备|event_电力设备_01":  {
+                                                 "industry":  "电力设备",
+                                                 "variable":  "event_电力设备_01",
+                                                 "name":  "光伏招标排产事件",
+                                                 "train_spearman_ic":  0.150743,
+                                                 "sign":  1
+                                             },
+                      "电力设备|event_电力设备_02":  {
+                                                 "industry":  "电力设备",
+                                                 "variable":  "event_电力设备_02",
+                                                 "name":  "风电招标事件",
+                                                 "train_spearman_ic":  0.123078,
+                                                 "sign":  1
+                                             },
+                      "电力设备|event_电力设备_03":  {
+                                                 "industry":  "电力设备",
+                                                 "variable":  "event_电力设备_03",
+                                                 "name":  "储能订单事件",
+                                                 "train_spearman_ic":  -0.077434,
+                                                 "sign":  -1
+                                             },
+                      "电力设备|event_电力设备_04":  {
+                                                 "industry":  "电力设备",
+                                                 "variable":  "event_电力设备_04",
+                                                 "name":  "锂电扩产事件",
+                                                 "train_spearman_ic":  -0.265688,
+                                                 "sign":  -1
+                                             },
+                      "电力设备|event_电力设备_05":  {
+                                                 "industry":  "电力设备",
+                                                 "variable":  "event_电力设备_05",
+                                                 "name":  "电网设备中标事件",
+                                                 "train_spearman_ic":  0.053045,
+                                                 "sign":  1
+                                             },
+                      "国防军工|cmb_国防军工_01":  {
+                                               "industry":  "国防军工",
+                                               "variable":  "cmb_国防军工_01",
+                                               "name":  "铁路机车 · 铁路机车产量当期值(辆)",
+                                               "train_spearman_ic":  0.395822,
+                                               "sign":  1
+                                           },
+                      "国防军工|cmb_国防军工_02":  {
+                                               "industry":  "国防军工",
+                                               "variable":  "cmb_国防军工_02",
+                                               "name":  "民用钢质船舶 · 民用钢质船舶产量当期值(万载重吨)",
+                                               "train_spearman_ic":  0.400222,
+                                               "sign":  1
+                                           },
+                      "国防军工|event_国防军工_01":  {
+                                                 "industry":  "国防军工",
+                                                 "variable":  "event_国防军工_01",
+                                                 "name":  "军品合同事件",
+                                                 "train_spearman_ic":  -0.070172,
+                                                 "sign":  -1
+                                             },
+                      "国防军工|event_国防军工_02":  {
+                                                 "industry":  "国防军工",
+                                                 "variable":  "event_国防军工_02",
+                                                 "name":  "航空装备交付事件",
+                                                 "train_spearman_ic":  -0.046505,
+                                                 "sign":  -1
+                                             },
+                      "国防军工|event_国防军工_03":  {
+                                                 "industry":  "国防军工",
+                                                 "variable":  "event_国防军工_03",
+                                                 "name":  "卫星火箭发射事件",
+                                                 "train_spearman_ic":  -0.293905,
+                                                 "sign":  -1
+                                             },
+                      "国防军工|event_国防军工_04":  {
+                                                 "industry":  "国防军工",
+                                                 "variable":  "event_国防军工_04",
+                                                 "name":  "舰船装备事件",
+                                                 "train_spearman_ic":  -0.018246,
+                                                 "sign":  -1
+                                             },
+                      "国防军工|event_国防军工_05":  {
+                                                 "industry":  "国防军工",
+                                                 "variable":  "event_国防军工_05",
+                                                 "name":  "军工重组事件",
+                                                 "train_spearman_ic":  0.251451,
+                                                 "sign":  1
+                                             },
+                      "国防军工|event_国防军工_06":  {
+                                                 "industry":  "国防军工",
+                                                 "variable":  "event_国防军工_06",
+                                                 "name":  "雷达导弹电子事件",
+                                                 "train_spearman_ic":  0.115354,
+                                                 "sign":  1
+                                             },
+                      "计算机|cmb_计算机_01":  {
+                                             "industry":  "计算机",
+                                             "variable":  "cmb_计算机_01",
+                                             "name":  "微型计算机设备 · 微型计算机设备产量当期值(万台)",
+                                             "train_spearman_ic":  0.31756,
+                                             "sign":  1
+                                         },
+                      "计算机|event_计算机_01":  {
+                                               "industry":  "计算机",
+                                               "variable":  "event_计算机_01",
+                                               "name":  "算力服务器项目事件",
+                                               "train_spearman_ic":  0.131831,
+                                               "sign":  1
+                                           },
+                      "计算机|event_计算机_02":  {
+                                               "industry":  "计算机",
+                                               "variable":  "event_计算机_02",
+                                               "name":  "政务信息化事件",
+                                               "train_spearman_ic":  0.19928,
+                                               "sign":  1
+                                           },
+                      "计算机|event_计算机_03":  {
+                                               "industry":  "计算机",
+                                               "variable":  "event_计算机_03",
+                                               "name":  "信创安全订单事件",
+                                               "train_spearman_ic":  0.072989,
+                                               "sign":  1
+                                           },
+                      "计算机|event_计算机_04":  {
+                                               "industry":  "计算机",
+                                               "variable":  "event_计算机_04",
+                                               "name":  "人工智能项目事件",
+                                               "train_spearman_ic":  -0.075483,
+                                               "sign":  -1
+                                           },
+                      "计算机|event_计算机_05":  {
+                                               "industry":  "计算机",
+                                               "variable":  "event_计算机_05",
+                                               "name":  "国产软件事件",
+                                               "train_spearman_ic":  -0.002454,
+                                               "sign":  -1
+                                           },
+                      "计算机|event_计算机_06":  {
+                                               "industry":  "计算机",
+                                               "variable":  "event_计算机_06",
+                                               "name":  "工业软件实施事件",
+                                               "train_spearman_ic":  0,
+                                               "sign":  1
+                                           },
+                      "计算机|event_计算机_07":  {
+                                               "industry":  "计算机",
+                                               "variable":  "event_计算机_07",
+                                               "name":  "数据中心项目事件",
+                                               "train_spearman_ic":  0.050267,
+                                               "sign":  1
+                                           },
+                      "传媒|cmb_传媒_01":  {
+                                           "industry":  "传媒",
+                                           "variable":  "cmb_传媒_01",
+                                           "name":  "文化办公用品 · 文化办公用品类商品零售类值当期值(亿元)",
+                                           "train_spearman_ic":  0.234497,
+                                           "sign":  1
+                                       },
+                      "传媒|cmb_传媒_02":  {
+                                           "industry":  "传媒",
+                                           "variable":  "cmb_传媒_02",
+                                           "name":  "书报杂志 · 书报杂志类商品零售类值当期值(亿元)",
+                                           "train_spearman_ic":  0.328569,
+                                           "sign":  1
+                                       },
+                      "传媒|cmb_传媒_03":  {
+                                           "industry":  "传媒",
+                                           "variable":  "cmb_传媒_03",
+                                           "name":  "邮政业务量 · 订销报纸份数 · 当期值(万份)",
+                                           "train_spearman_ic":  0.052692,
+                                           "sign":  1
+                                       },
+                      "传媒|cmb_传媒_04":  {
+                                           "industry":  "传媒",
+                                           "variable":  "cmb_传媒_04",
+                                           "name":  "邮政业务量 · 订销杂志份数 · 当期值(万份)",
+                                           "train_spearman_ic":  -0.100059,
+                                           "sign":  -1
+                                       },
+                      "传媒|event_传媒_01":  {
+                                             "industry":  "传媒",
+                                             "variable":  "event_传媒_01",
+                                             "name":  "影视项目定档事件",
+                                             "train_spearman_ic":  0.032699,
+                                             "sign":  1
+                                         },
+                      "传媒|event_传媒_02":  {
+                                             "industry":  "传媒",
+                                             "variable":  "event_传媒_02",
+                                             "name":  "游戏版号与上线事件",
+                                             "train_spearman_ic":  0,
+                                             "sign":  1
+                                         },
+                      "传媒|event_传媒_03":  {
+                                             "industry":  "传媒",
+                                             "variable":  "event_传媒_03",
+                                             "name":  "广告投放回暖事件",
+                                             "train_spearman_ic":  0.086174,
+                                             "sign":  1
+                                         },
+                      "传媒|event_传媒_04":  {
+                                             "industry":  "传媒",
+                                             "variable":  "event_传媒_04",
+                                             "name":  "院线票房与上座事件",
+                                             "train_spearman_ic":  -0.105758,
+                                             "sign":  -1
+                                         },
+                      "通信|cmb_通信_01":  {
+                                           "industry":  "通信",
+                                           "variable":  "cmb_通信_01",
+                                           "name":  "光缆 · 光缆产量当期值(万芯千米)",
+                                           "train_spearman_ic":  -0.131049,
+                                           "sign":  -1
+                                       },
+                      "通信|cmb_通信_02":  {
+                                           "industry":  "通信",
+                                           "variable":  "cmb_通信_02",
+                                           "name":  "邮电业务总量 · 电信业务总量 · 当期值(亿元)",
+                                           "train_spearman_ic":  -0.077051,
+                                           "sign":  -1
+                                       },
+                      "通信|cmb_通信_03":  {
+                                           "industry":  "通信",
+                                           "variable":  "cmb_通信_03",
+                                           "name":  "电信业务量 · 移动电话通话时长 · 当期值(万分钟)",
+                                           "train_spearman_ic":  -0.248083,
+                                           "sign":  -1
+                                       },
+                      "通信|cmb_通信_04":  {
+                                           "industry":  "通信",
+                                           "variable":  "cmb_通信_04",
+                                           "name":  "电信业务量 · 固定电话用户数 · 期末值(万户)",
+                                           "train_spearman_ic":  -0.103057,
+                                           "sign":  -1
+                                       },
+                      "通信|cmb_通信_05":  {
+                                           "industry":  "通信",
+                                           "variable":  "cmb_通信_05",
+                                           "name":  "电信业务量 · 移动电话用户 · 期末值(万户)",
+                                           "train_spearman_ic":  -0.052481,
+                                           "sign":  -1
+                                       },
+                      "通信|cmb_通信_06":  {
+                                           "industry":  "通信",
+                                           "variable":  "cmb_通信_06",
+                                           "name":  "电信业务量 · 移动短信业务量 · 当期值(亿条)",
+                                           "train_spearman_ic":  -0.155167,
+                                           "sign":  -1
+                                       },
+                      "通信|cmb_通信_07":  {
+                                           "industry":  "通信",
+                                           "variable":  "cmb_通信_07",
+                                           "name":  "电信业务量 · 互联网宽带接入用户 · 期末值(万户)",
+                                           "train_spearman_ic":  -0.378151,
+                                           "sign":  -1
+                                       },
+                      "通信|event_通信_01":  {
+                                             "industry":  "通信",
+                                             "variable":  "event_通信_01",
+                                             "name":  "5G基站建设与集采事件",
+                                             "train_spearman_ic":  0.152696,
+                                             "sign":  1
+                                         },
+                      "银行|cmb_银行_01":  {
+                                           "industry":  "银行",
+                                           "variable":  "cmb_银行_01",
+                                           "name":  "新增人民币贷款当月",
+                                           "train_spearman_ic":  0.107429,
+                                           "sign":  1
+                                       },
+                      "银行|cmb_银行_02":  {
+                                           "industry":  "银行",
+                                           "variable":  "cmb_银行_02",
+                                           "name":  "M2数量",
+                                           "train_spearman_ic":  0.056184,
+                                           "sign":  1
+                                       },
+                      "银行|cmb_银行_03":  {
+                                           "industry":  "银行",
+                                           "variable":  "cmb_银行_03",
+                                           "name":  "M1数量",
+                                           "train_spearman_ic":  0.204855,
+                                           "sign":  1
+                                       },
+                      "银行|cmb_银行_04":  {
+                                           "industry":  "银行",
+                                           "variable":  "cmb_银行_04",
+                                           "name":  "LPR1年利率",
+                                           "train_spearman_ic":  0,
+                                           "sign":  1
+                                       },
+                      "银行|cmb_银行_05":  {
+                                           "industry":  "银行",
+                                           "variable":  "cmb_银行_05",
+                                           "name":  "Shibor隔夜利率",
+                                           "train_spearman_ic":  0,
+                                           "sign":  1
+                                       },
+                      "银行|cmb_银行_06":  {
+                                           "industry":  "银行",
+                                           "variable":  "cmb_银行_06",
+                                           "name":  "Shibor1周利率",
+                                           "train_spearman_ic":  0,
+                                           "sign":  1
+                                       },
+                      "银行|cmb_银行_07":  {
+                                           "industry":  "银行",
+                                           "variable":  "cmb_银行_07",
+                                           "name":  "Shibor3月利率",
+                                           "train_spearman_ic":  0,
+                                           "sign":  1
+                                       },
+                      "银行|cmb_银行_08":  {
+                                           "industry":  "银行",
+                                           "variable":  "cmb_银行_08",
+                                           "name":  "Shibor6月利率",
+                                           "train_spearman_ic":  0,
+                                           "sign":  1
+                                       },
+                      "非银金融|cmb_非银金融_01":  {
+                                               "industry":  "非银金融",
+                                               "variable":  "cmb_非银金融_01",
+                                               "name":  "上海融资余额",
+                                               "train_spearman_ic":  -0.252599,
+                                               "sign":  -1
+                                           },
+                      "非银金融|cmb_非银金融_02":  {
+                                               "industry":  "非银金融",
+                                               "variable":  "cmb_非银金融_02",
+                                               "name":  "深圳融资余额",
+                                               "train_spearman_ic":  -0.074617,
+                                               "sign":  -1
+                                           },
+                      "非银金融|cmb_非银金融_03":  {
+                                               "industry":  "非银金融",
+                                               "variable":  "cmb_非银金融_03",
+                                               "name":  "原保险保费规模",
+                                               "train_spearman_ic":  0.364542,
+                                               "sign":  1
+                                           },
+                      "非银金融|event_非银金融_01":  {
+                                                 "industry":  "非银金融",
+                                                 "variable":  "event_非银金融_01",
+                                                 "name":  "券商承销业务事件",
+                                                 "train_spearman_ic":  0.042856,
+                                                 "sign":  1
+                                             },
+                      "非银金融|event_非银金融_02":  {
+                                                 "industry":  "非银金融",
+                                                 "variable":  "event_非银金融_02",
+                                                 "name":  "权益基金发行事件",
+                                                 "train_spearman_ic":  -0.038316,
+                                                 "sign":  -1
+                                             },
+                      "非银金融|event_非银金融_03":  {
+                                                 "industry":  "非银金融",
+                                                 "variable":  "event_非银金融_03",
+                                                 "name":  "保险产品赔付事件",
+                                                 "train_spearman_ic":  0.181157,
+                                                 "sign":  1
+                                             },
+                      "非银金融|event_非银金融_04":  {
+                                                 "industry":  "非银金融",
+                                                 "variable":  "event_非银金融_04",
+                                                 "name":  "期货品种成交事件",
+                                                 "train_spearman_ic":  0.088139,
+                                                 "sign":  1
+                                             },
+                      "非银金融|event_非银金融_05":  {
+                                                 "industry":  "非银金融",
+                                                 "variable":  "event_非银金融_05",
+                                                 "name":  "资管产品备案事件",
+                                                 "train_spearman_ic":  -0.043327,
+                                                 "sign":  -1
+                                             },
+                      "汽车|cmb_汽车_01":  {
+                                           "industry":  "汽车",
+                                           "variable":  "cmb_汽车_01",
+                                           "name":  "基本型乘用车（轿车） · 基本型乘用车（轿车）产量当期值(万辆)",
+                                           "train_spearman_ic":  0.206242,
+                                           "sign":  1
+                                       },
+                      "汽车|cmb_汽车_02":  {
+                                           "industry":  "汽车",
+                                           "variable":  "cmb_汽车_02",
+                                           "name":  "汽车 · 汽车产量当期值(万辆)",
+                                           "train_spearman_ic":  0.221839,
+                                           "sign":  1
+                                       },
+                      "汽车|cmb_汽车_03":  {
+                                           "industry":  "汽车",
+                                           "variable":  "cmb_汽车_03",
+                                           "name":  "汽车销量车企 · 一汽大众",
+                                           "train_spearman_ic":  -0.152877,
+                                           "sign":  -1
+                                       },
+                      "汽车|cmb_汽车_04":  {
+                                           "industry":  "汽车",
+                                           "variable":  "cmb_汽车_04",
+                                           "name":  "汽车销量车企 · 比亚迪汽车",
+                                           "train_spearman_ic":  -0.236976,
+                                           "sign":  -1
+                                       },
+                      "汽车|cmb_汽车_05":  {
+                                           "industry":  "汽车",
+                                           "variable":  "cmb_汽车_05",
+                                           "name":  "汽车销量车企 · 吉利汽车",
+                                           "train_spearman_ic":  0.223045,
+                                           "sign":  1
+                                       },
+                      "汽车|cmb_汽车_06":  {
+                                           "industry":  "汽车",
+                                           "variable":  "cmb_汽车_06",
+                                           "name":  "汽车销量车企 · 长安汽车",
+                                           "train_spearman_ic":  -0.113951,
+                                           "sign":  -1
+                                       },
+                      "汽车|event_汽车_01":  {
+                                             "industry":  "汽车",
+                                             "variable":  "event_汽车_01",
+                                             "name":  "新能源汽车交付事件",
+                                             "train_spearman_ic":  0.042425,
+                                             "sign":  1
+                                         },
+                      "汽车|event_汽车_02":  {
+                                             "industry":  "汽车",
+                                             "variable":  "event_汽车_02",
+                                             "name":  "汽车出口订单事件",
+                                             "train_spearman_ic":  0,
+                                             "sign":  1
+                                         },
+                      "机械设备|cmb_机械设备_01":  {
+                                               "industry":  "机械设备",
+                                               "variable":  "cmb_机械设备_01",
+                                               "name":  "工业锅炉 · 工业锅炉产量当期值(蒸发量吨)",
+                                               "train_spearman_ic":  0.202409,
+                                               "sign":  1
+                                           },
+                      "机械设备|cmb_机械设备_02":  {
+                                               "industry":  "机械设备",
+                                               "variable":  "cmb_机械设备_02",
+                                               "name":  "金属切削机床 · 金属切削机床产量当期值(万台)",
+                                               "train_spearman_ic":  -0.066387,
+                                               "sign":  -1
+                                           },
+                      "机械设备|event_机械设备_01":  {
+                                                 "industry":  "机械设备",
+                                                 "variable":  "event_机械设备_01",
+                                                 "name":  "工业机器人订单事件",
+                                                 "train_spearman_ic":  -0.02088,
+                                                 "sign":  -1
+                                             },
+                      "机械设备|event_机械设备_02":  {
+                                                 "industry":  "机械设备",
+                                                 "variable":  "event_机械设备_02",
+                                                 "name":  "机床订单交付事件",
+                                                 "train_spearman_ic":  0.050812,
+                                                 "sign":  1
+                                             },
+                      "机械设备|event_机械设备_03":  {
+                                                 "industry":  "机械设备",
+                                                 "variable":  "event_机械设备_03",
+                                                 "name":  "挖掘机销量出口事件",
+                                                 "train_spearman_ic":  0.131307,
+                                                 "sign":  1
+                                             },
+                      "机械设备|event_机械设备_04":  {
+                                                 "industry":  "机械设备",
+                                                 "variable":  "event_机械设备_04",
+                                                 "name":  "电梯订单中标事件",
+                                                 "train_spearman_ic":  -0.18116,
+                                                 "sign":  -1
+                                             },
+                      "机械设备|event_机械设备_05":  {
+                                                 "industry":  "机械设备",
+                                                 "variable":  "event_机械设备_05",
+                                                 "name":  "设备更新改造事件",
+                                                 "train_spearman_ic":  0,
+                                                 "sign":  1
+                                             },
+                      "机械设备|event_机械设备_06":  {
+                                                 "industry":  "机械设备",
+                                                 "variable":  "event_机械设备_06",
+                                                 "name":  "专用设备出口事件",
+                                                 "train_spearman_ic":  -0.00824,
+                                                 "sign":  -1
+                                             },
+                      "煤炭|cmb_煤炭_01":  {
+                                           "industry":  "煤炭",
+                                           "variable":  "cmb_煤炭_01",
+                                           "name":  "焦煤主力连续收盘价",
+                                           "train_spearman_ic":  0.017801,
+                                           "sign":  1
+                                       },
+                      "煤炭|cmb_煤炭_02":  {
+                                           "industry":  "煤炭",
+                                           "variable":  "cmb_煤炭_02",
+                                           "name":  "焦炭主力连续收盘价",
+                                           "train_spearman_ic":  -0.051837,
+                                           "sign":  -1
+                                       },
+                      "煤炭|cmb_煤炭_03":  {
+                                           "industry":  "煤炭",
+                                           "variable":  "cmb_煤炭_03",
+                                           "name":  "焦炭指数综合",
+                                           "train_spearman_ic":  0.078724,
+                                           "sign":  1
+                                       },
+                      "煤炭|event_煤炭_01":  {
+                                             "industry":  "煤炭",
+                                             "variable":  "event_煤炭_01",
+                                             "name":  "煤矿复产停产事件",
+                                             "train_spearman_ic":  -0.020464,
+                                             "sign":  -1
+                                         },
+                      "煤炭|event_煤炭_02":  {
+                                             "industry":  "煤炭",
+                                             "variable":  "event_煤炭_02",
+                                             "name":  "动力煤长协事件",
+                                             "train_spearman_ic":  0.021474,
+                                             "sign":  1
+                                         },
+                      "煤炭|event_煤炭_03":  {
+                                             "industry":  "煤炭",
+                                             "variable":  "event_煤炭_03",
+                                             "name":  "煤炭增产保供事件",
+                                             "train_spearman_ic":  -0.137662,
+                                             "sign":  -1
+                                         },
+                      "煤炭|event_煤炭_04":  {
+                                             "industry":  "煤炭",
+                                             "variable":  "event_煤炭_04",
+                                             "name":  "焦煤进口通关事件",
+                                             "train_spearman_ic":  -0.051881,
+                                             "sign":  -1
+                                         },
+                      "煤炭|event_煤炭_05":  {
+                                             "industry":  "煤炭",
+                                             "variable":  "event_煤炭_05",
+                                             "name":  "煤矿安全检查事件",
+                                             "train_spearman_ic":  -0.020464,
+                                             "sign":  -1
+                                         },
+                      "石油石化|cmb_石油石化_01":  {
+                                               "industry":  "石油石化",
+                                               "variable":  "cmb_石油石化_01",
+                                               "name":  "美原油指数CONC",
+                                               "train_spearman_ic":  0,
+                                               "sign":  1
+                                           },
+                      "石油石化|cmb_石油石化_02":  {
+                                               "industry":  "石油石化",
+                                               "variable":  "cmb_石油石化_02",
+                                               "name":  "原油运输指数BDTI",
+                                               "train_spearman_ic":  0,
+                                               "sign":  1
+                                           },
+                      "石油石化|cmb_石油石化_03":  {
+                                               "industry":  "石油石化",
+                                               "variable":  "cmb_石油石化_03",
+                                               "name":  "成品油调价 · 汽油价格",
+                                               "train_spearman_ic":  0,
+                                               "sign":  1
+                                           },
+                      "石油石化|cmb_石油石化_04":  {
+                                               "industry":  "石油石化",
+                                               "variable":  "cmb_石油石化_04",
+                                               "name":  "成品油调价 · 柴油价格",
+                                               "train_spearman_ic":  0,
+                                               "sign":  1
+                                           },
+                      "石油石化|cmb_石油石化_05":  {
+                                               "industry":  "石油石化",
+                                               "variable":  "cmb_石油石化_05",
+                                               "name":  "石油及制品 · 石油及制品类商品零售类值当期值(亿元)",
+                                               "train_spearman_ic":  0,
+                                               "sign":  1
+                                           },
+                      "石油石化|cmb_石油石化_06":  {
+                                               "industry":  "石油石化",
+                                               "variable":  "cmb_石油石化_06",
+                                               "name":  "乙烯 · 乙烯产量当期值(万吨)",
+                                               "train_spearman_ic":  0,
+                                               "sign":  1
+                                           },
+                      "石油石化|event_石油石化_02":  {
+                                                 "industry":  "石油石化",
+                                                 "variable":  "event_石油石化_02",
+                                                 "name":  "油气田增储上产事件",
+                                                 "train_spearman_ic":  0,
+                                                 "sign":  1
+                                             },
+                      "石油石化|event_石油石化_03":  {
+                                                 "industry":  "石油石化",
+                                                 "variable":  "event_石油石化_03",
+                                                 "name":  "LNG接收站到港事件",
+                                                 "train_spearman_ic":  0,
+                                                 "sign":  1
+                                             },
+                      "环保|event_环保_01":  {
+                                             "industry":  "环保",
+                                             "variable":  "event_环保_01",
+                                             "name":  "污水处理项目事件",
+                                             "train_spearman_ic":  0,
+                                             "sign":  1
+                                         },
+                      "环保|event_环保_02":  {
+                                             "industry":  "环保",
+                                             "variable":  "event_环保_02",
+                                             "name":  "垃圾焚烧运营事件",
+                                             "train_spearman_ic":  0,
+                                             "sign":  1
+                                         },
+                      "环保|event_环保_03":  {
+                                             "industry":  "环保",
+                                             "variable":  "event_环保_03",
+                                             "name":  "烟气脱硫脱硝事件",
+                                             "train_spearman_ic":  0,
+                                             "sign":  1
+                                         },
+                      "环保|event_环保_04":  {
+                                             "industry":  "环保",
+                                             "variable":  "event_环保_04",
+                                             "name":  "环保工程中标事件",
+                                             "train_spearman_ic":  0,
+                                             "sign":  1
+                                         },
+                      "环保|event_环保_05":  {
+                                             "industry":  "环保",
+                                             "variable":  "event_环保_05",
+                                             "name":  "再生资源事件",
+                                             "train_spearman_ic":  0,
+                                             "sign":  1
+                                         },
+                      "环保|event_环保_06":  {
+                                             "industry":  "环保",
+                                             "variable":  "event_环保_06",
+                                             "name":  "碳监测管理事件",
+                                             "train_spearman_ic":  0,
+                                             "sign":  1
+                                         },
+                      "环保|event_环保_07":  {
+                                             "industry":  "环保",
+                                             "variable":  "event_环保_07",
+                                             "name":  "固废危废处置事件",
+                                             "train_spearman_ic":  0,
+                                             "sign":  1
+                                         },
+                      "环保|event_环保_08":  {
+                                             "industry":  "环保",
+                                             "variable":  "event_环保_08",
+                                             "name":  "环境监测设备事件",
+                                             "train_spearman_ic":  0,
+                                             "sign":  1
+                                         },
+                      "美容护理|cmb_美容护理_01":  {
+                                               "industry":  "美容护理",
+                                               "variable":  "cmb_美容护理_01",
+                                               "name":  "化妆品 · 化妆品类商品零售类值当期值(亿元)",
+                                               "train_spearman_ic":  0,
+                                               "sign":  1
+                                           },
+                      "美容护理|cmb_美容护理_02":  {
+                                               "industry":  "美容护理",
+                                               "variable":  "cmb_美容护理_02",
+                                               "name":  "金银珠宝 · 金银珠宝类商品零售类值当期值(亿元)",
+                                               "train_spearman_ic":  0,
+                                               "sign":  1
+                                           },
+                      "美容护理|event_美容护理_01":  {
+                                                 "industry":  "美容护理",
+                                                 "variable":  "event_美容护理_01",
+                                                 "name":  "化妆品备案注册事件",
+                                                 "train_spearman_ic":  0,
+                                                 "sign":  1
+                                             },
+                      "美容护理|event_美容护理_02":  {
+                                                 "industry":  "美容护理",
+                                                 "variable":  "event_美容护理_02",
+                                                 "name":  "美妆新品发布事件",
+                                                 "train_spearman_ic":  0,
+                                                 "sign":  1
+                                             },
+                      "美容护理|event_美容护理_03":  {
+                                                 "industry":  "美容护理",
+                                                 "variable":  "event_美容护理_03",
+                                                 "name":  "美妆直播电商事件",
+                                                 "train_spearman_ic":  0,
+                                                 "sign":  1
+                                             },
+                      "美容护理|event_美容护理_04":  {
+                                                 "industry":  "美容护理",
+                                                 "variable":  "event_美容护理_04",
+                                                 "name":  "美妆门店运营事件",
+                                                 "train_spearman_ic":  0,
+                                                 "sign":  1
+                                             },
+                      "美容护理|event_美容护理_05":  {
+                                                 "industry":  "美容护理",
+                                                 "variable":  "event_美容护理_05",
+                                                 "name":  "医疗美容服务事件",
+                                                 "train_spearman_ic":  0,
+                                                 "sign":  1
+                                             },
+                      "美容护理|event_美容护理_06":  {
+                                                 "industry":  "美容护理",
+                                                 "variable":  "event_美容护理_06",
+                                                 "name":  "护肤原料研发事件",
+                                                 "train_spearman_ic":  0,
+                                                 "sign":  1
+                                             }
+                  }
+}

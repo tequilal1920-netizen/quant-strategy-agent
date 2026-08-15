@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import re
+import sqlite3
+
+import pandas as pd
 
 import engine as worker
 import event_cache as release
@@ -21,6 +24,49 @@ GAP_INDUSTRIES = {"纺织服饰", "公用事业", "商贸零售", "社会服务"
 
 _original_select = worker._select_direct_contracts
 _original_event_rows = worker._event_rows
+_GAP_CACHE: pd.DataFrame | None = None
+_GAP_CACHE_SIGNATURE: tuple[str, ...] | None = None
+
+
+def _prefetch_gap_events() -> pd.DataFrame:
+    """Read every dynamic gap industry in one PIT join without writing a cache."""
+    global _GAP_CACHE, _GAP_CACHE_SIGNATURE
+    industries = tuple(sorted(GAP_INDUSTRIES))
+    if _GAP_CACHE is not None and _GAP_CACHE_SIGNATURE == industries:
+        return _GAP_CACHE
+    keywords = sorted({
+        word
+        for industry in industries
+        for _, words in worker.EVENT_BLUEPRINTS.get(industry, [])
+        for word in words
+    })
+    if not industries or not keywords:
+        _GAP_CACHE = pd.DataFrame(columns=["industry_name", "publish_date", "news_id", "headline"])
+        _GAP_CACHE_SIGNATURE = industries
+        return _GAP_CACHE
+    industry_marks = ",".join("?" for _ in industries)
+    keyword_clause = " OR ".join("n.headline LIKE ?" for _ in keywords)
+    exclusion_clause = " AND ".join("n.headline NOT LIKE ?" for _ in worker.EXCLUDED_NEWS)
+    sql = f"""
+        SELECT DISTINCT m.industry_name, n.publish_date, n.news_id, n.headline
+        FROM news_event_daily n
+        JOIN sw_l1_industry_daily m
+          ON n.subject_code = m.ts_code
+         AND n.publish_date >= m.start_date
+         AND n.publish_date <= COALESCE(m.end_date, '99991231')
+        WHERE n.subject_type = 'stock'
+          AND m.industry_name IN ({industry_marks})
+          AND n.publish_date BETWEEN '20120101' AND '20991231'
+          AND ({keyword_clause})
+          AND {exclusion_clause}
+    """
+    params = list(industries) + [f"%{word}%" for word in keywords] + [f"%{word}%" for word in worker.EXCLUDED_NEWS]
+    uri = f"file:{worker.WAREHOUSE.as_posix()}?mode=ro"
+    with sqlite3.connect(uri, uri=True) as connection:
+        connection.execute("PRAGMA query_only=ON")
+        _GAP_CACHE = pd.read_sql_query(sql, connection, params=params)
+    _GAP_CACHE_SIGNATURE = industries
+    return _GAP_CACHE
 
 
 def _select(frames):
@@ -33,7 +79,11 @@ def _select(frames):
 
 def _event_rows(industry, blueprints):
     if industry in GAP_INDUSTRIES:
-        return _original_event_rows(industry, blueprints)
+        frame = _prefetch_gap_events()
+        return frame.loc[
+            frame["industry_name"].eq(industry),
+            ["publish_date", "news_id", "headline"],
+        ].copy()
     return release._event_rows(industry, blueprints)
 
 

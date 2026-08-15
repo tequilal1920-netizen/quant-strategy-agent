@@ -1,4 +1,4 @@
-"""V4.7 research release with common-window selection and report momentum."""
+"""V4.9 research release with causal prosperity acceleration diagnostics."""
 
 from __future__ import annotations
 
@@ -7,10 +7,13 @@ import pandas as pd
 
 import engine as worker
 import event_overrides as release4
+import six_dimension_model as six
 
 
 _original_feature = worker._feature
 _original_candidate_scores = worker._candidate_scores
+_original_frequency_payload = worker._frequency_payload
+_original_build = worker.build
 
 
 def _rank(frame: pd.DataFrame) -> pd.DataFrame:
@@ -25,6 +28,24 @@ def _mean_available(frames: list[pd.DataFrame]) -> pd.DataFrame:
         numerator = numerator.add(frame.fillna(0.0), fill_value=0.0)
         denominator = denominator.add(frame.notna().astype(float), fill_value=0.0)
     return numerator.div(denominator.replace(0.0, np.nan))
+
+def _cross_sectional_residual_rank(
+    signal: pd.DataFrame,
+    nuisance: pd.DataFrame,
+) -> pd.DataFrame:
+    """Remove the current cross-section's linear nuisance exposure causally."""
+    y = signal.astype(float)
+    x = nuisance.reindex_like(y).astype(float)
+    valid = y.notna() & x.notna()
+    x_centered = x.sub(x.where(valid).mean(axis=1), axis=0).where(valid)
+    y_centered = y.sub(y.where(valid).mean(axis=1), axis=0).where(valid)
+    covariance = x_centered.mul(y_centered).sum(axis=1, min_count=12)
+    variance = x_centered.pow(2).sum(axis=1, min_count=12).replace(0.0, np.nan)
+    beta = covariance.div(variance)
+    residual = y.sub(x_centered.mul(beta, axis=0)).where(valid)
+    return _rank(residual)
+
+
 
 
 def _directional_path_efficiency(close: pd.DataFrame, window: int) -> pd.DataFrame:
@@ -219,7 +240,7 @@ def _candidate_scores(contracts, aligned, diagnostics, index):
     direct_dominant = pd.DataFrame(index=index, columns=list(worker.INDUSTRY_CODES), dtype=float)
     for industry, items in contracts.items():
         frame = pd.DataFrame(aligned[industry])
-        signs = pd.Series({item.variable: (1.0 if diagnostics[industry].get(item.variable, 0.0) >= 0 else -1.0) for item in items})
+        signs = pd.Series({item.variable: worker._champion_sign(industry, item.variable) for item in items})
         weights = pd.Series({item.variable: (1.0 if item.source_kind == "direct" else 0.20) for item in items})
         signed = frame.mul(signs, axis=1)
         numerator = signed.mul(weights, axis=1).sum(axis=1, min_count=4)
@@ -273,7 +294,164 @@ def _candidate_scores(contracts, aligned, diagnostics, index):
         outputs[
             "C22_monthly_report_enhanced_momentum_top5"
         ] = _rank(report_composite)
+        # Prosperity level and marginal acceleration must agree with price
+        # confirmation. Crowding is removed continuously rather than by a
+        # hard threshold. The already-observed test interval makes this
+        # architecture diagnostic-only.
+        acceleration = _rank(
+            monthly_business.rolling(21, min_periods=8).mean().sub(
+                monthly_business.shift(21).rolling(21, min_periods=8).mean()
+            )
+        )
+        prosperity = _mean_available([monthly_business, acceleration])
+        confirmation = _mean_available(
+            [price_signals["monthly"], enhanced["regime_adjusted_rank"]]
+        )
+        confirmed_prosperity = _mean_available(
+            [_rank(prosperity), _rank(confirmation)]
+        )
+        outputs[
+            "C23_monthly_post_test_diagnostic_acceleration_confirmed_"
+            "crowding_residual_top5_buffered"
+        ] = _cross_sectional_residual_rank(
+            confirmed_prosperity, price_signals["crowding_percentile"]
+        )
+    outputs.update(
+        six.build_candidates(
+            outputs, close, worker.INDUSTRY_CODES, worker.SPLITS
+        )
+    )
+    if close is not None and not close.empty:
+        price_signals = _price_rotation_scores(close, index)
+        enhanced = _enhanced_momentum_scores(close, index)
+        aligned_close = close.reindex(index).ffill()
+        returns = aligned_close.pct_change(fill_method=None)
+        low_vol_63 = _rank(-returns.rolling(63, min_periods=30).std(ddof=0))
+        low_vol_126 = _rank(-returns.rolling(126, min_periods=63).std(ddof=0))
+        low_crowding = _rank(1.0 - price_signals["crowding_percentile"])
+        monthly_business = _rank(
+            outputs["C7_consensus"].rolling(21, min_periods=8).mean()
+        )
+        weekly_business = _rank(
+            outputs["C7_consensus"].rolling(5, min_periods=3).mean()
+        )
+        state = six.get_state()
+
+        def dimension_frame(
+            frequency: str,
+            name: str,
+            fallback: pd.DataFrame,
+        ) -> pd.DataFrame:
+            if state is None:
+                return fallback
+            frame = state.dimensions.get(frequency, {}).get(name)
+            if frame is None:
+                return fallback
+            return frame.reindex(index).reindex(columns=fallback.columns)
+
+        monthly_prosperity = dimension_frame("monthly", "prosperity", monthly_business)
+        monthly_fundamental = dimension_frame("monthly", "fundamental", monthly_business)
+        monthly_technical = dimension_frame("monthly", "technical", price_signals["monthly"])
+        monthly_valuation = dimension_frame("monthly", "valuation", monthly_business)
+        monthly_funds = dimension_frame("monthly", "funds", monthly_business)
+        monthly_crowding = dimension_frame("monthly", "crowding", 1.0 - low_crowding)
+        monthly_anti_crowding = _rank(1.0 - monthly_crowding)
+        monthly_trend = _mean_available([
+            monthly_technical,
+            price_signals["monthly"],
+            enhanced["regime_adjusted_rank"],
+        ])
+        monthly_quality = _mean_available([
+            monthly_fundamental,
+            monthly_valuation,
+            monthly_funds,
+        ])
+        monthly_canslim = _mean_available([
+            monthly_prosperity,
+            monthly_quality,
+            monthly_trend,
+            monthly_anti_crowding,
+        ])
+        monthly_super = _mean_available([
+            monthly_canslim,
+            low_vol_63,
+            low_vol_126,
+            low_crowding,
+        ])
+        monthly_defensive = _mean_available([
+            monthly_prosperity,
+            monthly_fundamental,
+            monthly_valuation,
+            monthly_anti_crowding,
+            low_vol_126,
+        ])
+        outputs[
+            "C30_monthly_six_dimension_canslim_top5_"
+            "risk_weighted_buffered_cash25"
+        ] = _rank(monthly_canslim)
+        outputs[
+            "C31_monthly_six_dimension_super_weight_top7_"
+            "risk_weighted_buffered_cash25"
+        ] = _rank(monthly_super)
+        outputs[
+            "C32_monthly_six_dimension_defensive_top5_"
+            "risk_weighted_buffered_cash50"
+        ] = _rank(monthly_defensive)
+
+        weekly_prosperity = dimension_frame("weekly", "prosperity", weekly_business)
+        weekly_technical = dimension_frame("weekly", "technical", price_signals["weekly"])
+        weekly_funds = dimension_frame("weekly", "funds", weekly_business)
+        weekly_crowding = dimension_frame("weekly", "crowding", 1.0 - low_crowding)
+        weekly_anti_crowding = _rank(1.0 - weekly_crowding)
+        weekly_fast = _mean_available([
+            weekly_prosperity,
+            weekly_technical,
+            weekly_funds,
+            price_signals["weekly"],
+            weekly_anti_crowding,
+            low_vol_63,
+        ])
+        weekly_defensive = _mean_available([
+            weekly_business,
+            weekly_funds,
+            weekly_anti_crowding,
+            low_vol_63,
+            low_vol_126,
+        ])
+        outputs[
+            "C33_weekly_six_dimension_fast_top5_"
+            "risk_weighted_buffered_cash25"
+        ] = _rank(weekly_fast)
+        outputs[
+            "C34_weekly_six_dimension_defensive_top5_"
+            "risk_weighted_buffered_cash50"
+        ] = _rank(weekly_defensive)
     return outputs
+
+
+def _frequency_payload(close, scores, frequency):
+    payload, score = _original_frequency_payload(close, scores, frequency)
+    return six.enrich_frequency_payload(payload, frequency), score
+
+
+def _build(output):
+    preserved_style = {}
+    if output.exists():
+        try:
+            preserved_style = worker._read_json(output).get("style", {})
+        except (OSError, ValueError):
+            preserved_style = {}
+    snapshot = _original_build(output)
+    if preserved_style:
+        snapshot["style"] = preserved_style
+    snapshot = six.enrich_snapshot(snapshot)
+    temporary = output.with_suffix(output.suffix + ".tmp")
+    temporary.write_text(
+        worker.json.dumps(snapshot, ensure_ascii=False, indent=2, allow_nan=False),
+        encoding="utf-8",
+    )
+    temporary.replace(output)
+    return snapshot
 
 
 def configure() -> None:
@@ -291,6 +469,20 @@ def configure() -> None:
     worker._select_direct_contracts = release4._select
     worker._feature = _feature
     worker._candidate_scores = _candidate_scores
+    worker._frequency_payload = _frequency_payload
+    worker.build = _build
+    worker.CANDIDATE_LABELS.update({
+        "C25_monthly_post_test_diagnostic_six_dimension_consensus_top10_buffered": "月频六维分层共识等权",
+        "C26_monthly_post_test_diagnostic_six_dimension_online_ic_top10_buffered": "月频冠军锚定在线增强",
+        "C27_monthly_post_test_diagnostic_six_dimension_defensive_top10_buffered": "月频质量趋势正交增强",
+        "C28_weekly_post_test_diagnostic_six_dimension_fast_top10_buffered": "周频六维快变量等权",
+        "C29_weekly_post_test_diagnostic_six_dimension_equal_top10_buffered": "周频冠军锚定在线增强",
+        "C30_monthly_six_dimension_canslim_top5_risk_weighted_buffered_cash25": "月频六维CANSLIM风险加权前五",
+        "C31_monthly_six_dimension_super_weight_top7_risk_weighted_buffered_cash25": "月频六维SUPER风险加权前七",
+        "C32_monthly_six_dimension_defensive_top5_risk_weighted_buffered_cash50": "月频六维防守风险预算前五",
+        "C33_weekly_six_dimension_fast_top5_risk_weighted_buffered_cash25": "周频六维快变风险加权前五",
+        "C34_weekly_six_dimension_defensive_top5_risk_weighted_buffered_cash50": "周频六维防守风险预算前五",
+    })
 
 
 def main() -> int:

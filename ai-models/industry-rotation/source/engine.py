@@ -48,17 +48,75 @@ KEYWORD_AUDIT = PROJECT_ROOT / "output" / "industry_rotation" / "evidence" / "ro
 WAREHOUSE = PROJECT_ROOT / "database" / "research_warehouse.db"
 OLD_SNAPSHOT = DATA_DIR / "rotation_snapshot.json"
 OUTPUT = DATA_DIR / "rotation_snapshot.json"
+CHAMPION_DIRECTION_FILE = ROOT / "champion_r32_directions.json"
+_CHAMPION_PARAMETERS: dict[str, Any] | None = None
+
+
+def _champion_parameters() -> dict[str, Any]:
+    """Load the hash-pinned R32 champion parameters and validate the contract."""
+    global _CHAMPION_PARAMETERS
+    if _CHAMPION_PARAMETERS is None:
+        payload = _read_json(CHAMPION_DIRECTION_FILE)
+        contracts = payload.get("contracts") or {}
+        if int(payload.get("contract_count") or 0) != 248 or len(contracts) != 248:
+            raise RuntimeError("industry_champion_direction_contract_invalid")
+        _CHAMPION_PARAMETERS = payload
+    return _CHAMPION_PARAMETERS
+
+
+def _champion_ic(industry: str, variable: str) -> float:
+    key = f"{industry}|{variable}"
+    row = (_champion_parameters().get("contracts") or {}).get(key)
+    if not isinstance(row, dict):
+        raise KeyError(f"industry_champion_direction_missing:{key}")
+    value = float(row.get("train_spearman_ic"))
+    if not math.isfinite(value):
+        raise ValueError(f"industry_champion_direction_non_finite:{key}")
+    return value
+
+
+def _champion_sign(industry: str, variable: str) -> float:
+    return -1.0 if _champion_ic(industry, variable) < 0.0 else 1.0
+
 
 SPLITS = {
     "train": ("2015-01-01", "2018-12-31"),
     "validation": ("2019-01-01", "2021-12-31"),
     "test": ("2022-01-01", "2099-12-31"),
 }
+DIRECTION_MIN_LABELS = 120
+_DIRECTION_LABEL_AUDIT: dict[tuple[str, str], dict[str, Any]] = {}
 EVENT_INDUSTRIES = set(EVENT_BLUEPRINTS)
 EXCLUDED_NEWS = (
     "营业收入", "营收", "利润", "净利润", "ROE", "ROA", "毛利率", "负债率",
     "主力资金", "涨停", "跌停", "股价", "换手率", "市盈率", "市净率",
 )
+
+CANDIDATE_LABELS = {
+    "C1_equal": "专属指标等权",
+    "C2_reliability": "数据可靠性加权",
+    "C3_train_ic": "训练期IC加权",
+    "C4_direct_dominant": "直接业务指标主导",
+    "C5_ic_quarter_smooth": "IC季度平滑",
+    "C6_direct_month_smooth": "直接景气月度平滑",
+    "C7_consensus": "多口径景气共识",
+    "C10_monthly_direct_smooth_risk_budget_cash25": "月频景气与轻度风险预算",
+    "C11_monthly_direct_smooth_risk_budget_cash50": "月频景气与中度风险预算",
+    "C14_weekly_direct_smooth_risk_budget_cash25": "周频景气与轻度风险预算",
+    "C15_weekly_direct_smooth_risk_budget_cash50": "周频景气与中度风险预算",
+    "C18_monthly_residual_path_top5": "月频残差趋势前五",
+    "C19_monthly_business_price_crowding_top5": "月频景气价格低拥挤前五",
+    "C20_weekly_residual_path_top5": "周频残差趋势前五",
+    "C21_weekly_business_price_crowding_top5": "周频景气价格低拥挤前五",
+    "C22_monthly_report_enhanced_momentum_top5": "月频景气增强动量前五",
+    "C23_monthly_post_test_diagnostic_acceleration_confirmed_crowding_residual_top5_buffered": "景气加速度确认与拥挤残差前五",
+}
+
+
+def _candidate_label(candidate: str) -> str:
+    return CANDIDATE_LABELS.get(candidate, "行业轮动候选")
+
+
 
 
 @dataclass
@@ -137,7 +195,11 @@ def _load_cmb_sheets() -> dict[str, pd.DataFrame]:
     workbook = pd.ExcelFile(CMB_DATA)
     for sheet in workbook.sheet_names:
         frame = pd.read_excel(CMB_DATA, sheet_name=sheet, index_col=0)
-        frame.index = pd.to_datetime(frame.index, errors="coerce")
+        frame.index = pd.to_datetime(
+            frame.index,
+            errors="coerce",
+            format="mixed",
+        )
         frame = frame.loc[frame.index.notna()]
         frames[str(sheet)] = frame
     return frames
@@ -330,36 +392,90 @@ def _load_closes() -> pd.DataFrame:
     return close.loc["2012-01-01":].dropna(how="all")
 
 
+def _non_overlapping_direction_labels(
+    close: pd.DataFrame,
+    signal_dates: list[pd.Timestamp],
+) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
+    """Build adjacent T+1-close return labels with explicit maturity dates."""
+    calendar = pd.DatetimeIndex(
+        sorted({pd.Timestamp(date) for date in signal_dates if date in close.index})
+    )
+    future = pd.DataFrame(np.nan, index=close.index, columns=close.columns, dtype=float)
+    maturities: dict[pd.Timestamp, pd.Timestamp] = {}
+    executions: dict[pd.Timestamp, pd.Timestamp] = {}
+    for signal, next_signal in zip(calendar[:-1], calendar[1:]):
+        start_pos = int(close.index.searchsorted(signal, side="right"))
+        end_pos = int(close.index.searchsorted(next_signal, side="right"))
+        if start_pos >= len(close.index) or end_pos >= len(close.index):
+            continue
+        execution = pd.Timestamp(close.index[start_pos])
+        maturity = pd.Timestamp(close.index[end_pos])
+        future.loc[signal] = close.loc[maturity].div(close.loc[execution]).sub(1.0)
+        executions[signal] = execution
+        maturities[signal] = maturity
+    return (
+        future,
+        pd.Series(maturities, dtype="datetime64[ns]").sort_index(),
+        pd.Series(executions, dtype="datetime64[ns]").sort_index(),
+    )
+
+
 def _align_features(
     contracts: dict[str, list[SeriesContract]],
     trading_index: pd.DatetimeIndex,
 ) -> tuple[dict[str, dict[str, pd.Series]], dict[str, dict[str, float]]]:
+    """Align PIT features and estimate a purged diagnostic IC.
+
+    The production C6 direction is loaded separately from the frozen R32
+    champion.  The diagnostic magnitude uses all matured daily observations;
+    the last 21 trading days of the training interval are purged explicitly.
+    """
+    global _DIRECTION_LABEL_AUDIT
     aligned: dict[str, dict[str, pd.Series]] = {}
     diagnostics: dict[str, dict[str, float]] = {}
+    direction_close = _load_closes().reindex(trading_index).ffill()
+    future = direction_close.shift(-21).div(direction_close).sub(1.0)
+    maturities = pd.Series(trading_index, index=trading_index).shift(-21)
+    train_start = pd.Timestamp(SPLITS["train"][0])
+    train_end = pd.Timestamp(SPLITS["train"][1])
+    eligible = maturities[
+        maturities.index.to_series().ge(train_start)
+        & maturities.le(train_end)
+    ].index
+    _DIRECTION_LABEL_AUDIT = {}
     for industry, items in contracts.items():
         aligned[industry] = {}
         diagnostics[industry] = {}
-        future = _load_industry_forward_return(industry, trading_index)
         for contract in items:
             feature = _feature(contract)
             feature.index = _available_index(contract, feature.index)
             daily = feature[~feature.index.duplicated(keep="last")].reindex(trading_index).ffill(limit=80 if contract.frequency == "月" else 25)
             aligned[industry][contract.variable] = daily
-            sample = pd.concat([daily.rename("x"), future.rename("y")], axis=1).loc[SPLITS["train"][0] : SPLITS["train"][1]].dropna()
-            ic = float(sample["x"].corr(sample["y"], method="spearman")) if len(sample) >= 120 else 0.0
-            diagnostics[industry][contract.variable] = ic if math.isfinite(ic) else 0.0
+            sample = pd.concat(
+                [daily.reindex(eligible).rename("x"), future[industry].reindex(eligible).rename("y")],
+                axis=1,
+            ).dropna()
+            value = float(sample["x"].corr(sample["y"], method="spearman")) if len(sample) >= 120 else math.nan
+            fallback = not math.isfinite(value)
+            diagnostic_ic = value if not fallback else _champion_ic(industry, contract.variable)
+            diagnostics[industry][contract.variable] = diagnostic_ic
+            champion_ic = _champion_ic(industry, contract.variable)
+            _DIRECTION_LABEL_AUDIT[(industry, contract.variable)] = {
+                "label_count": int(len(sample)),
+                "fallback_to_champion": fallback,
+                "latest_maturity": (
+                    pd.Timestamp(maturities.loc[sample.index.max()]).strftime("%Y-%m-%d")
+                    if len(sample)
+                    else None
+                ),
+                "champion_sign": int(_champion_sign(industry, contract.variable)),
+                "diagnostic_sign": 1 if diagnostic_ic >= 0.0 else -1,
+                "sign_drift": bool((champion_ic >= 0.0) != (diagnostic_ic >= 0.0)),
+            }
     return aligned, diagnostics
 
 
 _CLOSE_CACHE: pd.DataFrame | None = None
-
-
-def _load_industry_forward_return(industry: str, index: pd.DatetimeIndex) -> pd.Series:
-    global _CLOSE_CACHE
-    if _CLOSE_CACHE is None:
-        _CLOSE_CACHE = _load_closes()
-    close = _CLOSE_CACHE[industry].reindex(index).ffill()
-    return close.shift(-21).div(close).sub(1.0)
 
 
 def _candidate_scores(
@@ -371,7 +487,7 @@ def _candidate_scores(
     outputs = {name: pd.DataFrame(index=index, columns=list(INDUSTRY_CODES), dtype=float) for name in ("C1_equal", "C2_reliability", "C3_train_ic")}
     for industry, items in contracts.items():
         frame = pd.DataFrame(aligned[industry])
-        signs = {item.variable: (1.0 if diagnostics[industry].get(item.variable, 0.0) >= 0 else -1.0) for item in items}
+        signs = {item.variable: _champion_sign(industry, item.variable) for item in items}
         signed = frame.mul(pd.Series(signs), axis=1)
         weights_equal = pd.Series(1.0, index=frame.columns)
         weights_reliability = pd.Series({item.variable: 1.0 if item.source_kind == "direct" else 0.72 for item in items})
@@ -550,11 +666,16 @@ def _simulate(close: pd.DataFrame, targets: dict[pd.Timestamp, pd.Series], cost_
             benchmark_nav *= max(0.0, 1.0 - cost_rate * benchmark_turnover)
             weights, benchmark_weights = target_values, benchmark_target
             started = True
+            positive_weights = weights[weights > 0]
             holdings.append({
                 "signal_date": signal_date.strftime("%Y-%m-%d"),
                 "execution_date": pd.Timestamp(date).strftime("%Y-%m-%d"),
                 "names": [columns[i] for i, value in enumerate(weights) if value > 0],
-                "weight": round(float(weights[weights > 0].mean()), 6),
+                "weight": (
+                    round(float(positive_weights.mean()), 6)
+                    if positive_weights.size
+                    else 0.0
+                ),
                 "weights": {columns[i]: round(float(value), 6) for i, value in enumerate(weights) if value > 0},
                 "cash_weight": round(max(0.0, 1.0 - float(weights.sum())), 6),
                 "turnover": round(turnover, 6),
@@ -612,12 +733,15 @@ def _all_metrics(frame: pd.DataFrame) -> dict[str, dict[str, Any]]:
 
 
 def _candidate_target_policy(candidate: str) -> dict[str, Any]:
-    top_n = 5 if "top5" in candidate else 10
+    top_n = 10
+    for value in (3, 5, 7, 10):
+        if f"top{value}" in candidate:
+            top_n = value
+            break
     risk_overlay = 0.0
-    if "cash25" in candidate:
-        risk_overlay = 0.25
-    elif "cash50" in candidate:
-        risk_overlay = 0.50
+    cash_match = re.search(r"cash(\d{2})", candidate)
+    if cash_match:
+        risk_overlay = min(0.85, max(0.0, int(cash_match.group(1)) / 100.0))
     return {
         "top_n": top_n,
         "buffer_size": 3 if "buffered" in candidate else 0,
@@ -770,6 +894,15 @@ def _frequency_payload(close: pd.DataFrame, scores: dict[str, pd.DataFrame], fre
         validation = metrics["validation"].get("excess_sharpe")
         objective, yearly = _robust_selection_objective(simulation, metrics)
         audit.append({
+            "candidate_label": _candidate_label(name),
+            "train_sharpe": metrics["train"].get("sharpe"),
+            "validation_sharpe": metrics["validation"].get("sharpe"),
+            "train_annual_return": metrics["train"].get("annual_return"),
+            "validation_annual_return": metrics["validation"].get("annual_return"),
+            "train_max_drawdown": metrics["train"].get("max_drawdown"),
+            "validation_max_drawdown": metrics["validation"].get("max_drawdown"),
+            "train_turnover": metrics["train"].get("annual_turnover"),
+            "validation_turnover": metrics["validation"].get("annual_turnover"),
             "candidate": name,
             "train_excess_sharpe": train,
             "validation_excess_sharpe": validation,
@@ -788,7 +921,12 @@ def _frequency_payload(close: pd.DataFrame, scores: dict[str, pd.DataFrame], fre
         })
         evaluated.append((objective, name, simulation, holdings, metrics))
     evaluated.sort(key=lambda row: (row[0], row[1]), reverse=True)
-    _, research_selected, simulation, holdings, metrics = evaluated[0]
+    six_dimension_universe = [row for row in evaluated if "six_dimension" in row[1]]
+    research_universe = six_dimension_universe or evaluated
+    _, research_selected, research_simulation, research_holdings, research_metrics = research_universe[0]
+    simulation = research_simulation
+    holdings = research_holdings
+    metrics = research_metrics
     champion_name = "C6_direct_month_smooth"
     champion = next(
         (row for row in evaluated if row[1] == champion_name),
@@ -800,12 +938,32 @@ def _frequency_payload(close: pd.DataFrame, scores: dict[str, pd.DataFrame], fre
     }
     selected = research_selected
     if champion is not None and research_selected != champion_name:
-        promotion_gate = _champion_challenger_promotion_gate(
+        observed_gate = _champion_challenger_promotion_gate(
             champion[4],
             metrics,
         )
-        if promotion_gate["status"] != "passed":
+        if "post_test_diagnostic" in research_selected:
+            promotion_gate = {
+                **observed_gate,
+                "status": "diagnostic_only",
+                "reason": (
+                    "该架构在2022年后的测试区间已被观察之后才预声明；"
+                    "无论报告期结果如何都不能替换生产冠军。"
+                ),
+                "counterfactual_status": observed_gate["status"],
+            }
             _, selected, simulation, holdings, metrics = champion
+        else:
+            promotion_gate = observed_gate
+            if promotion_gate["status"] != "passed":
+                _, selected, simulation, holdings, metrics = champion
+    # Candidate ranking and the promotion gate use the shared comparison window.
+    # Once the production candidate is fixed, report its own complete history;
+    # a later-starting research data source must never truncate the champion.
+    production = next(row for row in prepared if row[0] == selected)
+    simulation = production[2]
+    holdings = production[3]
+    metrics = _all_metrics(simulation)
     score = scores[selected]
     target_policy = _candidate_target_policy(selected)
     latest_targets = _targets(
@@ -827,15 +985,28 @@ def _frequency_payload(close: pd.DataFrame, scores: dict[str, pd.DataFrame], fre
     payload = {
         "frequency": frequency,
         "selected_candidate": selected,
+        "selected_candidate_label": _candidate_label(selected),
         "research_selected_candidate": research_selected,
+        "research_selected_candidate_label": _candidate_label(research_selected),
         "selection_rule": (
-            "训练与验证选择唯一挑战者；封存测试只允许否决挑战者相对预声明"
-            "冠军的晋级，不参与候选排序或参数调整"
+            "六维架构存在时仅在其冻结执行变体中由训练与验证选择唯一挑战者；"
+            "封存测试只允许否决挑战者相对预声明冠军的晋级，不参与候选排序或参数调整"
         ),
         "promotion_gate": promotion_gate,
         "candidate_audit": audit,
+        "research_result": {
+            "candidate": research_selected,
+            "candidate_label": _candidate_label(research_selected),
+            "metrics": research_metrics,
+            "nav": [
+                {"date": date.strftime("%Y-%m-%d"), "strategy": round(float(value.nav), 6), "benchmark": round(float(value.benchmark_nav), 6), "excess": round(float(value.nav / value.benchmark_nav), 6)}
+                for date, value in research_simulation.iterrows()
+            ],
+            "holdings": research_holdings[-52:],
+        },
         "target_policy": target_policy,
         "common_evaluation_start": common_start.strftime("%Y-%m-%d"),
+        "production_evaluation_start": simulation.index.min().strftime("%Y-%m-%d"),
         "metrics": metrics,
         "return_loss_diagnostics": {
             "selection_policy": (
@@ -866,7 +1037,8 @@ def _indicator_payload(
 ) -> dict[str, Any]:
     raw = pd.to_numeric(contract.raw, errors="coerce").dropna().sort_index()
     available_feature = feature.dropna()
-    sign = 1 if ic >= 0 else -1
+    champion_ic = _champion_ic(contract.industry, contract.variable)
+    sign = 1 if champion_ic >= 0 else -1
     chart = raw.tail(180 if contract.frequency == "周" else 120)
     last_observation = raw.index.max() if not raw.empty else None
     last_available = _available_index(contract, pd.DatetimeIndex([last_observation]))[0] if last_observation is not None else None
@@ -885,7 +1057,8 @@ def _indicator_payload(
         "model_eligible": contract.status == "live" and len(raw) >= 36,
         "model_note": "仅在available_date不晚于信号日时入模；缺失不补0，剩余可见字段重新归一化。",
         "direction": "训练集单调正向" if sign > 0 else "训练集单调反向",
-        "train_spearman_ic": round(float(ic), 6),
+        "train_spearman_ic": round(float(champion_ic), 6),
+        "matured_train_spearman_ic": round(float(ic), 6),
         "first_date": raw.index.min().strftime("%Y-%m-%d") if not raw.empty else None,
         "last_date": last_observation.strftime("%Y-%m-%d") if last_observation is not None else None,
         "last_available_date": pd.Timestamp(last_available).strftime("%Y-%m-%d") if last_available is not None else None,
@@ -955,16 +1128,28 @@ def build(output: Path) -> dict[str, Any]:
     latest_score_date = selected_scores["monthly"].dropna(how="all").index.max()
     high_frequency = _high_frequency_payload(contracts, aligned, diagnostics, monthly_ranking, latest_score_date)
     generated_at = datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    direction_rows = list(_DIRECTION_LABEL_AUDIT.values())
+    direction_label_audit = {
+        "method": "逐交易日21日持有期Spearman IC仅作方向漂移诊断；标签成熟日不晚于训练期末；生产方向固定读取R32冠军参数",
+        "minimum_labels": DIRECTION_MIN_LABELS,
+        "contract_count": len(direction_rows),
+        "fallback_count": sum(bool(row["fallback_to_champion"]) for row in direction_rows),
+        "sign_drift_count": sum(bool(row["sign_drift"]) for row in direction_rows),
+        "champion_parameter_source": {key: value for key, value in _champion_parameters().items() if key != "contracts"},
+        "minimum_observations": min((row["label_count"] for row in direction_rows), default=0),
+        "maximum_observations": max((row["label_count"] for row in direction_rows), default=0),
+        "latest_maturity": max((row["latest_maturity"] for row in direction_rows if row["latest_maturity"]), default=None),
+    }
     snapshot = {
         "schema_version": "4.0",
-        "engine_version": "industry-rotation/4.7-common-window-report-momentum",
+        "engine_version": "industry-rotation/4.9-prosperity-acceleration-diagnostic",
         "generated_at": generated_at,
         "as_of": close.index.max().strftime("%Y-%m-%d"),
         "status": "ok" if high_frequency["summary"]["min_live_per_industry"] >= 6 else "review",
         "status_reason": "31行业×8专属业务字段已通过字段禁用、历史长度、PIT可用日和live覆盖门禁。",
         "method": {
             "industry_universe": "申万一级31行业官方指数",
-            "industry_portfolio": "Top10只做多；验证期在等权与缓冲风险权重间选择；风险权重单行业上限15%",
+            "industry_portfolio": "Top10生产组合保持不变；新增景气水平、边际加速度、价格确认与连续拥挤残差的Top5诊断组合",
             "industry_benchmark": "31行业等权；与策略同一执行日再平衡并扣同口径成本",
             "frequencies": ["monthly", "weekly"],
             "cost_rate": 0.001,
@@ -973,9 +1158,11 @@ def build(output: Path) -> dict[str, Any]:
             "availability": "观察日与可用日分离；月度保守按期末+25自然日，周度/事件按发布后第1交易日",
             "industry_splits": SPLITS,
             "test_policy": "训练集估计方向/权重，验证集选择候选，测试集冻结后只评估一次",
+            "direction_label": "R32冠军方向冻结；最新诊断使用21交易日前瞻收益且成熟日不晚于训练期末",
             "factor_contract": ["行业专属产量/价格/库存/运量/订单/开工/终端销量", "PIT行业事件", "训练期方向", "验证期选型"],
             "forbidden_fields": list(FORBIDDEN_PATTERNS),
         },
+        "direction_label_audit": direction_label_audit,
         "industry": {
             "source": "申万行业指数用于收益；正式信号仅来自248个行业专属业务字段",
             "start": close.index.min().strftime("%Y-%m-%d"),

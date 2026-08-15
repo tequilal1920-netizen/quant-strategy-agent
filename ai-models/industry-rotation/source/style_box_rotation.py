@@ -233,20 +233,63 @@ def candidate_scores(
     momentum_2q = (1.0 + history.tail(2)).prod() - 1.0
     z4 = cross_zscore(momentum_4q)
     z2 = cross_zscore(momentum_2q)
-    if candidate == "M4":
+    volatility_4q = history.tail(4).std(ddof=0).replace(0.0, np.nan)
+    loss_ratio_4q = history.tail(4).lt(0.0).mean()
+    low_vol = cross_zscore(-volatility_4q)
+    loss_control = cross_zscore(-loss_ratio_4q)
+    aligned = current_features.set_index("cell").reindex(CELL_CODES)
+    breadth = cross_zscore(aligned["growth_breadth"])
+    carry = cross_zscore(aligned["carry_score"])
+    if candidate in {"M4", "M4W"}:
         score = z4
     elif candidate == "M2":
         score = z2
-    elif candidate == "MIX":
+    elif candidate in {"MIX", "MIXW"}:
         score = 0.50 * z2 + 0.50 * z4
     elif candidate == "PIT":
-        aligned = current_features.set_index("cell").reindex(CELL_CODES)
-        breadth = cross_zscore(aligned["growth_breadth"])
-        carry = cross_zscore(aligned["carry_score"])
         score = 0.55 * (0.50 * z2 + 0.50 * z4) + 0.25 * breadth + 0.20 * carry
+    elif candidate == "M4R":
+        score = 0.52 * z4 + 0.23 * z2 + 0.15 * low_vol + 0.10 * loss_control
+    elif candidate == "PITR":
+        score = 0.45 * (0.50 * z2 + 0.50 * z4) + 0.20 * breadth + 0.15 * carry + 0.12 * low_vol + 0.08 * loss_control
+    elif candidate == "BAL":
+        score = 0.35 * z4 + 0.20 * z2 + 0.20 * carry + 0.15 * low_vol + 0.10 * loss_control
     else:
         raise ValueError(f"unknown candidate: {candidate}")
     return score.reindex(CELL_CODES).fillna(-99.0)
+
+
+def style_box_weights(candidate: str, selected: list[str], score: pd.Series, history: pd.DataFrame) -> pd.Series:
+    weights = pd.Series(0.0, index=CELL_CODES)
+    if not selected:
+        return weights
+    if candidate not in {"M4W", "MIXW", "M4R", "PITR", "BAL"}:
+        weights.loc[selected] = 1.0 / len(selected)
+        return weights
+    selected_score = pd.to_numeric(score.reindex(selected), errors="coerce")
+    confidence = selected_score.sub(selected_score.min()).add(0.05).clip(lower=0.01)
+    risk = history.tail(4).std(ddof=0).reindex(selected).replace(0.0, np.nan)
+    fallback = float(risk.dropna().median()) if risk.notna().any() else 1.0
+    raw = confidence.pow(0.5).div(risk.fillna(fallback).clip(lower=1e-6))
+    raw = raw.replace([np.inf, -np.inf], np.nan).fillna(0.0).clip(lower=0.0)
+    if raw.sum() <= 0.0:
+        weights.loc[selected] = 1.0 / len(selected)
+        return weights
+    capped = raw / raw.sum()
+    cap = 0.50
+    for _ in range(len(capped) + 1):
+        over = capped > cap + 1e-12
+        if not over.any():
+            break
+        capped.loc[over] = cap
+        remaining = 1.0 - float(capped.loc[over].sum())
+        free = ~over
+        if remaining <= 0.0 or not free.any():
+            break
+        base = raw.loc[free]
+        capped.loc[free] = remaining * (base / base.sum() if base.sum() > 0.0 else 1.0 / int(free.sum()))
+    weights.loc[selected] = capped / capped.sum()
+    return weights
 
 
 def run_candidate(
@@ -264,8 +307,8 @@ def run_candidate(
         if score is None or return_matrix.loc[signal].isna().any():
             continue
         selected = list(score.sort_values(ascending=False, kind="stable").head(TOP_N).index)
-        weights = pd.Series(0.0, index=CELL_CODES)
-        weights.loc[selected] = 1.0 / TOP_N
+        history = return_matrix.loc[return_matrix.index < signal, list(CELL_CODES)]
+        weights = style_box_weights(candidate, selected, score, history)
         turnover = float((weights - previous).abs().sum() / 2.0)
         gross = float((weights * return_matrix.loc[signal]).sum())
         benchmark = float(return_matrix.loc[signal].mean())
@@ -284,7 +327,8 @@ def run_candidate(
             "execution_date": iso(str(meta["execution_date"])),
             "names": selected,
             "codes": selected,
-            "weight": finite(1.0 / TOP_N),
+            "weight": finite(float(weights.loc[selected].mean())),
+            "weights": {cell: finite(float(weights.loc[cell])) for cell in selected},
             "turnover": finite(turnover),
         })
         previous = weights
@@ -299,6 +343,7 @@ class SourceFrames:
     valuations: pd.DataFrame
     prices: dict[str, pd.DataFrame]
     financials: pd.DataFrame
+    data_as_of: str
 
 
 def load_sources(database: Path) -> SourceFrames:
@@ -361,7 +406,7 @@ def load_sources(database: Path) -> SourceFrames:
     financials["visible_date"] = financials["visible_date"].astype(str)
     financials["end_date"] = financials["end_date"].astype(str)
     prices = {date: group.drop(columns="trade_date").set_index("ts_code") for date, group in price_frame.groupby("trade_date")}
-    return SourceFrames(signals, next_date, master, valuations, prices, financials)
+    return SourceFrames(signals, next_date, master, valuations, prices, financials, all_trade_dates[-1])
 
 
 def build_labels(source: SourceFrames) -> tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame]]:
@@ -609,7 +654,7 @@ def build_nav(backtest: pd.DataFrame) -> list[dict[str, Any]]:
 def build_style_payload(source: SourceFrames) -> dict[str, Any]:
     labels_by_signal, features_by_signal = build_labels(source)
     period_returns, cell_history, mean_coverage = build_period_returns(source, labels_by_signal)
-    candidates = ("M4", "M2", "MIX", "PIT")
+    candidates = ("M4", "M2", "MIX", "PIT", "M4W", "MIXW", "M4R", "PITR", "BAL")
     candidate_runs: dict[str, tuple[pd.DataFrame, list[dict[str, Any]]]] = {
         candidate: run_candidate(candidate, period_returns, features_by_signal)
         for candidate in candidates
@@ -627,6 +672,11 @@ def build_style_payload(source: SourceFrames) -> dict[str, Any]:
                 "M2": "过去2个已完成季度的12风格箱横截面动量",
                 "MIX": "2季度与4季度动量各50%",
                 "PIT": "55%动量、25%可见日增长广度、20%价值/股息carry",
+                "M4W": "四季动量选箱，Top3内部按得分置信度和近四季波动加权",
+                "MIXW": "2/4季度动量选箱，Top3内部按得分置信度和近四季波动加权",
+                "M4R": "四季动量叠加四季波动和亏损季度惩罚",
+                "PITR": "PIT复合因子叠加四季波动和亏损季度惩罚",
+                "BAL": "动量、价值股息carry、低波和亏损控制均衡融合",
             }[candidate],
             "selection_objective": split_metrics["validation"]["excess_sharpe"],
             "train_excess_sharpe": split_metrics["train"]["excess_sharpe"],
@@ -656,7 +706,7 @@ def build_style_payload(source: SourceFrames) -> dict[str, Any]:
         robust_set,
         key=lambda row: (
             999.0 if row["validation_annual_turnover"] is None else float(row["validation_annual_turnover"]),
-            {"M4": 0, "M2": 1, "MIX": 2, "PIT": 3}[row["candidate"]],
+            {"M4": 0, "M2": 1, "MIX": 2, "PIT": 3, "M4W": 4, "MIXW": 5, "M4R": 6, "PITR": 7, "BAL": 8}[row["candidate"]],
         ),
     )
     selected = selected_row["candidate"]
@@ -687,7 +737,10 @@ def build_style_payload(source: SourceFrames) -> dict[str, Any]:
     latest_scores = candidate_scores(selected, latest_signal, return_matrix, latest_features)
     if latest_scores is None:
         raise RuntimeError("insufficient style-box history for latest ranking")
-    selected_cells = set(latest_scores.sort_values(ascending=False, kind="stable").head(TOP_N).index)
+    latest_selected = list(latest_scores.sort_values(ascending=False, kind="stable").head(TOP_N).index)
+    latest_history = return_matrix.loc[return_matrix.index < latest_signal, list(CELL_CODES)]
+    latest_weights = style_box_weights(selected, latest_selected, latest_scores, latest_history)
+    selected_cells = set(latest_selected)
     cell_summaries = {row["cell"]: row for row in latest_cell_summary(latest, float(latest["circ_mv"].sum()))}
     ranking: list[dict[str, Any]] = []
     for rank, (cell, score) in enumerate(latest_scores.sort_values(ascending=False, kind="stable").items(), start=1):
@@ -700,7 +753,7 @@ def build_style_payload(source: SourceFrames) -> dict[str, Any]:
             "style": summary["style"],
             "score": finite(score),
             "selected": cell in selected_cells,
-            "weight": finite(1.0 / TOP_N) if cell in selected_cells else 0.0,
+            "weight": finite(float(latest_weights.loc[cell])) if cell in selected_cells else 0.0,
             "stock_count": summary["stock_count"],
             "cap_share": summary["cap_share"],
             "components": {
@@ -717,9 +770,10 @@ def build_style_payload(source: SourceFrames) -> dict[str, Any]:
         "execution_date": iso(latest_execution),
         "names": [row["name"] for row in ranking if row["selected"]],
         "codes": [row["code"] for row in ranking if row["selected"]],
-        "weight": finite(1.0 / TOP_N),
+        "weight": finite(float(latest_weights.loc[latest_selected].mean())),
+        "weights": {cell: finite(float(latest_weights.loc[cell])) for cell in latest_selected},
         "turnover": None,
-        "status": "planned" if latest_execution > source.signals[-1] else "executed",
+        "status": "planned" if latest_execution > source.data_as_of else "executed",
     }
     holdings_with_current = holdings + [current_holding]
     previous_signal = source.signals[-2]
@@ -754,7 +808,7 @@ def build_style_payload(source: SourceFrames) -> dict[str, Any]:
             "signal": "季度末交易日收盘后",
             "execution": "下一交易日收盘",
             "accounting_pit": "financial_report_visible.visible_date <= signal_date",
-            "portfolio": "验证集选择候选；每季只做多Top3风格箱、等权；单箱内部流通市值加权并尽可能限制单股8%",
+            "portfolio": "验证集选择候选；每季只做多Top3风格箱；基础候选等权，风险候选按得分置信度和近四季波动加权；单箱内部流通市值加权并尽可能限制单股8%",
             "cost": "风格箱层换手×10bp",
             "splits": {
                 "train": ["2012-01-01", TRAIN_END],
@@ -767,10 +821,10 @@ def build_style_payload(source: SourceFrames) -> dict[str, Any]:
             "quarterly": {
                 "frequency": "quarterly",
                 "selected_candidate": selected,
-                "selected_window": "2Q/4Q及PIT组合候选，验证集冻结择优",
-                "selected_weights": [1.0 / TOP_N] * TOP_N,
+                "selected_window": "2Q/4Q/PIT及风险调整组合候选，验证集冻结择优",
+                "selected_weights": [finite(float(latest_weights.loc[cell])) for cell in latest_selected],
                 "selection_rule": (
-                    "四个预注册候选使用2019–2021验证集；在最高超额夏普一倍标准误差内，"
+                    "九个预注册候选使用2019–2021验证集；在最高超额夏普一倍标准误差内，"
                     "优先选择验证期换手最低的简单候选；2022年后仅报告"
                 ),
                 "current_regime": " / ".join(current_holding["names"]),
@@ -848,12 +902,17 @@ def build_style_payload(source: SourceFrames) -> dict[str, Any]:
 
 def update_snapshot(database: Path, snapshot: Path) -> dict[str, Any]:
     original = json.loads(snapshot.read_text(encoding="utf-8"))
-    original["style"] = build_style_payload(load_sources(database))
+    style_payload = build_style_payload(load_sources(database))
+    snapshot_as_of = str(original.get("as_of") or "")
+    for holding in style_payload.get("frequencies", {}).get("quarterly", {}).get("holdings", []):
+        if holding.get("status") == "planned" and str(holding.get("execution_date") or "") <= snapshot_as_of:
+            holding["status"] = "executed"
+    original["style"] = style_payload
     original["generated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     original.setdefault("method", {})["style_universe"] = "全体合格A股季度个股标签"
     original["method"]["style_box"] = "大/中/小盘×成长/均衡/价值/红利，共12个互斥且穷尽的风格箱"
     original["method"]["style_frequency"] = "quarterly"
-    original["method"]["style_portfolio"] = "每季度Top3风格箱等权只做多；12风格箱等权基准"
+    original["method"]["style_portfolio"] = "每季度Top3风格箱只做多；基础候选等权，风险候选按得分置信度和近四季波动加权；12风格箱等权基准"
     original["method"]["style_timing"] = "季度末收盘形成标签与信号；下一交易日收盘执行"
     original["method"]["style_splits"] = {
         "train": ["2012-01-01", TRAIN_END],
@@ -878,18 +937,25 @@ def update_snapshot(database: Path, snapshot: Path) -> dict[str, Any]:
     return original
 
 
+def project_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "database").is_dir() and (parent / "board").is_dir():
+            return parent
+    return Path(__file__).resolve().parents[2]
+
+
 def parse_args() -> argparse.Namespace:
-    project_root = Path(__file__).resolve().parents[1]
+    root = project_root()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--database",
         type=Path,
-        default=project_root / "database" / "research_warehouse.db",
+        default=root / "database" / "research_warehouse.db",
     )
     parser.add_argument(
         "--snapshot",
         type=Path,
-        default=project_root / "board" / "quant_strategy_agent" / "data" / "rotation_snapshot.json",
+        default=root / "board" / "quant_strategy_agent" / "data" / "rotation_snapshot.json",
     )
     return parser.parse_args()
 
