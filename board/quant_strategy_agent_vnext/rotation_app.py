@@ -17,6 +17,8 @@ APP_VERSION = f"{BASE_VERSION}-rotation-r2"
 ROOT = Path(__file__).resolve().parent
 ROTATION_SNAPSHOT = ROOT / "data" / "rotation_snapshot.json"
 ROTATION_TRACKING = ROOT / "data" / "rotation_tracking.json"
+ROTATION_FINAL_FIGURES = ROOT / "data" / "rotation_final_figures.json"
+ROTATION_FINAL_FIGURES_STATIC = ROOT / "static" / "rotation_figures" / "manifest.json"
 _CACHE_LOCK = threading.RLock()
 _CACHE: dict[str, dict[str, Any]] = {}
 
@@ -148,10 +150,47 @@ def rotation_snapshot():
         if contract["status"] != "ok":
             return jsonify({"status": "failed", "quality": contract}), 503
         public_payload = dict(payload)
+        public_industry = dict(payload.get("industry", {}))
+        public_frequencies: dict[str, dict[str, Any]] = {}
+        for frequency, model in payload.get("industry", {}).get("frequencies", {}).items():
+            public_model = dict(model)
+            six_dimension = public_model.pop("six_dimension", {})
+            public_model["research_ranking"] = six_dimension.get("research_ranking", [])
+            public_frequencies[frequency] = public_model
+        public_industry["frequencies"] = public_frequencies
         public_style = dict(payload.get("style", {}))
         public_style.pop("stock_labels", None)
         public_style["stock_labels_endpoint"] = "/api/rotation/style-labels"
+        public_payload["industry"] = public_industry
         public_payload["style"] = public_style
+        return jsonify(public_payload)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"status": "failed", "message": str(exc)}), 503
+
+
+@app.get("/api/rotation/final-figures")
+def rotation_final_figures():
+    """Return web-ready global result figures for industry and style rotation."""
+    try:
+        source = ROTATION_FINAL_FIGURES if ROTATION_FINAL_FIGURES.exists() else ROTATION_FINAL_FIGURES_STATIC
+        payload = _load_json(source)
+        if payload.get("schema_version") != "1.0":
+            return jsonify({"status": "failed", "message": "final_figure_schema_mismatch"}), 503
+        public_payload = {
+            "schema_version": payload.get("schema_version"),
+            "generated_at": payload.get("generated_at"),
+            "splits": payload.get("splits", {}),
+            "figures": {},
+        }
+        for key, row in payload.get("figures", {}).items():
+            public_payload["figures"][key] = {
+                "label": row.get("label"),
+                "annual_table": row.get("annual_table"),
+                "daily_nav": row.get("daily_nav"),
+                "selected_candidate": row.get("selected_candidate"),
+                "research_selected_candidate": row.get("research_selected_candidate"),
+                "metrics": row.get("metrics", {}),
+            }
         return jsonify(public_payload)
     except Exception as exc:  # noqa: BLE001
         return jsonify({"status": "failed", "message": str(exc)}), 503

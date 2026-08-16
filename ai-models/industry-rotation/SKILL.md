@@ -1,6 +1,6 @@
 ---
 name: industry-rotation
-description: "查询和审计31个申万一级行业的高频景气、53因子六维行业轮动、月周配置、季度3×4风格箱及分样本回测治理；涉及行业排名、单行业驱动、六维分解、风格标签或行业配置时使用。"
+description: "查询和审计31个申万一级行业的高频景气、53因子六维行业轮动、月周配置、季度3×4风格箱、月频六维风格轮动及分样本回测治理；涉及行业排名、单行业驱动、六维分解、风格标签或行业配置时使用。"
 ---
 # 行业景气度
 
@@ -79,3 +79,10 @@ Set-Location ai-models/industry-rotation/runtime
 python -B -m unittest agent_runtime.test_runtime
 python -B -m py_compile agent_runtime/core.py agent_runtime/cli.py agent_runtime/server.py
 ```
+## 月频六维风格轮动
+
+- `source/style_six_dimension_monthly.py` 将行业轮动六维框架映射到股票风格标签，形成12格风格箱、3类市值、4类风格三套月频策略。
+- 六维为景气度、基本面、技术面、估值、资金面、拥挤度。前五维形成收益信号，拥挤度用于扣分和低拥挤确认。
+- 因子进入候选前先做训练期和验证期 RankIC、ICIR、胜率、覆盖率和方向稳定性检验。测试集只报告和否决，不参与候选排序。
+- 当前结果写入 `board/quant_strategy_agent_vnext/data/style_six_dimension_monthly.json`。最终展示图写入 `board/quant_strategy_agent_vnext/static/rotation_figures/`，网页只读取脱敏后的 `rotation_final_figures.json`。
+- 复现命令：`python model\industry_rotation\style_six_dimension_monthly.py`，更新展示图：`python model\industry_rotation\build_rotation_final_figures.py`。
