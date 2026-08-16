@@ -620,7 +620,7 @@ class OptimizerBackendService:
             self.llm_client is not None
             or (
                 (os.getenv("AI_ROUTER_API_KEY") or os.getenv("OPENAI_API_KEY"))
-                and os.getenv("AI_ROUTER_URL")
+                and (os.getenv("AI_ROUTER_URL") or os.getenv("AI_ROUTER_BASE_URL"))
             )
         )
         warehouse = Path(
@@ -1525,7 +1525,7 @@ class OptimizerBackendService:
         )
         llm_ready = bool(
             (self.llm_client is not None)
-            or ((os.getenv("AI_ROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")) and os.getenv("AI_ROUTER_URL"))
+            or ((os.getenv("AI_ROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")) and (os.getenv("AI_ROUTER_URL") or os.getenv("AI_ROUTER_BASE_URL")))
         )
         warehouse = Path(
             os.getenv("RESEARCH_WAREHOUSE_DB", str(PROJECT_ROOT / "database" / "research_warehouse.db"))
@@ -1786,6 +1786,48 @@ class OptimizerBackendService:
                 "\u5019\u9009\u652f\u6301\u4e0d\u5728\u6c42\u89e3\u524d\u9884\u51bb\u7ed3\uff0c\u4e0d\u5ba3\u79f0\u5168\u5c40MIQCP\u6700\u4f18",
             ],
         }
+
+
+    def plan_options(self, payload: Mapping[str, Any]) -> tuple[dict[str, Any], int]:
+        compiler = self._compiler_module()
+        raw_request = str(
+            payload.get("instruction")
+            or payload.get("raw_request")
+            or payload.get("prompt")
+            or payload.get("text")
+            or ""
+        ).strip()
+        mode = str(payload.get("mode") or "joint_cardinality")
+        context = (
+            copy.deepcopy(dict(payload.get("context") or {}))
+            if isinstance(payload.get("context"), Mapping)
+            else {}
+        )
+        for key in (
+            "base_config", "universe", "rebalance_frequency",
+            "knowledge_base_version",
+        ):
+            if key in payload:
+                context[key] = copy.deepcopy(payload[key])
+        planned = compiler.generate_mandate_plan_options(
+            raw_request,
+            llm_client=self.llm_client,
+            require_llm=True,
+            mode=mode,
+            available_solvers=self._discover_solvers(),
+            context=context,
+        )
+        status = str(planned.get("status") or BLOCKED_SCHEMA)
+        output = copy.deepcopy(dict(planned))
+        output["compiler_status"] = status
+        output["status"] = (
+            status if status == getattr(compiler, "AWAITING_PLAN_SELECTION", "AWAITING_PLAN_SELECTION")
+            else _public_compiler_status(status)
+        )
+        output["planner"] = "ai_router_mandate_plan_options"
+        output["mode"] = mode
+        output["raw_request_hash"] = _stable_hash({"raw_request": raw_request, "mode": mode})
+        return output, 200
 
     def interpret(self, payload: Mapping[str, Any]) -> tuple[dict[str, Any], int]:
         compiler = self._compiler_module()
@@ -3587,6 +3629,16 @@ def optimizer_bootstrap() -> Response:
 @optimizer_blueprint.get("/api/optimizer/strategy-snapshot")
 def optimizer_strategy_snapshot() -> Response:
     return _no_store(jsonify(_service().strategy_snapshot()))
+
+
+
+@optimizer_blueprint.post("/api/optimizer/constraints/plans")
+def optimizer_plan_options() -> tuple[Response, int] | Response:
+    payload = _request_payload()
+    if payload is None:
+        return _no_store(jsonify({"status": BLOCKED_SCHEMA, "message": "JSON object required"})), 400
+    output, status = _service().plan_options(payload)
+    return _no_store(jsonify(output)), status
 
 
 @optimizer_blueprint.post("/api/optimizer/constraints/interpret")

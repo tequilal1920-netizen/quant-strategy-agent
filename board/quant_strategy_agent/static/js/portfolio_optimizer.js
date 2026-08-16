@@ -95,6 +95,8 @@
     snapshot: null,
     config: clone(DEF),
     instruction: "",
+    planOptions: [],
+    selectedPlanId: "",
     draft: [],
     validation: null,
     run: null,
@@ -1108,11 +1110,115 @@
           }),
       );
   }
+  function activePlan() {
+    const options = arr(state.planOptions);
+    if (!options.length) return null;
+    return (
+      options.find((x) => String(x.id || "") === String(state.selectedPlanId || "")) ||
+      options[0]
+    );
+  }
+  function textItems(v, limit) {
+    const out = [];
+    if (typeof v === "string") return v.trim() ? [v.trim()] : [];
+    if (Array.isArray(v)) {
+      v.forEach((x) => {
+        if (out.length >= limit) return;
+        if (typeof x === "string" && x.trim()) out.push(x.trim());
+        else if (x && typeof x === "object") out.push(x.formula || x.name || x.metric || JSON.stringify(x));
+        else if (x != null) out.push(String(x));
+      });
+      return out;
+    }
+    if (v && typeof v === "object") {
+      Object.keys(v).forEach((k) => {
+        if (out.length >= limit) return;
+        const item = v[k];
+        out.push(k + ": " + (item && typeof item === "object" ? JSON.stringify(item) : String(item)));
+      });
+    }
+    return out;
+  }
+  function renderPlanParams(params) {
+    const p = obj(params),
+      keys = Object.keys(p).slice(0, 6);
+    if (!keys.length) return '<div class="optimizer-plan-empty">默认参数由现有配置继承</div>';
+    return keys
+      .map((k) => {
+        const v = p[k],
+          text = v && typeof v === "object" ? JSON.stringify(v) : String(v);
+        return '<div><strong>' + esc(k) + '</strong><span>' + esc(text) + '</span></div>';
+      })
+      .join("");
+  }
+  function planCard(x, i) {
+    const selected = String(x.id || "") === String((activePlan() || {}).id || ""),
+      terms = textItems(x.objective_terms, 4),
+      eqs = textItems(x.constraint_equations, 4),
+      steps = textItems(x.solver_steps, 4),
+      cons = arr(x.added_constraints).slice(0, 4);
+    return (
+      '<article class="optimizer-plan-card ' +
+      (selected ? "is-selected" : "") +
+      '"><header><span>方案 ' +
+      (i + 1) +
+      '</span><h3>' +
+      esc(x.name || x.id || "组合优化方案") +
+      '</h3><small>' +
+      esc(x.profile || "约束组合优化") +
+      '</small></header><p>' +
+      esc(x.summary || "完整目标函数、约束和求解流程方案") +
+      '</p><div class="optimizer-plan-equation"><strong>目标函数</strong><code>' +
+      esc(x.objective_equation || "") +
+      '</code></div>' +
+      (terms.length
+        ? '<div class="optimizer-plan-tags">' + terms.map((t) => '<em>' + esc(t) + '</em>').join("") + '</div>'
+        : "") +
+      '<div class="optimizer-plan-params">' +
+      renderPlanParams(x.default_parameters) +
+      '</div>' +
+      (cons.length
+        ? '<div class="optimizer-plan-list"><strong>新增/强化约束</strong>' +
+          cons
+            .map((c) => '<span>' + esc(c.name || c.metric || c.type || "约束") + '：' + esc(c.formula || c.equation || c.rationale || "") + '</span>')
+            .join("") +
+          '</div>'
+        : "") +
+      (eqs.length
+        ? '<div class="optimizer-plan-list"><strong>方程</strong>' + eqs.map((t) => '<span>' + esc(t) + '</span>').join("") + '</div>'
+        : "") +
+      (steps.length
+        ? '<div class="optimizer-plan-list"><strong>求解步骤</strong>' + steps.map((t) => '<span>' + esc(t) + '</span>').join("") + '</div>'
+        : "") +
+      '<footer><span>' +
+      esc(x.expected_tradeoff || "等待人工选择后进入严格编译") +
+      '</span><button class="ghost-button" data-plan-index="' +
+      i +
+      '">' +
+      (selected ? "已选择" : "选择此方案") +
+      "</button></footer></article>"
+    );
+  }
+  function bindPlanOptions() {
+    root()
+      .querySelectorAll("[data-plan-index]")
+      .forEach(
+        (b) =>
+          (b.onclick = () => {
+            const option = arr(state.planOptions)[Number(b.dataset.planIndex)];
+            state.selectedPlanId = option ? String(option.id || "") : "";
+            state.validation = null;
+            renderLlm();
+          }),
+      );
+  }
   function renderLlm() {
     const v = valid(),
       kb = obj(boot().knowledge_base),
-      issues = arr(v.p.errors).concat(arr(v.p.conflicts));
-    let phase = "等待生成";
+      issues = arr(v.p.errors).concat(arr(v.p.conflicts)),
+      plan = activePlan();
+    let phase = "等待生成方案";
+    if (arr(state.planOptions).length && !state.draft.length) phase = "等待按方案生成草案";
     if (state.draft.length) phase = "等待校验";
     if (v.checked) phase = "等待人工确认";
     if (v.confirmed) phase = "已确认，可提交";
@@ -1120,24 +1226,41 @@
       '<div class="optimizer-shell">' +
       strip(
         [
-          ["工作流", "生成 → 校验 → 人工确认 → 求解"],
+          ["工作流", "输入 → 生成方案 → 选择/修改 → 草案 → 校验 → 确认 → 求解"],
           ["当前状态", phase],
+          ["方案数量", String(arr(state.planOptions).length || "--")],
           ["约束数量", String(state.draft.length)],
           ["权重权限", "LLM不得输出权重"],
         ],
         v.confirmed ? "is-ready" : "",
       ) +
-      '<div class="optimizer-llm-grid"><section class="optimizer-prompt"><header><h2>LLM约束输入</h2><p>仅把自然语言转成可编辑约束与公式，权重仍由精确求解器生成。</p></header><textarea id="instruction" rows="6" placeholder="例如：中证500内持有50只；行业偏离不超过2%；四类风格暴露不超过0.10；跟踪误差不超过6%；单期换手不超过100%。">' +
+      '<div class="optimizer-llm-grid"><section class="optimizer-prompt"><header><h2>LLM方案输入</h2><p>先生成1–3套完整方程和流程方案；选择并修改后，再进入严格约束编译。</p></header><textarea id="instruction" rows="6" placeholder="例如：中证500内持有50只；行业偏离不超过2%；风格暴露不超过0.10；跟踪误差不超过6%；单期换手不超过100%；希望新增低换手或更严格行业约束。">' +
       esc(state.instruction) +
-      '</textarea><div class="optimizer-action-row"><span>草案生成后可逐条展开修改。</span><button class="action-button" id="interpret">生成约束草案</button></div></section><aside class="optimizer-kb"><h3>约束知识库</h3><div class="optimizer-kb-chips"><span>持仓与整数选择</span><span>行业主动偏离</span><span>风格中性</span><span>跟踪误差SOCP</span><span>换手与成本</span><span>流动性与名单</span></div><dl><div><dt>版本</dt><dd>' +
+      '</textarea><div class="optimizer-action-row"><span>方案生成阶段同样走中转站，且禁止返回权重。</span><button class="action-button" id="generate-plans">生成方程方案</button></div></section><aside class="optimizer-kb"><h3>约束知识库</h3><div class="optimizer-kb-chips"><span>持仓与整数选择</span><span>行业主动偏离</span><span>风格中性</span><span>跟踪误差SOCP</span><span>换手与成本</span><span>流动性与名单</span></div><dl><div><dt>版本</dt><dd>' +
       esc(kb.version || boot().knowledge_base_version || "--") +
       "</dd></div><div><dt>来源</dt><dd>" +
       esc(kb.source_count || "--") +
-      "</dd></div><div><dt>权重生成</dt><dd>禁止</dd></div></dl></aside></div>" +
+      "</dd></div><div><dt>方案生成</dt><dd>中转站LLM</dd></div><div><dt>权重生成</dt><dd>禁止</dd></div></dl></aside></div>" +
+      (arr(state.planOptions).length
+        ? section(
+            "方程方案",
+            "每张卡片对应一套完整的目标函数、参数分类、约束方程和求解步骤。",
+            '<div class="optimizer-plan-grid">' + arr(state.planOptions).map(planCard).join("") + "</div>",
+          )
+        : "") +
+      (plan && !state.draft.length
+        ? section(
+            "选中方案",
+            "可以直接编辑该方案的完整约束意图；点击生成后进入原有严格编译、校验与人工确认链路。",
+            '<div class="optimizer-selected-plan"><textarea id="selected-plan-request" rows="7">' +
+              esc(plan.mandate_request || state.instruction) +
+              '</textarea><div class="optimizer-action-row"><span>该文本会作为当前方案传入 OptimizationMandate/v1 编译器。</span><button class="action-button" id="interpret">按选中方案生成约束草案</button></div></div>',
+          )
+        : "") +
       (state.draft.length
         ? section(
             "约束草案",
-            "按类别折叠展示；默认不铺开参数表",
+            "按类别折叠展示；默认不铺开参数表。",
             '<div class="optimizer-constraint-toolbar"><span>' +
               state.draft.length +
               '条硬约束草案</span><button class="ghost-button" id="add">新增约束</button></div><div class="optimizer-constraint-list">' +
@@ -1165,9 +1288,23 @@
           ">提交求解</button></div></section>"
         : "") +
       "</div>";
-    root().querySelector("#instruction").oninput = (e) =>
-      (state.instruction = e.target.value);
-    root().querySelector("#interpret").onclick = interpret;
+    root().querySelector("#instruction").oninput = (e) => {
+      state.instruction = e.target.value;
+      state.validation = null;
+    };
+    const gen = root().querySelector("#generate-plans");
+    if (gen) gen.onclick = generatePlans;
+    bindPlanOptions();
+    const selected = root().querySelector("#selected-plan-request");
+    if (selected && plan) {
+      selected.oninput = (e) => {
+        plan.mandate_request = e.target.value;
+        plan.compile_instruction = e.target.value;
+        state.validation = null;
+      };
+    }
+    const interpretButton = root().querySelector("#interpret");
+    if (interpretButton) interpretButton.onclick = interpret;
     if (state.draft.length) {
       bindDraft();
       root().querySelector("#add").onclick = () => {
@@ -1197,15 +1334,15 @@
       return;
     }
     conclusion(
-      "LLM只负责编译约束，人工确认后HiGHS与Clarabel才可求解；整个流程不存在自动确认或权重降级。",
+      "LLM先生成可选择的方程方案，再把选中方案编译成约束；人工确认后，HiGHS+Clarabel 才能求解权重。",
     );
     renderLlm();
   }
-  async function interpret() {
-    const b = root().querySelector("#interpret");
-    b.disabled = true;
+  async function generatePlans() {
+    const b = root().querySelector("#generate-plans");
+    if (b) b.disabled = true;
     try {
-      const q = await api("/api/optimizer/constraints/interpret", {
+      const q = await api("/api/optimizer/constraints/plans", {
           method: "POST",
           body: {
             mode: "joint_cardinality",
@@ -1220,8 +1357,44 @@
           },
         }),
         d = obj(q.data || q),
+        options = arr(d.options || d.plans || d.schemes);
+      if (!options.length) throw new Error(arr(d.errors).join("；") || "接口未返回方程方案");
+      state.planOptions = options;
+      state.selectedPlanId = String(options[0].id || "");
+      state.draft = [];
+      state.validation = null;
+      renderLlm();
+      conclusion("方程方案已生成；请选择或修改后，再生成约束草案。");
+    } catch (e) {
+      if (b) b.disabled = false;
+      conclusion("方程方案生成失败：" + e.message, true);
+    }
+  }
+  async function interpret() {
+    const b = root().querySelector("#interpret"),
+      plan = activePlan(),
+      selectedInstruction = String((plan && plan.mandate_request) || state.instruction || "").trim();
+    if (b) b.disabled = true;
+    try {
+      if (!selectedInstruction) throw new Error("请先输入约束需求或选择方案");
+      const q = await api("/api/optimizer/constraints/interpret", {
+          method: "POST",
+          body: {
+            mode: "joint_cardinality",
+            instruction: selectedInstruction,
+            selected_plan: plan,
+            base_config: state.config,
+            universe: "000905.SH",
+            rebalance_frequency: "monthly",
+            knowledge_base_version:
+              obj(boot().knowledge_base).version ||
+              boot().knowledge_base_version ||
+              null,
+          },
+        }),
+        d = obj(q.data || q),
         a = arr(d.constraints || d.draft || d.items);
-      if (!a.length) throw new Error("接口未返回约束草案");
+      if (!a.length) throw new Error(arr(d.errors).join("；") || "接口未返回约束草案");
       state.draft = a.map((x) =>
         Object.assign(
           {
@@ -1235,9 +1408,9 @@
       );
       state.validation = null;
       renderLlm();
-      conclusion("约束草案已生成；修改后执行校验和人工确认。");
+      conclusion("选中方案已编译为约束草案；修改后执行校验和人工确认。");
     } catch (e) {
-      b.disabled = false;
+      if (b) b.disabled = false;
       conclusion("约束草案生成失败：" + e.message, true);
     }
   }
