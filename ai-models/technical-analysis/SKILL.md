@@ -1,20 +1,19 @@
 ---
 name: technical-analysis
-description: "用于运行、审计和维护技术分析；当任务涉及K线学习、单股或同类公司分析、形态记忆、情境进化、历史任务或技术配置策略时使用。"
+description: "用于运行、审计和维护技术分析双模型；当任务涉及 K 线学习、个股买卖点判断、同类股票模式学习、技术因子择时、横截面轮动、LLM 形态记忆或技术分析网页展示时使用。"
 ---
 # 技术分析
 
-
-## 直接对话入口
+## 对话入口
 
 ```powershell
 python ai-models/technical-analysis/scripts/query.py status
 python ai-models/technical-analysis/scripts/query.py patterns 关键词=breakout 数量=20
 ```
 
-`status` 回答K线横截面模型是否已经通过治理；`patterns` 检索正式形态知识。当前治理返回观察状态时，必须明确说明没有可用于交易的验证策略。
+`status` 返回技术分析双模型的治理状态：模型一是纯技术信号栈，模型二是 LLM 记忆多周期模型。`patterns` 检索正式形态知识库。当前若返回观察或研究诊断状态，必须明确说明没有可直接发布交易的策略。
 
-需要运行远程单股学习时先查询证券和交易日，再提交任务：
+远程单股任务先查证券和交易日，再提交任务：
 
 ```powershell
 python -m agent_runtime remote GET "/api/kline/stocks?q=000001&limit=20"
@@ -24,46 +23,32 @@ python -m agent_runtime remote POST /api/kline/jobs --json '{"code":"000001.SZ",
 
 任务编号返回后，通过 `/api/kline/jobs/<任务编号>` 查询状态和结果。凭据只从环境变量读取。
 
-## 目标
+## 当前模型边界
 
-把 K 线任务、同类公司学习、126 份形态记忆、情境检索和技术配置策略整合为可追溯的学习与决策流程。
-
-## 输入
-
-- 股票代码、名称或搜索条件，截止日和复权口径。
-- 学习窗口、预测周期、同类公司范围、技术指标和风险约束。
-- 可选的已有任务、情境记忆或形态文件。
-
-## 输出
-
-- 单股与同类公司的 K 线、量价、形态、基本面和事件诊断。
-- 规则排名、同类公司、情境记忆、进化记录和历史任务状态。
-- 技术配置策略、置信度、失效条件、风险提示和可复现输入。
-- 受影响的形态参考文档和技能注册表更新。
+- 模型一：`technical-signal-stack/1.0-broker-style`。只使用本地 OHLCV 与可时点化的技术因子，先构建信号族，再训练期学习权重，输出个股择时和横截面轮动。
+- 模型二：`kline-multiscale-expert/1.6`。使用 K 线形态专家、状态记忆、监督排序和多空诊断，学习历史 K 线模式与同类股票的相似技术结构。
+- 封存测试只报告，不参与选模、调参或文案晋级。若封存测试失败，页面和回答都只能标记为研究诊断。
 
 ## 工作流
 
-1. 阅读 `references/module-map.md`、`ai-models/technical-analysis/components/kline_memory_learning/AGENT.md`、模型 README 和技能注册表。
-2. 核对证券、交易日、复权、价格、成交量、财务和事件数据的可用时点。
-3. 根据任务选择单股分析、同类公司学习或横截面研究，避免重复加载整个大库。
-4. 先检索 `references/kline-patterns/` 中的相关形态，再运行正式模型入口。
-5. 将新证据写入正式记忆和输出；保留来源、样本窗口、置信度和失效条件。
-6. 检查规则排名、同类公司、情境记忆、进化记录、历史任务和技术策略页内控件。
-7. 验证健康、历史、股票搜索和日期接口的缓存、并发、错误状态和跳转。
+1. 阅读 `references/dual-model-sop.md`、`references/module-map.md`、`source/README.md` 和 K 线记忆组件说明。
+2. 核对证券代码、复权口径、交易日、OHLCV、成交额、流动性过滤和 ST/退市过滤。
+3. 模型一先生成技术信号族：趋势动量、突破确认、回撤反转、量价确认、波动质量、防守择时。
+4. 只用训练集计算信号族 IC 权重和单股买卖阈值；验证集只负责候选筛选；封存测试只做一次报告。
+5. 模型二读取形态专家和状态记忆，做股票大类/形态相似性学习，输出历史判断、当前判断、失败条件和净值回测。
+6. 网页端读取冻结快照，不在 HTTP 请求中重新训练模型。
+7. 任何新增因子、阈值或 LLM 记忆规则必须在进入封存测试前声明并留痕。
 
-## 约束
+## 输出要求
 
-- 不把技术形态描述成确定收益；必须给出失效条件和风险提示。
-- 不使用截止日之后的价格、财务或事件信息。
-- 126 份形态参考文档是正式知识，不得当作中间文件删除。
-- 状态颜色固定为绿色正常、蓝色运行、红色异常。
-- 中文楷体、英文和数字 Arial；遵守统一看板布局。
+- 个股：历史关键买卖点、当前买卖点倾向、触发逻辑、失效条件、净值曲线、最大回撤和换手成本。
+- 组合：个股间技术评分、横截面轮动、训练/验证/测试分段绩效、候选失败原因和发布闸门。
+- 说明：用中文解释流程，不承诺收益，不把训练集或测试集拟合结果说成未来确定性。
 
 ## 验证
 
 ```powershell
-python -m py_compile ai-models/technical-analysis/components/kline_memory_learning/single_stock_analyzer.py ai-models/technical-analysis/components/kline_memory_learning/cohort_wyckoff_learning.py ai-models/technical-analysis/components/kline_memory_learning/cross_sectional_factor_study.py
-python board/quant_strategy_agent/qa/test_canonical_app.py
+python -m pytest framework/backtest/test_technical_signal_model.py framework/backtest/test_kline_multiscale_expert.py framework/backtest/test_kline_supervised_ranker.py -q
+python -m pytest board/quant_strategy_agent_vnext/qa/test_kline_multiscale_evidence.py -q
+python -m py_compile ai-models/technical-analysis/runtime/agent_runtime/core.py
 ```
-
-浏览器必须验证“任务设置 / 学习记忆 / 历史记录”和“规则排名 / 同类公司 / 情境记忆 / 进化记录”的跳转与内容。

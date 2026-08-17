@@ -1,51 +1,54 @@
 {
-    "schema_version":  "quant-agent-ai-package/1.0",
-    "title":  "技术分析",
-    "slug":  "technical-analysis",
-    "github_folder_url":  "https://github.com/tequilal1920-netizen/quant-strategy-agent/tree/agent/industry-style-r16-6/ai-models/technical-analysis",
-    "github_branch":  "agent/industry-style-r16-6",
-    "skill_entry":  "SKILL.md",
-    "query_entry":  "scripts/query.py",
-    "model_source":  "source",
-    "bundled_components":  [
-                               "components/kline_memory_learning"
-                           ],
-    "bundled_runtime":  "runtime/agent_runtime",
-    "operations":  [
-                       "status",
-                       "patterns"
-                   ],
-    "question_examples":  [
-                              "K线模型现在是否可用于交易",
-                              "查询突破与反转形态的学习资料"
-                          ],
-    "standalone_with_environment":  true,
-    "shared_repository_dependencies":  [
-                                           "澶栭儴妯″瀷蹇収鐩綍",
-                                           "鐮旂┒鏁版嵁搴撲笌鍥犲瓙鐘舵€佸簱",
-                                           "杩滅▼妯″瀷鏈嶅姟鍙婂叾鍑嵁"
-                                       ],
-    "required_environment":  [
-                                 "QUANT_AGENT_SNAPSHOT_ROOT",
-                                 "RESEARCH_WAREHOUSE_DB",
-                                 "FACTOR_STATE_DB",
-                                 "QUANT_AGENT_OUTPUT_ROOT"
-                             ],
-    "remote_model_environment":  [
-                                     "QUANT_AGENT_BASE_URL",
-                                     "QUANT_AGENT_USER",
-                                     "QUANT_AGENT_PASSWORD"
-                                 ],
-    "deployment":  {
-                       "remote_root":  "F:\\apps\\quant_strategy_agent_github_runtime",
-                       "local_service":  "http://127.0.0.1:8091",
-                       "authenticated_service":  "http://127.0.0.1:8076/quant-agent-vnext"
-                   },
-    "inventory":  {
-                      "skill_files":  131,
-                      "source_files":  2,
-                      "component_files":  10,
-                      "runtime_files":  8,
-                      "total_files":  152
-                  }
+  "schema_version": "quant-agent-ai-package/1.0",
+  "title": "技术分析",
+  "slug": "technical-analysis",
+  "github_folder_url": "https://github.com/tequilal1920-netizen/quant-strategy-agent/tree/agent/industry-style-r16-6/ai-models/technical-analysis",
+  "github_branch": "agent/industry-style-r16-6",
+  "skill_entry": "SKILL.md",
+  "query_entry": "scripts/query.py",
+  "model_source": "source",
+  "bundled_components": [
+    "components/kline_memory_learning"
+  ],
+  "bundled_runtime": "runtime/agent_runtime",
+  "operations": [
+    "status",
+    "patterns"
+  ],
+  "question_examples": [
+    "K线模型现在是否可以用于交易",
+    "解释纯技术信号栈的买卖点流程",
+    "查询突破与反转形态的学习资料"
+  ],
+  "standalone_with_environment": true,
+  "shared_repository_dependencies": [
+    "framework/backtest/technical_signal_model.py",
+    "framework/backtest/kline_multiscale_expert.py",
+    "framework/backtest/kline_supervised_ranker.py",
+    "model/kline_memory_learning/run_multiscale_expert_challenger.py",
+    "board/quant_strategy_agent_vnext/data/kline_multiscale_expert_challenger.json"
+  ],
+  "required_environment": [
+    "QUANT_AGENT_SNAPSHOT_ROOT",
+    "RESEARCH_WAREHOUSE_DB",
+    "FACTOR_STATE_DB",
+    "QUANT_AGENT_OUTPUT_ROOT"
+  ],
+  "remote_model_environment": [
+    "QUANT_AGENT_BASE_URL",
+    "QUANT_AGENT_USER",
+    "QUANT_AGENT_PASSWORD"
+  ],
+  "deployment": {
+    "remote_root": "F:\\apps\\quant_strategy_agent_github_runtime",
+    "local_service": "http://127.0.0.1:8091",
+    "authenticated_service": "http://127.0.0.1:8076/quant-agent-vnext"
+  },
+  "inventory": {
+    "skill_files": 131,
+    "source_files": 3,
+    "component_files": 10,
+    "runtime_files": 8,
+    "total_files": 153
+  }
 }

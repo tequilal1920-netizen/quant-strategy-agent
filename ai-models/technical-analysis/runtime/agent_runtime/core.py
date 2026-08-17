@@ -481,16 +481,69 @@ def _technical_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
     if operation == "status":
         payload, path = _snapshot("kline_cross_sectional_audit.json")
         result = {
-            "治理状态": payload.get("status"),
-            "版本": payload.get("version"),
-            "选择规则": payload.get("selection_policy"),
-            "测试是否参与选择": payload.get("selection_uses_test"),
-            "入选候选": payload.get("selected_candidate"),
-            "候选数": payload.get("candidate_count"),
-            "合格数": payload.get("eligible_count"),
-            "切分": payload.get("split"),
-            "完整性": payload.get("integrity"),
+            "legacy_audit_status": payload.get("status"),
+            "legacy_version": payload.get("version"),
+            "legacy_selection_policy": payload.get("selection_policy"),
+            "legacy_selection_uses_test": payload.get("selection_uses_test"),
+            "legacy_selected_candidate": payload.get("selected_candidate"),
+            "legacy_candidate_count": payload.get("candidate_count"),
+            "legacy_eligible_count": payload.get("eligible_count"),
+            "legacy_split": payload.get("split"),
+            "legacy_integrity": payload.get("integrity"),
         }
+        try:
+            dual_payload, dual_path = _snapshot("kline_multiscale_expert_challenger.json")
+        except QueryError:
+            dual_payload, dual_path = {}, None
+        if dual_payload:
+            selected = dual_payload.get("selected") or {}
+            deployment = dual_payload.get("deployment_selected") or {}
+            pure = dual_payload.get("pure_technical_model") or {}
+            pure_selected = pure.get("selected") or {}
+            pure_guard = pure.get("release_guard") or {}
+            pure_results = (pure.get("results") or {}).get(pure_selected.get("universe")) or {}
+            pure_candidate = (pure_results.get("candidates") or {}).get(pure_selected.get("candidate")) or {}
+            selected_result = (dual_payload.get("results") or {}).get(selected.get("universe")) or {}
+            selected_candidate = (selected_result.get("candidates") or {}).get(selected.get("candidate")) or {}
+            result["dual_model_snapshot"] = str(dual_path)
+            pure_framework = pure.get("framework") or {}
+            if isinstance(pure_framework, dict):
+                pure_families = pure_framework.get("families") or {}
+                pure_family_names = list(pure_families.keys()) if isinstance(pure_families, dict) else list(pure_families)
+            elif isinstance(pure_framework, list):
+                pure_family_names = list(pure_framework)
+            else:
+                pure_family_names = []
+            result["model_1_pure_technical"] = {
+                "version": pure.get("version"),
+                "status": pure.get("status"),
+                "selected_universe": pure_selected.get("universe"),
+                "selected_candidate": pure_selected.get("candidate"),
+                "accepted_by_train_validation": pure_selected.get("accepted_by_train_validation"),
+                "release_approved": pure_guard.get("release_approved"),
+                "selection_uses_test": False,
+                "metrics": {
+                    split: _compact_metrics(metrics)
+                    for split, metrics in (pure_candidate.get("metrics") or {}).items()
+                    if split in {"train", "valid", "test"}
+                },
+                "framework_families": pure_family_names,
+            }
+            result["model_2_llm_memory"] = {
+                "version": dual_payload.get("version"),
+                "status": dual_payload.get("status"),
+                "selected_universe": selected.get("universe"),
+                "selected_candidate": selected.get("candidate"),
+                "accepted_by_train_validation": selected.get("accepted_by_train_validation"),
+                "release_approved": deployment.get("release_approved"),
+                "deployment_candidate": deployment.get("candidate"),
+                "selection_uses_test": False,
+                "metrics": {
+                    split: _compact_metrics(metrics)
+                    for split, metrics in (selected_candidate.get("metrics") or {}).items()
+                    if split in {"train", "valid", "test"}
+                },
+            }
         return _response("technical-analysis", operation, payload, path, result)
     if operation == "patterns":
         query_text = str(

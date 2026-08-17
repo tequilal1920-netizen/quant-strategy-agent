@@ -24,24 +24,25 @@ import research_evidence_backend
 import rotation_app as rotation
 
 
-APP_VERSION = "2026.07.29-trump-research-v3-r27.0"
+APP_VERSION = "2026.08.17-technical-dual-model-vnext-r38.0"
 legacy.APP_VERSION = APP_VERSION
 rotation.APP_VERSION = APP_VERSION
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-factor_lab_backend.API_VERSION = "factor-lab-api/2.2"
+factor_lab_backend.API_VERSION = "factor-lab-api/2.9"
 factor_lab_backend.ENGINE_PATH = (
     PROJECT_ROOT / "model" / "factor_laboratory" / "worker.py"
 )
 for key, label in {
     "lstm": "LSTM",
-    "rl_transformer": "RL+Transformer",
-    "strategy": "OLS / Lasso / 深度模型",
+    "gru": "GRU",
+    "rl_transformer": "Transformer+LLM",
+    "strategy": "等权 / RankIC / OLS / Lasso / Ridge / MLP 打分回测",
     "joint_test": "联合检验",
 }.items():
     if key in factor_lab_backend.MODEL_PRESETS:
         factor_lab_backend.MODEL_PRESETS[key]["label"] = label
-        factor_lab_backend.MODEL_PRESETS[key]["architecture"] = []
+
 
 app = rotation.app
 if "factor_lab" not in app.blueprints:
