@@ -31,6 +31,7 @@ from framework.backtest.kline_multiscale_expert import (
 
 
 TECHNICAL_MODEL_VERSION = "technical-signal-stack/1.0-broker-style"
+FULL_HISTORY_TECHNICAL_MODEL_VERSION = "technical-signal-stack/1.1-full-history-low-frequency"
 
 DEFAULT_FAMILY_WEIGHTS = {
     "趋势动量": 0.22,
@@ -362,6 +363,65 @@ def learn_family_weights_train_only(
     }
 
 
+
+def learn_family_weights_full_history(
+    families: Mapping[str, np.ndarray],
+    forward_returns: np.ndarray,
+    eligible: np.ndarray,
+    prior_weights: Mapping[str, float] | None = None,
+    prior_strength: float = 0.35,
+) -> dict[str, Any]:
+    """Estimate family weights from all matured historical labels.
+
+    This retrospective research-fit mode is for high in-sample Sharpe
+    exploration and deliberately does not claim holdout validation.
+    """
+
+    prior = _normalize_weights(prior_weights or DEFAULT_FAMILY_WEIGHTS)
+    forward_returns = np.asarray(forward_returns, dtype=np.float64)
+    eligible = np.asarray(eligible, dtype=bool)
+    raw_scores: Dict[str, float] = {}
+    diagnostics = []
+    for name, values in families.items():
+        ics = [
+            rank_ic(values[index], forward_returns[index], eligible[index])
+            for index in range(len(forward_returns))
+            if np.isfinite(forward_returns[index]).any()
+        ]
+        clean = np.asarray([value for value in ics if np.isfinite(value)], dtype=float)
+        mean_ic = float(np.mean(clean)) if len(clean) else 0.0
+        weak_ic = float(np.percentile(clean, 25)) if len(clean) else 0.0
+        median_ic = float(np.median(clean)) if len(clean) else 0.0
+        stability = float(np.mean(clean > 0.0)) if len(clean) else 0.0
+        score = max(0.0, 0.50 * mean_ic + 0.30 * median_ic + 0.20 * weak_ic) * (0.4 + 0.6 * stability)
+        raw_scores[name] = score
+        diagnostics.append(
+            {
+                "family": name,
+                "full_rank_ic_mean": mean_ic,
+                "full_rank_ic_median": median_ic,
+                "full_rank_ic_q25": weak_ic,
+                "full_positive_ratio": stability,
+                "raw_score": score,
+            }
+        )
+    score_weights = _normalize_weights(raw_scores)
+    learned = {
+        name: prior_strength * prior.get(name, 0.0) + (1.0 - prior_strength) * score_weights.get(name, 0.0)
+        for name in families
+    }
+    weights = _normalize_weights(learned)
+    return {
+        "version": FULL_HISTORY_TECHNICAL_MODEL_VERSION,
+        "weights": weights,
+        "diagnostics": diagnostics,
+        "prior_weights": prior,
+        "prior_strength": float(prior_strength),
+        "all_matured_history_used_for_fit": True,
+        "sample_split_used": False,
+        "holdout_validation_claimed": False,
+    }
+
 def combine_signal_families(
     families: Mapping[str, np.ndarray],
     eligible: np.ndarray,
@@ -406,6 +466,32 @@ def technical_family_diagnostics(
             row[f"{split}_positive_ratio"] = float(np.mean(clean > 0.0)) if len(clean) else 0.0
             row[f"{split}_periods"] = int(len(clean))
         rows.append(row)
+    return rows
+
+
+def technical_family_diagnostics_full_history(
+    families: Mapping[str, np.ndarray],
+    forward_returns: np.ndarray,
+    eligible: np.ndarray,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    forward_returns = np.asarray(forward_returns, dtype=np.float64)
+    eligible = np.asarray(eligible, dtype=bool)
+    for name, values in families.items():
+        ics = [
+            rank_ic(values[index], forward_returns[index], eligible[index])
+            for index in range(len(forward_returns))
+        ]
+        clean = np.asarray([value for value in ics if np.isfinite(value)], dtype=float)
+        rows.append(
+            {
+                "family": name,
+                "full_rank_ic": float(np.mean(clean)) if len(clean) else 0.0,
+                "full_rank_ic_median": float(np.median(clean)) if len(clean) else 0.0,
+                "full_positive_ratio": float(np.mean(clean > 0.0)) if len(clean) else 0.0,
+                "full_periods": int(len(clean)),
+            }
+        )
     return rows
 
 

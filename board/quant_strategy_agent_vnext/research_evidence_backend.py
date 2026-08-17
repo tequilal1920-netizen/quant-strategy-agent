@@ -1171,6 +1171,10 @@ def _kline() -> dict[str, Any]:
         pure = model.get("pure_technical_model") or {}
         pure_selected = pure.get("selected") or {}
         pure_guard = pure.get("release_guard") or {}
+        full = model.get("full_history_technical_model") or {}
+        full_selected = full.get("selected") or {}
+        full_guard = full.get("release_guard") or {}
+        full_positions = full.get("current_positions") or []
         payload = _base("kline", "研究诊断", str(model.get("created_at") or "").split("T")[0])
         payload.update(
             {
@@ -1192,6 +1196,9 @@ def _kline() -> dict[str, Any]:
                 "descriptive": {
                     "candidate_count": len(result.get("candidates") or {}),
                     "factor_count": len(result.get("expert_names") or []),
+                    "full_history_current_signal_date": full.get("current_signal_date"),
+                    "full_history_current_position_count": len(full_positions),
+                    "full_history_top_positions": full_positions[:20],
                 },
                 "governance": {
                     "status": "observe_only",
@@ -1207,7 +1214,14 @@ def _kline() -> dict[str, Any]:
                     "pure_technical_universe": pure_selected.get("universe"),
                     "pure_technical_release_approved": bool(pure_guard.get("release_approved")),
                     "pure_technical_selection_uses_test": False,
-                    "dual_model_note": "model_1_pure_technical_signal_stack; model_2_llm_memory_multiscale; sealed_test_report_only",
+                    "full_history_status": full.get("status"),
+                    "full_history_candidate": full_selected.get("candidate"),
+                    "full_history_universe": full_selected.get("universe"),
+                    "full_history_release_approved": bool(full_selected.get("release_approved")),
+                    "full_history_sample_split_used": bool(full_guard.get("sample_split_used", False)),
+                    "full_history_holdout_validation_claimed": bool(full_guard.get("holdout_validation_claimed", False)),
+                    "full_history_current_signal_date": full.get("current_signal_date"),
+                    "triple_model_note": "model_1_pure_technical_signal_stack; model_2_llm_memory_multiscale; model_3_full_history_low_frequency_fit; model_3_no_holdout_claim",
                 },
                 "references": model.get("research_basis") or REPORT_REFERENCES["kline"],
             }

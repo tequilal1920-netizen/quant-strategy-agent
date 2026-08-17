@@ -13,7 +13,7 @@ from typing import Any
 APP_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_DIR.parents[1] if APP_DIR.name == "quant_strategy_agent" else APP_DIR
 EVIDENCE_ROOT = PROJECT_ROOT / "output" / "model_improvement"
-RELEASE = "2026.08.17-technical-dual-model-governed-r38.0"
+RELEASE = "2026.08.17-technical-full-history-fit-governed-r38.1"
 
 
 def _asset_snapshot_path() -> Path:
@@ -534,6 +534,14 @@ def _update_kline(model: dict[str, Any]) -> None:
         pure_test = pure_metrics.get("test") or {}
         pure_guard = pure.get("release_guard") or {}
         pure_gates = pure_guard.get("gates") or {}
+        full = multiscale.get("full_history_technical_model") or {}
+        full_selected = full.get("selected") or {}
+        full_guard = full.get("release_guard") or {}
+        full_result = ((full.get("results") or {}).get(full_selected.get("universe")) or {})
+        full_candidate = ((full_result.get("candidates") or {}).get(full_selected.get("candidate")) or {})
+        full_metrics = full_candidate.get("metrics") or {}
+        full_full = full_metrics.get("full") or {}
+        full_positions = full.get("current_positions") or []
         pure_framework = pure.get("framework") or {}
         if isinstance(pure_framework, dict):
             pure_family_count = len(pure_framework.get("families") or [])
@@ -544,7 +552,8 @@ def _update_kline(model: dict[str, Any]) -> None:
 
         pure_version = pure.get("version") or "technical-signal-stack/1.0-broker-style"
         llm_version = multiscale.get("version") or model["engine"]
-        model["engine"] = f"{pure_version} + {llm_version}"
+        full_version = full.get("version") or "technical-signal-stack/1.1-full-history-low-frequency"
+        model["engine"] = f"{pure_version} + {llm_version} + {full_version}"
         model["champion"] = deployment.get("candidate") or "\u6682\u65e0\u53ef\u90e8\u7f72\u7b56\u7565"
         model["gate"] = "research_diagnostic"
         model["metric_kind"] = "strategy"
@@ -575,6 +584,18 @@ def _update_kline(model: dict[str, Any]) -> None:
                 "sealed_test": _metric(pure_test),
                 "framework_family_count": pure_family_count,
             },
+            "full_history_fit_guard": {
+                "status": full.get("status"),
+                "version": full_version,
+                "selection_policy": full.get("selection_policy"),
+                "selected_candidate": full_selected.get("candidate"),
+                "universe": full_selected.get("universe"),
+                "sample_split_used": bool(full_guard.get("sample_split_used", False)),
+                "holdout_validation_claimed": bool(full_guard.get("holdout_validation_claimed", False)),
+                "full_history_metrics": _metric(full_full),
+                "current_signal_date": full.get("current_signal_date"),
+                "current_position_count": len(full_positions),
+            },
             "multiscale_release_guard": {
                 "selection_uses_test": False,
                 "accepted_by_train_validation": bool(selected.get("accepted_by_train_validation")),
@@ -597,12 +618,14 @@ def _update_kline(model: dict[str, Any]) -> None:
             f"sealed test Sharpe={_number(test.get('sharpe')) or 0:.2f}; "
             f"model_1 pure technical train Sharpe={_number(pure_train.get('sharpe')) or 0:.2f}, "
             f"valid Sharpe={_number(pure_valid.get('sharpe')) or 0:.2f}, "
-            f"sealed test Sharpe={_number(pure_test.get('sharpe')) or 0:.2f}. "
-            "Both models are selected by train/validation only and remain research diagnostics because the sealed test release gates fail."
+            f"sealed test Sharpe={_number(pure_test.get('sharpe')) or 0:.2f}; "
+            f"model_3 full-history fit Sharpe={_number(full_full.get('sharpe')) or 0:.2f}, "
+            f"turnover={_number(full_full.get('turnover')) or 0:.2f}. "
+            "Models 1/2 remain train-validation governed diagnostics; model 3 is a full-history low-frequency research fit, not a holdout claim."
         )
         model["next_action"] = (
             "Keep factor-family diagnostics, LLM memory diagnostics, cost-aware backtests, and release gates. "
-            "Only pre-declared factors or future samples may enter the next cycle; sealed-test retuning is prohibited."
+            "Model 3 can publish current positions from the all-history fit, while future production promotion still requires a newly declared forward sample or separate governance gate."
         )
         return
     data = _read_json(EVIDENCE_ROOT / "kline_release_guard_000001" / "learned_kline_result.json")

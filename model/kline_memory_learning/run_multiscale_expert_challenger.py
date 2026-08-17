@@ -31,17 +31,21 @@ from framework.backtest.kline_multiscale_expert import (  # noqa: E402
     online_market_exposure,
     residual_blend,
     row_rank,
+    WEEKS_PER_YEAR,
 )
 from framework.backtest.kline_supervised_ranker import (  # noqa: E402
     train_chronological_kline_ranker,
     train_chronological_market_exposure,
 )
 from framework.backtest.technical_signal_model import (  # noqa: E402
+    FULL_HISTORY_TECHNICAL_MODEL_VERSION,
     TECHNICAL_MODEL_VERSION,
     build_technical_signal_families,
     combine_signal_families,
+    learn_family_weights_full_history,
     learn_family_weights_train_only,
     technical_family_diagnostics,
+    technical_family_diagnostics_full_history,
     technical_framework_payload,
 )
 
@@ -99,6 +103,12 @@ REPORTS = [
         "implemented": "个股截面与指数时序双验证、日K周K独立专家",
     },
 ]
+
+
+FULL_HISTORY_REBALANCE_INTERVAL_WEEKS = 4
+FULL_HISTORY_SELECTION_FRACTION = 0.06
+FULL_HISTORY_TURNOVER_TARGET = 0.80
+FULL_HISTORY_MIN_PERIODS = 120
 
 
 def _safe_float(value: object, default: float = np.nan) -> float:
@@ -358,6 +368,157 @@ def _latest_rows(
     return rows
 
 
+
+def _low_frequency_score(score: np.ndarray, eligible: np.ndarray, interval_weeks: int) -> np.ndarray:
+    score = np.asarray(score, dtype=np.float64)
+    eligible = np.asarray(eligible, dtype=bool)
+    output = np.full_like(score, np.nan, dtype=np.float32)
+    last = np.full(score.shape[1], np.nan, dtype=np.float64)
+    interval = max(1, int(interval_weeks))
+    for row in range(len(score)):
+        if row % interval == 0 or row == len(score) - 1:
+            last = score[row].copy()
+        output[row] = last
+        output[row, ~eligible[row]] = np.nan
+    return row_rank(output, eligible).astype(np.float32)
+
+
+def _choose_full_history_champion(candidates: Mapping[str, object]) -> Dict[str, object]:
+    best_name = ""
+    best_payload: Mapping[str, object] = {}
+    best_score = -1.0e12
+    best_metrics: Mapping[str, object] = {}
+    for name, payload in candidates.items():
+        metrics = ((payload or {}).get("metrics") or {}).get("full") or {}
+        periods = int(metrics.get("periods") or 0)
+        sharpe = _safe_float(metrics.get("sharpe"), 0.0)
+        excess_sharpe = _safe_float(metrics.get("excess_sharpe"), 0.0)
+        annual_return = _safe_float(metrics.get("annual_return"), 0.0)
+        max_drawdown = _safe_float(metrics.get("max_drawdown"), -1.0)
+        turnover = _safe_float(metrics.get("turnover"), 0.0)
+        drawdown_penalty = max(0.0, abs(max_drawdown) - 0.30)
+        turnover_penalty = max(0.0, turnover - FULL_HISTORY_TURNOVER_TARGET)
+        period_penalty = 5.0 if periods < FULL_HISTORY_MIN_PERIODS else 0.0
+        score = (
+            sharpe
+            + 0.25 * excess_sharpe
+            + 0.15 * annual_return
+            - 0.12 * turnover
+            - 0.80 * turnover_penalty
+            - 0.80 * drawdown_penalty
+            - period_penalty
+        )
+        if score > best_score:
+            best_name = str(name)
+            best_payload = payload
+            best_score = float(score)
+            best_metrics = metrics
+    champion = dict(best_payload)
+    champion["name"] = best_name
+    champion["accepted"] = True
+    champion["selection"] = {
+        "policy": "full_history_fit_high_sharpe_low_turnover",
+        "score": float(best_score),
+        "minimum_periods": FULL_HISTORY_MIN_PERIODS,
+        "periods": int(best_metrics.get("periods") or 0),
+        "full_sharpe": _safe_float(best_metrics.get("sharpe"), 0.0),
+        "full_excess_sharpe": _safe_float(best_metrics.get("excess_sharpe"), 0.0),
+        "full_annual_return": _safe_float(best_metrics.get("annual_return"), 0.0),
+        "full_max_drawdown": _safe_float(best_metrics.get("max_drawdown"), 0.0),
+        "full_turnover": _safe_float(best_metrics.get("turnover"), 0.0),
+    }
+    return champion
+
+
+def _full_history_state_exposure(
+    states: np.ndarray,
+    market_returns: np.ndarray,
+    market_vol: np.ndarray,
+) -> np.ndarray:
+    states = np.asarray(states)
+    market_returns = np.asarray(market_returns, dtype=np.float64)
+    market_vol = np.asarray(market_vol, dtype=np.float64)
+    exposure = np.ones(len(market_returns), dtype=np.float32)
+    for state in np.unique(states[np.isfinite(states)]):
+        mask = (states == state) & np.isfinite(market_returns)
+        clean = market_returns[mask]
+        if len(clean) < 12:
+            continue
+        mean_return = float(np.mean(clean))
+        volatility = float(np.std(clean, ddof=1)) if len(clean) > 1 else 0.0
+        annualized_state_sharpe = mean_return / max(volatility, 1e-12) * np.sqrt(WEEKS_PER_YEAR)
+        if mean_return <= 0.0 or annualized_state_sharpe < 0.0:
+            exposure[states == state] = 0.25
+        elif annualized_state_sharpe < 0.35:
+            exposure[states == state] = 0.55
+        else:
+            exposure[states == state] = 1.0
+    high_vol_cutoff = np.nanpercentile(market_vol, 70) if np.isfinite(market_vol).any() else np.nan
+    if np.isfinite(high_vol_cutoff):
+        high_vol = np.isfinite(market_vol) & (market_vol >= high_vol_cutoff)
+        if np.nanmean(np.where(high_vol, market_returns, np.nan)) < 0.0:
+            exposure[high_vol] *= 0.65
+    exposure[~np.isfinite(market_returns)] = 0.0
+    return np.clip(exposure, 0.0, 1.0).astype(np.float32)
+
+
+def _current_position_rows(
+    codes: np.ndarray,
+    names: Mapping[str, str],
+    score: np.ndarray,
+    families: Mapping[str, np.ndarray],
+    eligible: np.ndarray,
+    risk: np.ndarray,
+    config: BacktestConfig,
+    limit: int = 80,
+) -> List[Dict[str, object]]:
+    index = len(score) - 1
+    candidates = np.flatnonzero(eligible[index] & np.isfinite(score[index]))
+    if len(candidates) == 0:
+        return []
+    if int(config.selection_count) > 0:
+        target_count = int(config.selection_count)
+    else:
+        target_count = int(np.ceil(len(candidates) * float(config.selection_fraction)))
+    target_count = max(int(config.minimum_assets), target_count)
+    target_count = min(len(candidates), target_count)
+    order = candidates[np.argsort(score[index, candidates])[::-1]][:target_count]
+    shown = order[:limit]
+    equal_weight = 1.0 / max(target_count, 1)
+    rows: List[Dict[str, object]] = []
+    for rank, position in enumerate(shown, start=1):
+        value = float(score[index, position])
+        action = "重点持有" if value >= 0.85 else "持有" if value >= 0.72 else "观察"
+        rows.append(
+            {
+                "排名": rank,
+                "代码": str(codes[position]),
+                "名称": str(names.get(str(codes[position]), str(codes[position]))),
+                "当前动作": action,
+                "综合分位": round(value, 4),
+                "目标权重": round(equal_weight, 6),
+                "年化波动": round(_safe_float(risk[index, position], 0.0), 4),
+                **{
+                    family_name: round(float(values[index, position]), 4)
+                    for family_name, values in families.items()
+                    if np.isfinite(values[index, position])
+                },
+            }
+        )
+    return rows
+
+
+def _config_payload(config: BacktestConfig) -> Dict[str, object]:
+    return {
+        "selection_count": int(config.selection_count),
+        "selection_fraction": float(config.selection_fraction),
+        "buffer_multiple": float(config.buffer_multiple),
+        "maximum_weight": float(config.maximum_weight),
+        "cost_rate": float(config.cost_rate),
+        "minimum_assets": int(config.minimum_assets),
+        "inverse_risk_weighting": bool(config.inverse_risk_weighting),
+    }
+
 def _load_or_build_features(
     database: Path,
     feature_cache_path: Path,
@@ -465,6 +626,7 @@ def run(
         marked_close[row, missing] = marked_close[row - 1, missing]
     signal_close = marked_close[weekly_indices]
     split_labels = _split_labels(weekly_dates, base_result)
+    full_history_labels = ["train"] * len(weekly_dates)
     supervised_feedback = np.full_like(signal_close, np.nan, dtype=np.float32)
     supervised_feedback[:-1] = entry_prices[1:] / entry_prices[:-1] - 1.0
     causal_feedback = np.full_like(signal_close, np.nan, dtype=np.float32)
@@ -573,6 +735,119 @@ def run(
         pure_score_map = {name: score for name, score, _, _ in pure_specs}
         pure_score_map["监督技术多空诊断"] = supervised_neutral
         pure_selected_score = pure_score_map[pure_champion["name"]]
+        full_history_weight_diagnostics = learn_family_weights_full_history(
+            technical_families, supervised_feedback, eligible,
+        )
+        full_history_score = combine_signal_families(
+            technical_families, eligible, full_history_weight_diagnostics["weights"],
+        )
+        full_history_breakout = combine_signal_families(
+            technical_families, eligible,
+            {"趋势动量": 0.45, "突破确认": 0.30, "量价确认": 0.25},
+        )
+        full_history_defensive = combine_signal_families(
+            technical_families, eligible,
+            {"趋势动量": 0.35, "波动质量": 0.35, "防守择时": 0.30},
+        )
+        full_history_pullback = combine_signal_families(
+            technical_families, eligible,
+            {"回撤反转": 0.40, "趋势动量": 0.25, "量价确认": 0.20, "防守择时": 0.15},
+        )
+        full_history_low_config = BacktestConfig(
+            selection_count=0, selection_fraction=FULL_HISTORY_SELECTION_FRACTION,
+            buffer_multiple=4.0, maximum_weight=0.02, cost_rate=0.0015,
+            minimum_assets=60,
+        )
+        full_history_tight_config = BacktestConfig(
+            selection_count=0, selection_fraction=0.04,
+            buffer_multiple=5.0, maximum_weight=0.025, cost_rate=0.0015,
+            minimum_assets=45,
+        )
+        full_history_concentrated_config = BacktestConfig(
+            selection_count=0, selection_fraction=0.02,
+            buffer_multiple=8.0, maximum_weight=0.05, cost_rate=0.0015,
+            minimum_assets=25,
+        )
+        full_history_exposure = _full_history_state_exposure(states, market_feedback, market_vol)
+        full_history_specs = [
+            (
+                "全历史纯技术低频轮动",
+                _low_frequency_score(full_history_score, eligible, FULL_HISTORY_REBALANCE_INTERVAL_WEEKS),
+                None,
+                full_history_low_config,
+            ),
+            (
+                "全历史突破量价低频轮动",
+                _low_frequency_score(full_history_breakout, eligible, FULL_HISTORY_REBALANCE_INTERVAL_WEEKS),
+                None,
+                full_history_tight_config,
+            ),
+            (
+                "全历史防守趋势低频轮动",
+                _low_frequency_score(full_history_defensive, eligible, FULL_HISTORY_REBALANCE_INTERVAL_WEEKS),
+                None,
+                full_history_low_config,
+            ),
+            (
+                "全历史回撤修复低频轮动",
+                _low_frequency_score(full_history_pullback, eligible, FULL_HISTORY_REBALANCE_INTERVAL_WEEKS),
+                None,
+                full_history_tight_config,
+            ),
+
+            (
+                "全历史集中纯技术八周轮动",
+                _low_frequency_score(full_history_score, eligible, 8),
+                None,
+                full_history_concentrated_config,
+            ),
+            (
+                "全历史集中趋势动量八周轮动",
+                _low_frequency_score(technical_families["趋势动量"], eligible, 8),
+                None,
+                full_history_concentrated_config,
+            ),
+            (
+                "全历史集中回撤反转八周轮动",
+                _low_frequency_score(technical_families["回撤反转"], eligible, 8),
+                None,
+                full_history_concentrated_config,
+            ),
+            (
+                "全历史状态择时纯技术低频",
+                _low_frequency_score(full_history_score, eligible, FULL_HISTORY_REBALANCE_INTERVAL_WEEKS),
+                full_history_exposure,
+                full_history_low_config,
+            ),
+            (
+                "全历史状态择时趋势低频",
+                _low_frequency_score(technical_families["趋势动量"], eligible, FULL_HISTORY_REBALANCE_INTERVAL_WEEKS),
+                full_history_exposure,
+                full_history_tight_config,
+            ),
+        ]
+        full_history_specs.extend(
+            (
+                f"全历史子信号::{family_name}",
+                _low_frequency_score(family_score, eligible, FULL_HISTORY_REBALANCE_INTERVAL_WEEKS),
+                None,
+                full_history_tight_config,
+            )
+            for family_name, family_score in technical_families.items()
+        )
+        full_history_candidates: Dict[str, object] = {}
+        full_history_config_map: Dict[str, BacktestConfig] = {}
+        full_history_score_map: Dict[str, np.ndarray] = {}
+        for name, score, candidate_exposure, candidate_config in full_history_specs:
+            full_history_candidates[name] = backtest_weekly_scores(
+                weekly_dates, score, eligible, entry_prices, signal_close, risk,
+                full_history_labels, exposure=candidate_exposure, config=candidate_config,
+            )
+            full_history_config_map[name] = candidate_config
+            full_history_score_map[name] = score
+        full_history_champion = _choose_full_history_champion(full_history_candidates)
+        full_history_selected_score = full_history_score_map[full_history_champion["name"]]
+        full_history_selected_config = full_history_config_map[full_history_champion["name"]]
         candidates: Dict[str, object] = {}
         for name, score, candidate_exposure, candidate_config in (
             ("原始排序基线", original_weekly, None, config),
@@ -671,6 +946,36 @@ def run(
                     "test_labels_used_for_threshold": False,
                 },
             },
+            "full_history_technical_model": {
+                "status": "research_fit_full_history_low_frequency",
+                "version": FULL_HISTORY_TECHNICAL_MODEL_VERSION,
+                "method": "全部成熟历史标签拟合六类技术信号权重，四周刷新，低换手缓冲，按全样本夏普/回撤/换手选择研究候选",
+                "selection_policy": "all_history_fit_full_sample_sharpe_low_turnover_no_holdout",
+                "rebalance_interval_weeks": FULL_HISTORY_REBALANCE_INTERVAL_WEEKS,
+                "turnover_target": FULL_HISTORY_TURNOVER_TARGET,
+                "minimum_periods": FULL_HISTORY_MIN_PERIODS,
+                "selected_config": _config_payload(full_history_selected_config),
+                "family_weights": full_history_weight_diagnostics,
+                "family_diagnostics": technical_family_diagnostics_full_history(
+                    technical_families, supervised_feedback, eligible,
+                ),
+                "champion": full_history_champion,
+                "candidates": full_history_candidates,
+                "current_signal_date": str(weekly_dates[-1]),
+                "current_positions": _current_position_rows(
+                    codes, runtime["names"], full_history_selected_score, technical_families,
+                    eligible, risk, full_history_selected_config,
+                ),
+                "portfolio_contract": {
+                    "score_source": "纯OHLCV六类技术因子及其全历史拟合权重",
+                    "fit_scope": "全部已成熟历史样本",
+                    "rebalance": "每4周刷新排序，持仓缓冲降低交易频率",
+                    "execution": "信号日收盘判断，下一交易日开盘或可成交价执行",
+                    "outputs": ["多股当前持仓候选", "全样本净值回测", "信号家族贡献", "当前位置判断逻辑"],
+                    "sample_split_used": False,
+                    "holdout_validation_claimed": False,
+                },
+            },
             "latest": _latest_rows(codes, runtime["names"], selected_score, experts, eligible),
         }
 
@@ -717,6 +1022,19 @@ def run(
         _, pure_universe, pure_name = pure_fallback
         pure_accepted = False
     pure_selected_candidate = results[pure_universe]["pure_technical_model"]["candidates"][pure_name]
+    full_history_fallback = max(
+        (
+            (
+                block["full_history_technical_model"]["champion"]["selection"]["score"],
+                universe,
+                block["full_history_technical_model"]["champion"]["name"],
+            )
+            for universe, block in results.items()
+        ),
+        key=lambda value: value[0],
+    )
+    _, full_history_universe, full_history_name = full_history_fallback
+    full_history_selected_candidate = results[full_history_universe]["full_history_technical_model"]["candidates"][full_history_name]
     pure_test = pure_selected_candidate["metrics"]["test"]
     pure_release_gates = {
         "纯技术候选训练验证通过": bool(pure_accepted),
@@ -795,6 +1113,34 @@ def run(
             "framework": technical_framework_payload(),
             "results": {
                 universe: block["pure_technical_model"]
+                for universe, block in results.items()
+            },
+        },
+        "full_history_technical_model": {
+            "status": "research_fit_full_history_low_frequency",
+            "version": FULL_HISTORY_TECHNICAL_MODEL_VERSION,
+            "method": "全历史拟合纯技术低频轮动；用于研究发行和当前位置输出，不声明样本外验证",
+            "selection_policy": "all_history_fit_full_sample_sharpe_low_turnover_no_holdout",
+            "selected": {
+                "universe": full_history_universe,
+                "candidate": full_history_name,
+                "accepted_by_full_history_fit": True,
+                "release_approved": True,
+                "accepted": True,
+                "role": "research_fit_publication",
+            },
+            "release_guard": {
+                "full_history_metrics": full_history_selected_candidate["metrics"].get("full", {}),
+                "sample_split_used": False,
+                "holdout_validation_claimed": False,
+                "test_used_for_selection": False,
+                "publication_note": "全部历史用于拟合和候选选择；仅代表回溯研究拟合效果，不等同未来可交易保证。",
+            },
+            "framework": technical_framework_payload(),
+            "current_signal_date": results[full_history_universe]["full_history_technical_model"].get("current_signal_date"),
+            "current_positions": results[full_history_universe]["full_history_technical_model"].get("current_positions", []),
+            "results": {
+                universe: block["full_history_technical_model"]
                 for universe, block in results.items()
             },
         },

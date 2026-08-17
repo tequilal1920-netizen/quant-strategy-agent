@@ -30,6 +30,7 @@ python ai-models/industry-rotation/scripts/query.py drivers 行业=电子 数量
 python ai-models/liquidity-tracking/scripts/query.py page 页面=外资
 python ai-models/factor-laboratory/scripts/query.py champion
 python ai-models/technical-analysis/scripts/query.py status
+python ai-models/technical-analysis/scripts/query.py current 数量=20
 python ai-models/portfolio-optimization/scripts/query.py current 最小权重=0.001
 python ai-models/research-home/scripts/query.py overview
 ```
@@ -46,7 +47,7 @@ python ai-models/research-home/scripts/query.py overview
 | 资金面跟踪 | [`liquidity-tracking`](ai-models/liquidity-tracking/) | 查询七类资金主体的最新值、方向、来源和质量状态。 |
 | 行业景气度 | [`industry-rotation`](ai-models/industry-rotation/) | 查询行业景气排名、高频驱动、月周轮动和季度风格箱。 |
 | 因子实验室 | [`factor-laboratory`](ai-models/factor-laboratory/) | 查询因子冠军、指数增强、SmartBeta、三段绩效和治理门禁。 |
-| 技术分析 | [`technical-analysis`](ai-models/technical-analysis/) | 查询K线治理和形态知识，并转接远程单股学习任务。 |
+| 技术分析 | [`technical-analysis`](ai-models/technical-analysis/) | 查询K线治理、全历史低频技术当前位置和形态知识，并转接远程单股学习任务。 |
 | 组合优化 | [`portfolio-optimization`](ai-models/portfolio-optimization/) | 查询求解器、权重、风险贡献、约束余量、压力和回测门禁。 |
 
 ## 本机接口与远程模型

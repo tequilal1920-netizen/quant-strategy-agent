@@ -24,7 +24,7 @@ import research_evidence_backend
 import rotation_app as rotation
 
 
-APP_VERSION = "2026.08.17-technical-dual-model-vnext-r38.0"
+APP_VERSION = "2026.08.17-technical-full-history-fit-vnext-r38.1"
 legacy.APP_VERSION = APP_VERSION
 rotation.APP_VERSION = APP_VERSION
 

@@ -100,6 +100,35 @@ def _latest_rows(result: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+
+def _full_history_current_rows(model: dict[str, Any]) -> list[dict[str, Any]]:
+    full = model.get("full_history_technical_model") or {}
+    rows = []
+    for rank, item in enumerate((full.get("current_positions") or [])[:20], start=1):
+        rows.append(
+            {
+                "name": item.get("名称") or item.get("代码"),
+                "rank": rank,
+                "action": item.get("当前动作") or "观察",
+                "target_weight": _num(item.get("目标权重")),
+                "score": _num(item.get("综合分位")),
+                "daily": _num(item.get("趋势动量")),
+                "breakout": _num(item.get("突破确认")),
+                "pullback": _num(item.get("回撤反转")),
+                "quiet": _num(item.get("波动质量")),
+                "weekly": _num(item.get("量价确认")),
+                "defense": _num(item.get("防守择时")),
+                "trend": [
+                    _num(item.get("趋势动量")),
+                    _num(item.get("突破确认")),
+                    _num(item.get("回撤反转")),
+                    _num(item.get("波动质量")),
+                    _num(item.get("量价确认")),
+                ],
+            }
+        )
+    return rows
+
 def _expert_rows(result: dict[str, Any]) -> list[dict[str, Any]]:
     names = result.get("expert_names") or []
     posterior = result.get("posterior_weights") or []
@@ -202,7 +231,8 @@ def kline_multiscale_visuals(model: dict[str, Any]) -> dict[str, Any]:
     release_approved = bool(
         (model.get("deployment_selected") or {}).get("release_approved")
     )
-    latest = _latest_rows(result)
+    full_current = _full_history_current_rows(model)
+    latest = full_current or _latest_rows(result)
     experts = _expert_rows(result)
     split_rows = _split_rows(candidate, "模型二：LLM记忆多周期")
     pure = model.get("pure_technical_model") or {}
@@ -211,6 +241,12 @@ def kline_multiscale_visuals(model: dict[str, Any]) -> dict[str, Any]:
     pure_candidate = ((pure_result.get("candidates") or {}).get(pure_selected.get("candidate")) or {})
     if pure_candidate:
         split_rows.extend(_split_rows(pure_candidate, "模型一：纯技术信号栈"))
+    full = model.get("full_history_technical_model") or {}
+    full_selected = full.get("selected") or {}
+    full_result = ((full.get("results") or {}).get(full_selected.get("universe")) or {})
+    full_candidate = ((full_result.get("candidates") or {}).get(full_selected.get("candidate")) or {})
+    if full_candidate:
+        split_rows.extend(_split_rows(full_candidate, "模型三：全历史低频拟合"))
     curve = _curve_rows(candidate) if release_approved else []
     importance = _importance_rows(model)
     names = result.get("expert_names") or []
@@ -259,16 +295,22 @@ def kline_multiscale_visuals(model: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "descriptive": {
-            "title": "最新多周期技术截面",
-            "note": "全A可交易股票按行业与市值处理后的当前形态排序。",
+            "title": "全历史技术模型当前位置" if full_current else "最新多周期技术截面",
+            "note": (
+                "全历史拟合低频模型的最新持仓候选；该表是回溯拟合研究输出。"
+                if full_current
+                else "全A可交易股票按行业与市值处理后的当前形态排序。"
+            ),
             "table": _table(
                 [
                     ("name", "标的", "text"),
                     ("rank", "排名", "integer"),
-                    ("daily", "日线", "percentile"),
+                    ("action", "动作", "text"),
+                    ("target_weight", "权重", "percentile"),
+                    ("daily", "趋势", "percentile"),
                     ("breakout", "突破", "percentile"),
                     ("pullback", "回撤", "percentile"),
-                    ("weekly", "周线", "percentile"),
+                    ("weekly", "量价", "percentile"),
                     ("trend", "五维形态", "sparkline"),
                 ],
                 latest,
@@ -304,7 +346,7 @@ def kline_multiscale_visuals(model: dict[str, Any]) -> dict[str, Any]:
         },
         "diagnostics": {
             "title": "分样本模型诊断",
-            "note": "训练验证用于选择，封存测试只用于发布闸门。",
+            "note": "模型一/二保留分段治理；模型三为全历史拟合低频研究版，不声明样本外验证。",
             "table": _table(
                 [
                     ("model", "模型", "text"),

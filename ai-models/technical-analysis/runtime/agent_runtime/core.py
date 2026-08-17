@@ -478,6 +478,25 @@ def _factor_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
 
 
 def _technical_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
+    if operation == "current":
+        payload, path = _snapshot("kline_multiscale_expert_challenger.json")
+        full = payload.get("full_history_technical_model") or {}
+        selected = full.get("selected") or {}
+        result_block = ((full.get("results") or {}).get(selected.get("universe")) or {})
+        candidate = ((result_block.get("candidates") or {}).get(selected.get("candidate")) or {})
+        result = {
+            "模型": "model_3_full_history_low_frequency_fit",
+            "版本": full.get("version"),
+            "股票池": selected.get("universe"),
+            "候选": selected.get("candidate"),
+            "信号日": full.get("current_signal_date"),
+            "训练方式": "全部成熟历史样本拟合；不划分训练/测试",
+            "验证边界": "全样本回溯拟合，不声明样本外验证",
+            "绩效": _compact_metrics((candidate.get("metrics") or {}).get("full") or {}),
+            "当前位置": (full.get("current_positions") or [])[: _limit(params, default=20, maximum=100)],
+            "逻辑": (result_block.get("portfolio_contract") or full.get("release_guard") or {}),
+        }
+        return _response("technical-analysis", operation, payload, path, result)
     if operation == "status":
         payload, path = _snapshot("kline_cross_sectional_audit.json")
         result = {
@@ -529,6 +548,25 @@ def _technical_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
                 },
                 "framework_families": pure_family_names,
             }
+            full = dual_payload.get("full_history_technical_model") or {}
+            full_selected = full.get("selected") or {}
+            full_guard = full.get("release_guard") or {}
+            full_results = (full.get("results") or {}).get(full_selected.get("universe")) or {}
+            full_candidate = (full_results.get("candidates") or {}).get(full_selected.get("candidate")) or {}
+            result["model_3_full_history_fit"] = {
+                "version": full.get("version"),
+                "status": full.get("status"),
+                "selected_universe": full_selected.get("universe"),
+                "selected_candidate": full_selected.get("candidate"),
+                "current_signal_date": full.get("current_signal_date"),
+                "current_position_count": len(full.get("current_positions") or []),
+                "sample_split_used": bool(full_guard.get("sample_split_used", False)),
+                "holdout_validation_claimed": bool(full_guard.get("holdout_validation_claimed", False)),
+                "metrics": {
+                    "full": _compact_metrics((full_candidate.get("metrics") or {}).get("full") or {})
+                },
+                "top_positions": (full.get("current_positions") or [])[:10],
+            }
             result["model_2_llm_memory"] = {
                 "version": dual_payload.get("version"),
                 "status": dual_payload.get("status"),
@@ -573,7 +611,7 @@ def _technical_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
             root,
             rows[: _limit(params, default=20, maximum=200)],
         )
-    raise QueryError("技术分析动作仅支持 status、patterns")
+    raise QueryError("技术分析动作仅支持 status、current、patterns")
 
 
 def _portfolio_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:

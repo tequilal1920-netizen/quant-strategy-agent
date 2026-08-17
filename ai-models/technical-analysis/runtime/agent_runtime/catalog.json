@@ -61,9 +61,9 @@
       "skill": "technical-analysis",
       "model_path": "model/technical_analysis",
       "skill_path": "skill/technical-analysis",
-      "summary": "查询K线横截面治理状态与形态知识，并可转接远程单股K线学习任务。",
-      "operations": ["status", "patterns"],
-      "questions": ["K线模型现在是否可用于交易", "查询突破与反转形态的学习资料"]
+      "summary": "查询K线横截面治理状态、全历史低频技术模型当前位置与形态知识，并可转接远程单股K线学习任务。",
+      "operations": ["status", "current", "patterns"],
+      "questions": ["K线模型现在是否可用于交易", "当前全历史技术模型持有哪些个股", "查询突破与反转形态的学习资料"]
     },
     {
       "title": "组合优化",

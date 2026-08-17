@@ -4,8 +4,10 @@ from framework.backtest.technical_signal_model import (
     build_technical_signal_families,
     calibrate_single_asset_timing,
     combine_signal_families,
+    learn_family_weights_full_history,
     learn_family_weights_train_only,
     technical_family_diagnostics,
+    technical_family_diagnostics_full_history,
 )
 
 
@@ -81,6 +83,28 @@ def test_combined_signal_and_diagnostics_use_all_families():
     assert np.nanmax(combined) <= 1.0
     assert [row["family"] for row in rows] == list(families)
     assert all("test_rank_ic" in row for row in rows)
+
+
+def test_full_history_weights_use_all_matured_labels_without_sample_split():
+    rng = np.random.default_rng(38)
+    periods, assets = 40, 64
+    families = {
+        "趋势动量": rng.random((periods, assets)),
+        "突破确认": rng.random((periods, assets)),
+        "回撤反转": rng.random((periods, assets)),
+    }
+    eligible = np.ones((periods, assets), dtype=bool)
+    forward = rng.normal(0.0, 0.02, size=(periods, assets))
+
+    fitted = learn_family_weights_full_history(families, forward, eligible)
+    diagnostics = technical_family_diagnostics_full_history(families, forward, eligible)
+
+    assert fitted["sample_split_used"] is False
+    assert fitted["holdout_validation_claimed"] is False
+    assert fitted["all_matured_history_used_for_fit"] is True
+    assert abs(sum(fitted["weights"].values()) - 1.0) < 1e-9
+    assert [row["family"] for row in diagnostics] == list(families)
+    assert all(row["full_periods"] > 0 for row in diagnostics)
 
 
 def test_single_asset_timing_calibration_ignores_test_returns():

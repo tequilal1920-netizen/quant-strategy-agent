@@ -13,10 +13,12 @@
   "bundled_runtime": "runtime/agent_runtime",
   "operations": [
     "status",
+    "current",
     "patterns"
   ],
   "question_examples": [
     "K线模型现在是否可以用于交易",
+    "当前全历史低频技术模型持有哪些个股",
     "解释纯技术信号栈的买卖点流程",
     "查询突破与反转形态的学习资料"
   ],

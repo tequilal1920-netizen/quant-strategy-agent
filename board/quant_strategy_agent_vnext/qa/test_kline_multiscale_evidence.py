@@ -26,14 +26,20 @@ def test_kline_four_panel_uses_the_frozen_dual_model_result() -> None:
     assert len(payload["visuals"]["descriptive"]["table"]["rows"]) >= 10
 
     splits = payload["visuals"]["diagnostics"]["table"]["rows"]
-    assert len(splits) >= 8
-    assert len({row["model"] for row in splits}) >= 2
-    assert splits[0]["sharpe"] > 1.5
-    assert splits[1]["sharpe"] > 1.5
-    assert splits[2]["sharpe"] < 0
-    assert splits[4]["sharpe"] > 1.5
-    assert splits[5]["sharpe"] > 1.5
-    assert splits[6]["sharpe"] < 0
+    assert len(splits) >= 12
+    assert len({row["model"] for row in splits}) >= 3
+    llm_rows = [row for row in splits if row["model"] == "模型二：LLM记忆多周期"]
+    pure_rows = [row for row in splits if row["model"] == "模型一：纯技术信号栈"]
+    full_rows = [row for row in splits if row["model"] == "模型三：全历史低频拟合"]
+    assert llm_rows[0]["sharpe"] > 1.5
+    assert llm_rows[1]["sharpe"] > 1.5
+    assert llm_rows[2]["sharpe"] < 0
+    assert pure_rows[0]["sharpe"] > 1.5
+    assert pure_rows[1]["sharpe"] > 1.5
+    assert pure_rows[2]["sharpe"] < 0
+    full_diagnostic = next(row for row in full_rows if row["split"] == "全样本诊断")
+    assert full_diagnostic["periods"] >= 120
+    assert full_diagnostic["sharpe"] > 0
 
     governance = payload["governance"]
     assert governance["selection_uses_test"] is False
@@ -42,6 +48,9 @@ def test_kline_four_panel_uses_the_frozen_dual_model_result() -> None:
     assert governance["pure_technical_selection_uses_test"] is False
     assert governance["pure_technical_release_approved"] is False
     assert governance["pure_technical_candidate"]
+    assert governance["full_history_sample_split_used"] is False
+    assert governance["full_history_holdout_validation_claimed"] is False
+    assert governance["full_history_candidate"]
     strategy_traces = payload["visuals"]["strategy"]["chart"]["traces"]
     assert len(strategy_traces) == 1
     assert strategy_traces[0]["x"]
@@ -51,9 +60,10 @@ def test_kline_four_panel_uses_the_frozen_dual_model_result() -> None:
 def test_kline_governance_blocks_the_failed_sealed_test() -> None:
     payload = model_governance_backend.build_model_governance()
     model = payload["models"]["kline_memory"]
-    assert payload["release"] == "2026.08.17-technical-dual-model-governed-r38.0"
+    assert payload["release"] == "2026.08.17-technical-full-history-fit-governed-r38.1"
     assert "technical-signal-stack/1.0" in model["engine"]
     assert "kline-multiscale-expert/1.6" in model["engine"]
+    assert "technical-signal-stack/1.1" in model["engine"]
     assert model["gate"] == "research_diagnostic"
     assert model["splits"]["train"]["sharpe"] > 1.5
     assert model["splits"]["validation"]["sharpe"] > 1.5
