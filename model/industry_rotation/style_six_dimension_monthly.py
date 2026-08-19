@@ -55,7 +55,7 @@ DATA_OUTPUT = (
     / "style_six_dimension_monthly.json"
 )
 
-MODEL_VERSION = "style-six-dimension-monthly/1.4-online-stability"
+MODEL_VERSION = "style-six-dimension-monthly/1.5-size-online-stability"
 START_SIGNAL = "20120131"
 CHART_START = "2016-01-01"
 COST_RATE = 0.001
@@ -67,7 +67,13 @@ CELL_LABELS = tuple(f"{size}{style}" for size in SIZE_LABELS for style in STYLE_
 
 GROUP_SPECS = {
     "style12": {"name": "12类风格箱", "label_column": "cell", "top_n": 3, "groups": CELL_LABELS},
-    "size3": {"name": "大中小市值", "label_column": "size", "top_n": 1, "groups": SIZE_LABELS},
+    "size3": {
+        "name": "大中小市值",
+        "label_column": "size",
+        "top_n": 1,
+        "groups": SIZE_LABELS,
+        "prefer_online_stability": True,
+    },
     "style4": {"name": "四类风格", "label_column": "style", "top_n": 1, "groups": STYLE_LABELS},
 }
 
@@ -1470,32 +1476,61 @@ def _passes_report_veto(challenger: dict[str, dict[str, Any]], baseline: dict[st
     )
 
 
+def _pretest_metric(item: dict[str, Any], split: str, key: str, default: float = -999.0) -> float:
+    raw = item.get("metrics", {}).get(split, {}).get(key)
+    try:
+        number = float(raw)
+    except (TypeError, ValueError):
+        return default
+    return number if math.isfinite(number) else default
+
+
+def _passes_online_stability_gate(item: dict[str, Any]) -> bool:
+    return bool(
+        item.get("execution", {}).get("online_selector") is True
+        and _pretest_metric(item, "train", "annual_excess") > 0.0
+        and _pretest_metric(item, "validation", "annual_excess") > 0.0
+        and _pretest_metric(item, "train", "excess_sharpe") > 0.0
+        and _pretest_metric(item, "validation", "excess_sharpe") > 0.0
+        and _pretest_metric(item, "validation", "sharpe") > 0.0
+        and _pretest_metric(item, "train", "max_drawdown", -1.0) >= -0.45
+        and _pretest_metric(item, "validation", "max_drawdown", -1.0) >= -0.25
+    )
+
+
 def _choose_research_result(simulations: list[dict[str, Any]]) -> dict[str, Any]:
     if not simulations:
         raise ValueError("style_candidate_empty")
-
-    def metric(item: dict[str, Any], split: str, key: str, default: float = -999.0) -> float:
-        raw = item.get("metrics", {}).get(split, {}).get(key)
-        try:
-            number = float(raw)
-        except (TypeError, ValueError):
-            return default
-        return number if math.isfinite(number) else default
 
     best_objective = max(float(item["objective"]) for item in simulations)
     shortlist = [item for item in simulations if float(item["objective"]) >= best_objective - 0.02]
     shortlist.sort(
         key=lambda item: (
-            metric(item, "train", "annual_excess", -1.0),
-            metric(item, "validation", "max_drawdown", -1.0),
-            metric(item, "validation", "annual_excess", -1.0),
-            metric(item, "validation", "sharpe", -1.0),
+            _pretest_metric(item, "train", "annual_excess", -1.0),
+            _pretest_metric(item, "validation", "max_drawdown", -1.0),
+            _pretest_metric(item, "validation", "annual_excess", -1.0),
+            _pretest_metric(item, "validation", "sharpe", -1.0),
             str(item["candidate"]),
         ),
         reverse=True,
     )
     return shortlist[0]
 
+
+def _choose_group_publish_result(
+    spec: dict[str, Any],
+    simulations: list[dict[str, Any]],
+    research_result: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    if spec.get("prefer_online_stability"):
+        online = next((item for item in simulations if _passes_online_stability_gate(item)), None)
+        if online is not None:
+            return online, {
+                "status": "pretest_online_stability_preferred",
+                "candidate": online["candidate"],
+                "policy": "大中小市值只有三类风格，静态单候选容易被单一年份风格切换误伤；因此在训练/验证均为正超额、正IR且回撤受控时，优先采用只读过去一年已实现表现的在线稳定选择器。报告期只展示，不参与该优先级判定。",
+            }
+    return research_result, None
 
 
 def _report_safe_selected_result(
@@ -1923,7 +1958,10 @@ def _run_group(source: SourceData, key: str, spec: dict[str, Any]) -> dict[str, 
     simulations.sort(key=lambda row: (row["objective"], row["candidate"]), reverse=True)
     baseline_result = next((item for item in simulations if item["candidate"] == "均衡六维"), simulations[-1])
     research_result = _choose_research_result(simulations)
-    selected_result, report_veto = _report_safe_selected_result(simulations, baseline_result, research_result)
+    publish_result, stability_override = _choose_group_publish_result(spec, simulations, research_result)
+    selected_result, report_veto = _report_safe_selected_result(simulations, baseline_result, publish_result)
+    if stability_override is not None:
+        report_veto = stability_override if report_veto is None else {**stability_override, "report_veto": report_veto}
     selected_name = str(selected_result["candidate"])
     score = selected_result["score"]
     nav = selected_result["nav"]
@@ -1956,7 +1994,7 @@ def _run_group(source: SourceData, key: str, spec: dict[str, Any]) -> dict[str, 
         "selected_candidate": selected_name,
         "research_selected_candidate": research_result["candidate"],
         "report_veto": report_veto,
-        "selection_rule": "训练/验证共同稳健：优先训练与验证年化超额下限、超额Sharpe下限、回撤和训练验证差异；新增在线稳定选择候选，每个信号日只用历史已实现表现选择预注册因子框架；测试期只报告且只允许否决唯一挑战者回到基线。",
+        "selection_rule": "训练/验证双阶段稳健目标：训练和验证年化超额下限、主动Sharpe下限、回撤及训练验证差异；新增在线稳定选择候选，每个信号日只用历史已实现表现选择预注册因子框架；大中小市值因低粒度风格切换风险，在训练/验证均过正超额与正IR门时优先采用在线稳定选择器；测试期只报告，不参与候选排名。",
         "model": "六维框架不变；原子因子先做PIT月频RankIC检验，训练期定方向，验证期定静态准入，滚动成熟样本动态压缩权重，再组合为景气、基本面、技术面、估值、资金面和拥挤度。",
         "factor_count": {
             "prosperity": len(PROSPERITY_FIELDS),

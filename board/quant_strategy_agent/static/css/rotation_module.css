@@ -405,3 +405,61 @@ button.style-box-cell:hover {
     min-height: 88px;
   }
 }
+
+
+/* 行业/风格轮动最终收益图：沿用招银理财作图色系，静态图只读展示。 */
+.rotation-final-figures {
+  margin: 0 0 18px;
+}
+.rotation-final-figures .panel-header {
+  margin-bottom: 10px;
+}
+.rotation-result-group {
+  margin: 0 0 18px;
+  padding: 12px 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+}
+.rotation-result-group:last-child {
+  margin-bottom: 0;
+}
+.rotation-result-group h4 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 14px;
+  margin: 0 0 10px;
+  color: var(--ink);
+  font: 700 15px/1.45 KaiTi, "STKaiti", "Kaiti SC", Arial, sans-serif;
+}
+.rotation-result-group h4 span {
+  color: var(--muted);
+  font: 500 12px/1.45 Arial, KaiTi, sans-serif;
+}
+.rotation-result-pair {
+  display: grid;
+  grid-template-columns: minmax(260px, .92fr) minmax(360px, 1.38fr);
+  gap: 14px;
+  align-items: start;
+}
+.rotation-result-figure {
+  margin: 0;
+  min-width: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+.rotation-result-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #fff;
+}
+@media (max-width: 980px) {
+  .rotation-result-pair {
+    grid-template-columns: 1fr;
+  }
+}

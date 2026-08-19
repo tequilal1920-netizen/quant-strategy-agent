@@ -17,6 +17,8 @@ APP_VERSION = f"{BASE_VERSION}-rotation-r2"
 ROOT = Path(__file__).resolve().parent
 ROTATION_SNAPSHOT = ROOT / "data" / "rotation_snapshot.json"
 ROTATION_TRACKING = ROOT / "data" / "rotation_tracking.json"
+ROTATION_FINAL_FIGURES = ROOT / "data" / "rotation_final_figures.json"
+ROTATION_FINAL_FIGURES_STATIC = ROOT / "static" / "rotation_figures" / "manifest.json"
 _CACHE_LOCK = threading.RLock()
 _CACHE: dict[str, dict[str, Any]] = {}
 
@@ -277,6 +279,28 @@ def rotation_tracking():
         payload = _load_json(ROTATION_TRACKING)
         if len(payload.get("industries", {})) != 31:
             return jsonify({"status": "failed", "message": "tracking_industry_count_not_31"}), 503
+        return jsonify(payload)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"status": "failed", "message": str(exc)}), 503
+
+
+@app.get("/api/rotation/final-figures")
+def rotation_final_figures():
+    """Return final daily performance figure manifest for industry/style rotation."""
+    try:
+        source = ROTATION_FINAL_FIGURES if ROTATION_FINAL_FIGURES.exists() else ROTATION_FINAL_FIGURES_STATIC
+        payload = _load_json(source)
+        figures = payload.get("figures", {})
+        expected = {"industry_monthly", "style12", "size3", "style4"}
+        if set(figures) != expected:
+            return jsonify({"status": "failed", "message": "rotation_final_figures_contract"}), 503
+        for key, row in figures.items():
+            for field in ("annual_table", "daily_nav"):
+                value = str(row.get(field) or "")
+                if not value.startswith("/static/rotation_figures/"):
+                    return jsonify({"status": "failed", "message": f"{key}_{field}_path_contract"}), 503
+                if not (ROOT / value.lstrip("/")).exists():
+                    return jsonify({"status": "failed", "message": f"{key}_{field}_missing"}), 503
         return jsonify(payload)
     except Exception as exc:  # noqa: BLE001
         return jsonify({"status": "failed", "message": str(exc)}), 503
