@@ -273,11 +273,15 @@ def build() -> dict[str, Any]:
     style = _read_json(DATA_DIR / "style_six_dimension_monthly.json")
     figures: dict[str, Any] = {}
     industry = rotation["industry"]["frequencies"]["monthly"]
-    figures["industry_monthly"] = _build_one(
+    industry_row = _build_one(
         "industry_monthly",
         industry.get("return_loss_diagnostics", {}).get("calendar_year", []),
         industry.get("nav", []),
     )
+    industry_row["selected_candidate"] = industry.get("selected_candidate_label") or industry.get("selected_candidate")
+    industry_row["research_selected_candidate"] = industry.get("research_selected_candidate_label") or industry.get("research_selected_candidate")
+    industry_row["metrics"] = industry.get("metrics", {})
+    figures["industry_monthly"] = industry_row
     for key in ["style12", "size3", "style4"]:
         strategy = style["strategies"][key]
         row = _build_one(key, strategy.get("calendar_year", []), strategy.get("nav", []))

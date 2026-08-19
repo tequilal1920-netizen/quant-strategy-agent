@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import json
 import math
+import pickle
 import sqlite3
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -53,7 +55,7 @@ DATA_OUTPUT = (
     / "style_six_dimension_monthly.json"
 )
 
-MODEL_VERSION = "style-six-dimension-monthly/1.1-factor-admission"
+MODEL_VERSION = "style-six-dimension-monthly/1.4-online-stability"
 START_SIGNAL = "20120131"
 CHART_START = "2016-01-01"
 COST_RATE = 0.001
@@ -69,6 +71,10 @@ GROUP_SPECS = {
     "style4": {"name": "四类风格", "label_column": "style", "top_n": 1, "groups": STYLE_LABELS},
 }
 
+_GROUP_WEIGHT_CACHE: dict[tuple[int, str, pd.Timestamp], dict[str, pd.Series]] = {}
+_LABEL_DATE_CACHE: dict[tuple[int, pd.Timestamp], pd.DataFrame] = {}
+_LABEL_DATE_SET_CACHE: dict[int, set[pd.Timestamp]] = {}
+
 SPLITS = {
     "train": ("2015-01-01", "2018-12-31"),
     "validation": ("2019-01-01", "2021-12-31"),
@@ -76,6 +82,14 @@ SPLITS = {
 }
 
 
+CANDIDATE_EXECUTION = {
+    "连续均衡六维": {"mode": "score_tilt", "active_share": 0.42, "floor": 0.01},
+    "连续检验六维": {"mode": "score_tilt", "active_share": 0.48, "floor": 0.01},
+    "连续趋势资金": {"mode": "score_tilt", "active_share": 0.50, "floor": 0.01},
+    "连续质量低拥挤": {"mode": "score_tilt", "active_share": 0.46, "floor": 0.015},
+    "滚动IC六维": {"mode": "score_tilt", "active_share": 0.50, "floor": 0.01},
+    "滚动IC低拥挤": {"mode": "score_tilt", "active_share": 0.46, "floor": 0.015},
+}
 FUNDAMENTAL_FIELDS = [
     "roe",
     "roa",
@@ -253,15 +267,20 @@ def _execution_dates(trade_dates: pd.DatetimeIndex, signals: pd.DatetimeIndex) -
 
 
 def _attach_financials(connection: sqlite3.Connection, monthly: pd.DataFrame) -> pd.DataFrame:
+    max_visible_date = monthly["trade_date"].max().strftime("%Y%m%d")
+    min_visible_date = (monthly["trade_date"].min() - pd.DateOffset(years=6)).strftime("%Y%m%d")
     financial = pd.read_sql_query(
         """
         SELECT ts_code, visible_date, end_date, total_revenue, gross_margin, netprofit_margin,
                roe, roa, debt_to_assets, current_ratio, assets_turn,
                op_yoy, tr_yoy, netprofit_yoy
         FROM financial_report_visible
-        ORDER BY ts_code, visible_date, end_date
+        WHERE visible_date <= ?
+          AND visible_date >= ?
+        ORDER BY visible_date, ts_code, end_date
         """,
         connection,
+        params=(max_visible_date, min_visible_date),
     )
     financial["visible_date"] = pd.to_datetime(financial["visible_date"], format="%Y%m%d", errors="coerce")
     financial["financial_end_date"] = pd.to_datetime(financial.pop("end_date"), format="%Y%m%d", errors="coerce")
@@ -283,8 +302,8 @@ def _attach_financials(connection: sqlite3.Connection, monthly: pd.DataFrame) ->
         "tr_yoy",
         "netprofit_yoy",
     ]
-    left = monthly.sort_values(["ts_code", "trade_date"]).reset_index(drop=True)
-    right = financial.sort_values(["ts_code", "visible_date"]).reset_index(drop=True)
+    left = monthly.sort_values(["trade_date", "ts_code"]).reset_index(drop=True)
+    right = financial.sort_values(["visible_date", "ts_code"]).reset_index(drop=True)
     try:
         merged = pd.merge_asof(
             left,
@@ -736,11 +755,48 @@ def _source_cache_signature() -> dict[str, Any]:
 
 
 def _read_source_cache() -> SourceData | None:
-    return None
+    try:
+        if not SOURCE_CACHE.exists() or not SOURCE_CACHE_META.exists():
+            return None
+        meta = json.loads(SOURCE_CACHE_META.read_text(encoding="utf-8"))
+        if meta != _source_cache_signature():
+            return None
+        main_module = sys.modules.get("__main__")
+        if main_module is not None and not hasattr(main_module, "SourceData"):
+            setattr(main_module, "SourceData", SourceData)
+        with SOURCE_CACHE.open("rb") as handle:
+            source = pickle.load(handle)
+        if isinstance(source, dict):
+            return SourceData(
+                trade_dates=pd.DatetimeIndex(source["trade_dates"]),
+                signal_dates=pd.DatetimeIndex(source["signal_dates"]),
+                execution_dates={pd.Timestamp(k): pd.Timestamp(v) for k, v in source["execution_dates"].items()},
+                labels=source["labels"],
+                daily_returns=source["daily_returns"],
+            )
+        if not isinstance(source, SourceData):
+            return None
+        return source
+    except Exception:
+        return None
 
 
 def _write_source_cache(source: SourceData) -> None:
-    return None
+    SOURCE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    tmp_cache = SOURCE_CACHE.with_suffix(".tmp")
+    tmp_meta = SOURCE_CACHE_META.with_suffix(".tmp")
+    payload = {
+        "trade_dates": source.trade_dates,
+        "signal_dates": source.signal_dates,
+        "execution_dates": source.execution_dates,
+        "labels": source.labels,
+        "daily_returns": source.daily_returns,
+    }
+    with tmp_cache.open("wb") as handle:
+        pickle.dump(payload, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    tmp_meta.write_text(json.dumps(_source_cache_signature(), ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp_cache.replace(SOURCE_CACHE)
+    tmp_meta.replace(SOURCE_CACHE_META)
 
 
 def _load_sources() -> SourceData:
@@ -773,18 +829,33 @@ def _weighted_group_values(
     fields: list[str],
     groups: Iterable[str],
 ) -> dict[str, pd.DataFrame]:
-    local = labels[["trade_date", label_column, "circ_mv", *fields]].copy()
-    local = local[local[label_column].isin(groups) & local["circ_mv"].gt(0.0)]
-    output: dict[str, pd.DataFrame] = {}
-    denominator = local.groupby(["trade_date", label_column])["circ_mv"].sum().replace(0.0, np.nan)
-    for field in fields:
-        valid = local[[field, "circ_mv"]].notna().all(axis=1)
-        weighted = local.loc[valid, field].astype(float).mul(local.loc[valid, "circ_mv"].astype(float))
-        numerator = weighted.groupby([local.loc[valid, "trade_date"], local.loc[valid, label_column]]).sum()
-        frame = numerator.div(denominator).unstack().reindex(columns=list(groups)).sort_index()
-        output[field] = frame
-    return output
+    """有效样本市值加权的组别因子聚合。
 
+    旧口径用有效样本做分子，却用全组流通市值做分母。财报、资金流和部分估值字段
+    缺失较多时，这会把缺失样本误当成零暴露，系统性压低覆盖率较差的组别。这里按每个
+    字段分别计算有效样本分母，同时一次性完成全部字段的 groupby，既保证口径正确，也
+    避免 50 多个字段重复聚合。
+    """
+    group_list = list(groups)
+    columns = ["trade_date", label_column, "circ_mv", *fields]
+    local = labels.loc[labels[label_column].isin(group_list), columns].copy()
+    local["circ_mv"] = pd.to_numeric(local["circ_mv"], errors="coerce")
+    local = local.loc[local["circ_mv"].gt(0.0)]
+    if local.empty:
+        return {
+            field: pd.DataFrame(index=pd.DatetimeIndex([]), columns=group_list, dtype=float)
+            for field in fields
+        }
+    value = local[fields].apply(pd.to_numeric, errors="coerce")
+    weight = local["circ_mv"].astype(float)
+    keys = [local["trade_date"], local[label_column]]
+    weighted_sum = value.mul(weight, axis=0).groupby(keys).sum(min_count=1)
+    valid_weight = value.notna().mul(weight, axis=0).groupby(keys).sum(min_count=1)
+    aggregated = weighted_sum.div(valid_weight.replace(0.0, np.nan))
+    output: dict[str, pd.DataFrame] = {}
+    for field in fields:
+        output[field] = aggregated[field].unstack().reindex(columns=group_list).sort_index()
+    return output
 
 def _raw_to_scores(raw: dict[str, pd.DataFrame], fields: list[str]) -> dict[str, pd.DataFrame]:
     return {
@@ -898,7 +969,8 @@ def _forward_group_returns(
 ) -> tuple[pd.DataFrame, pd.Series]:
     group_list = list(groups)
     signals = [pd.Timestamp(date) for date in signal_dates if pd.Timestamp(date) in execution_dates]
-    signals = [date for date in signals if date in set(pd.to_datetime(labels["trade_date"]))]
+    available_dates = set(pd.to_datetime(labels["trade_date"]).unique())
+    signals = [date for date in signals if date in available_dates]
     future = pd.DataFrame(np.nan, index=pd.DatetimeIndex(signals), columns=group_list, dtype=float)
     maturities: dict[pd.Timestamp, pd.Timestamp] = {}
     for index, signal in enumerate(signals[:-1]):
@@ -1098,6 +1170,51 @@ def _weighted_dimension_mean(items: list[tuple[pd.DataFrame, float]], minimum: i
     return numerator.div(denominator.replace(0.0, np.nan)).where(count.ge(minimum))
 
 
+def _online_dimension_score(
+    dimensions: dict[str, pd.DataFrame],
+    forward: pd.DataFrame,
+    maturities: pd.Series,
+    base_weights: dict[str, float],
+    minimum: int,
+    lookback: int = 36,
+    minimum_history: int = 9,
+) -> pd.DataFrame:
+    """只使用已成熟标签的滚动IC维度加权。
+
+    每个信号日只能读取该日以前已完成持有期的IC样本。样本不足时回到预设权重，
+    样本充足后用ICIR、命中率和样本数压缩权重，避免单一维度在验证期被偶然放大。
+    """
+    if not dimensions:
+        return pd.DataFrame()
+    first = next(iter(dimensions.values()))
+    numerator = pd.DataFrame(0.0, index=first.index, columns=first.columns)
+    denominator = pd.DataFrame(0.0, index=first.index, columns=first.columns)
+    count = pd.DataFrame(0.0, index=first.index, columns=first.columns)
+    maturity = pd.to_datetime(maturities, errors="coerce")
+    for name, frame in dimensions.items():
+        base = float(base_weights.get(name, 0.0))
+        if base <= 0.0 or frame.empty:
+            continue
+        bad_signal = name == "crowding"
+        ic = _row_spearman(frame, forward)
+        signed = frame.copy()
+        dynamic_weight = pd.Series(base, index=frame.index, dtype=float)
+        for date in frame.index:
+            mature_index = [idx for idx in ic.index if idx < date and pd.notna(maturity.get(idx)) and maturity.get(idx) < date]
+            history = ic.loc[mature_index].tail(lookback) if mature_index else pd.Series(dtype=float)
+            if len(history) >= minimum_history:
+                direction, quality = _history_quality(history, bad_signal=bad_signal)
+                signed.loc[date] = frame.loc[date] if direction >= 0.0 else 1.0 - frame.loc[date]
+                dynamic_weight.loc[date] = base * (0.35 + min(2.0, quality))
+            elif bad_signal:
+                signed.loc[date] = 1.0 - frame.loc[date]
+        numeric = signed.astype(float)
+        numerator = numerator.add(numeric.fillna(0.0).mul(dynamic_weight, axis=0), fill_value=0.0)
+        denominator = denominator.add(numeric.notna().astype(float).mul(dynamic_weight, axis=0), fill_value=0.0)
+        count = count.add(numeric.notna().astype(float), fill_value=0.0)
+    combined = numerator.div(denominator.replace(0.0, np.nan)).where(count.ge(minimum))
+    return _rank_frame(combined)
+
 def _validated_candidate_scores(
     dimensions: dict[str, pd.DataFrame],
     factor_scores: dict[str, dict[str, pd.DataFrame]],
@@ -1107,60 +1224,197 @@ def _validated_candidate_scores(
     validated, diagnostics = _validated_atomic_dimensions(factor_scores, dimensions, forward, maturities)
     crowd = validated["crowding"].clip(0.0, 1.0)
     anti_crowd = _rank_frame(1.0 - crowd)
+    检验六维 = _rank_frame(
+        _weighted_dimension_mean(
+            [
+                (validated["prosperity"], 0.22),
+                (validated["fundamental"], 0.22),
+                (validated["technical"], 0.22),
+                (validated["valuation"], 0.17),
+                (validated["funds"], 0.17),
+            ],
+            3,
+        ).sub(crowd.pow(2).mul(0.30))
+    )
+    趋势资金 = _rank_frame(
+        _weighted_dimension_mean(
+            [
+                (validated["prosperity"], 0.30),
+                (validated["technical"], 0.30),
+                (validated["funds"], 0.18),
+                (validated["fundamental"], 0.12),
+                (anti_crowd, 0.10),
+            ],
+            3,
+        ).sub(crowd.pow(2).mul(0.20))
+    )
+    质量低拥挤 = _rank_frame(
+        _weighted_dimension_mean(
+            [
+                (validated["fundamental"], 0.28),
+                (validated["valuation"], 0.20),
+                (validated["prosperity"], 0.16),
+                (anti_crowd, 0.22),
+                (validated["technical"], 0.14),
+            ],
+            3,
+        ).sub(crowd.pow(2).mul(0.12))
+    )
+    低拥挤 = _rank_frame(
+        _weighted_dimension_mean(
+            [
+                (validated["prosperity"], 0.18),
+                (validated["fundamental"], 0.18),
+                (validated["technical"], 0.18),
+                (validated["valuation"], 0.12),
+                (validated["funds"], 0.12),
+                (anti_crowd, 0.22),
+            ],
+            4,
+        ).sub(crowd.pow(2).mul(0.08))
+    )
+    滚动六维 = _online_dimension_score(
+        {
+            "prosperity": validated["prosperity"],
+            "fundamental": validated["fundamental"],
+            "technical": validated["technical"],
+            "valuation": validated["valuation"],
+            "funds": validated["funds"],
+            "crowding": validated["crowding"],
+        },
+        forward,
+        maturities,
+        {
+            "prosperity": 0.20,
+            "fundamental": 0.20,
+            "technical": 0.22,
+            "valuation": 0.14,
+            "funds": 0.14,
+            "crowding": 0.10,
+        },
+        4,
+    )
+    滚动低拥挤 = _online_dimension_score(
+        {
+            "prosperity": validated["prosperity"],
+            "fundamental": validated["fundamental"],
+            "technical": validated["technical"],
+            "valuation": validated["valuation"],
+            "funds": validated["funds"],
+            "crowding": validated["crowding"],
+        },
+        forward,
+        maturities,
+        {
+            "prosperity": 0.16,
+            "fundamental": 0.18,
+            "technical": 0.18,
+            "valuation": 0.12,
+            "funds": 0.12,
+            "crowding": 0.24,
+        },
+        4,
+    )
     candidates = {
         "均衡六维": _composite_score(dimensions),
-        "因子检验六维": _rank_frame(
-            _weighted_dimension_mean(
-                [
-                    (validated["prosperity"], 0.22),
-                    (validated["fundamental"], 0.22),
-                    (validated["technical"], 0.22),
-                    (validated["valuation"], 0.17),
-                    (validated["funds"], 0.17),
-                ],
-                3,
-            ).sub(crowd.pow(2).mul(0.30))
-        ),
-        "景气趋势确认": _rank_frame(
-            _weighted_dimension_mean(
-                [
-                    (validated["prosperity"], 0.34),
-                    (validated["technical"], 0.28),
-                    (validated["funds"], 0.14),
-                    (validated["fundamental"], 0.14),
-                    (anti_crowd, 0.10),
-                ],
-                3,
-            ).sub(crowd.pow(2).mul(0.20))
-        ),
-        "质量估值防守": _rank_frame(
-            _weighted_dimension_mean(
-                [
-                    (validated["fundamental"], 0.30),
-                    (validated["valuation"], 0.24),
-                    (validated["prosperity"], 0.18),
-                    (anti_crowd, 0.18),
-                    (validated["technical"], 0.10),
-                ],
-                3,
-            ).sub(crowd.pow(2).mul(0.15))
-        ),
-        "低拥挤均衡": _rank_frame(
-            _weighted_dimension_mean(
-                [
-                    (validated["prosperity"], 0.20),
-                    (validated["fundamental"], 0.18),
-                    (validated["technical"], 0.18),
-                    (validated["valuation"], 0.14),
-                    (validated["funds"], 0.12),
-                    (anti_crowd, 0.18),
-                ],
-                4,
-            ).sub(crowd.pow(2).mul(0.10))
-        ),
+        "因子检验六维": 检验六维,
+        "景气趋势确认": 趋势资金,
+        "质量估值防守": 质量低拥挤,
+        "低拥挤均衡": 低拥挤,
+        "连续均衡六维": _composite_score(validated),
+        "连续检验六维": 检验六维,
+        "连续趋势资金": 趋势资金,
+        "连续质量低拥挤": 质量低拥挤,
+        "滚动IC六维": 滚动六维,
+        "滚动IC低拥挤": 滚动低拥挤,
     }
     return {name: score.clip(0.0, 1.0) for name, score in candidates.items()}, diagnostics
 
+
+def _online_meta_candidate_score(
+    candidates: dict[str, pd.DataFrame],
+    simulations: list[dict[str, Any]],
+    baseline_name: str = "均衡六维",
+    lookback_days: int = 252,
+    minimum_days: int = 126,
+) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
+    """Past-only candidate switcher inspired by walk-forward model selection.
+
+    At each signal date it selects the pre-registered candidate with the best
+    trailing realised relative strength and risk-adjusted profile, using only
+    NAV rows dated on or before that signal date.  This adds adaptability while
+    preserving the signal(t) -> return(t+1) contract.
+    """
+    if baseline_name not in candidates:
+        raise KeyError("style_online_baseline_missing")
+    baseline = candidates[baseline_name]
+    nav_by_name: dict[str, pd.DataFrame] = {}
+    for item in simulations:
+        name = str(item.get("candidate"))
+        nav = item.get("nav")
+        if not isinstance(nav, pd.DataFrame) or nav.empty or name not in candidates:
+            continue
+        local = nav.copy()
+        local["date"] = pd.to_datetime(local["date"])
+        local = local.sort_values("date").set_index("date")
+        nav_by_name[name] = local
+
+    online = baseline.copy()
+    decisions: list[dict[str, Any]] = []
+    for signal in baseline.index:
+        signal_date = pd.Timestamp(signal)
+        best_name = baseline_name
+        best_score = -np.inf
+        best_detail: dict[str, Any] = {}
+        for name, nav in nav_by_name.items():
+            if signal_date not in candidates[name].index:
+                continue
+            if candidates[name].loc[signal_date].dropna().empty:
+                continue
+            history = nav.loc[nav.index <= signal_date]
+            if len(history) < minimum_days:
+                continue
+            window = history.tail(lookback_days)
+            strategy = pd.to_numeric(window["strategy_return"], errors="coerce").dropna()
+            benchmark = pd.to_numeric(window["benchmark_return"], errors="coerce").dropna()
+            aligned = pd.concat([strategy, benchmark], axis=1, join="inner").dropna()
+            if len(aligned) < minimum_days:
+                continue
+            strategy = aligned.iloc[:, 0]
+            benchmark = aligned.iloc[:, 1]
+            active = strategy - benchmark
+            active_std = float(active.std(ddof=1))
+            strategy_std = float(strategy.std(ddof=1))
+            relative_nav = strategy.add(1.0).cumprod().div(benchmark.add(1.0).cumprod())
+            strategy_nav = strategy.add(1.0).cumprod()
+            relative_return = float(relative_nav.iloc[-1] / relative_nav.iloc[0] - 1.0)
+            strategy_return = float(strategy_nav.iloc[-1] / strategy_nav.iloc[0] - 1.0)
+            active_ir = float(active.mean() / active_std * math.sqrt(252.0)) if active_std > 0.0 else -9.0
+            strategy_sharpe = float(strategy.mean() / strategy_std * math.sqrt(252.0)) if strategy_std > 0.0 else -9.0
+            relative_drawdown = float((relative_nav / relative_nav.cummax() - 1.0).min())
+            strategy_drawdown = float((strategy_nav / strategy_nav.cummax() - 1.0).min())
+            score_value = (
+                relative_return
+                + 0.05 * active_ir
+                + 0.03 * strategy_sharpe
+                + 0.10 * strategy_return
+                - 0.55 * max(0.0, -relative_drawdown - 0.08)
+                - 0.20 * max(0.0, -strategy_drawdown - 0.22)
+            )
+            if score_value > best_score:
+                best_score = score_value
+                best_name = name
+                best_detail = {
+                    "trailing_days": int(len(aligned)),
+                    "trailing_relative_return": _finite(relative_return),
+                    "trailing_active_ir": _finite(active_ir),
+                    "trailing_strategy_sharpe": _finite(strategy_sharpe),
+                    "trailing_relative_drawdown": _finite(relative_drawdown),
+                    "online_score": _finite(score_value),
+                }
+        online.loc[signal_date] = candidates[best_name].loc[signal_date]
+        decisions.append({"signal_date": _iso(signal_date), "selected_candidate": best_name, **best_detail})
+    return online.clip(0.0, 1.0), decisions
 
 def _selection_objective(metrics: dict[str, dict[str, Any]]) -> float:
     def value(split: str, key: str, default: float = -999.0) -> float:
@@ -1173,17 +1427,25 @@ def _selection_objective(metrics: dict[str, dict[str, Any]]) -> float:
 
     train_alpha = value("train", "annual_excess", 0.0)
     validation_alpha = value("validation", "annual_excess", -1.0)
+    train_sharpe = value("train", "sharpe", -1.0)
     validation_sharpe = value("validation", "sharpe", -1.0)
+    train_excess_sharpe = value("train", "excess_sharpe", -1.0)
     validation_excess_sharpe = value("validation", "excess_sharpe", -1.0)
     validation_drawdown = value("validation", "max_drawdown", -1.0)
-    drawdown_penalty = max(0.0, -validation_drawdown - 0.25)
-    train_bonus = max(0.0, train_alpha)
+    train_drawdown = value("train", "max_drawdown", -1.0)
+    alpha_floor = min(train_alpha, validation_alpha)
+    alpha_balance_penalty = abs(validation_alpha - train_alpha)
+    sharpe_floor = min(train_sharpe, validation_sharpe)
+    excess_sharpe_floor = min(train_excess_sharpe, validation_excess_sharpe)
+    drawdown_penalty = max(0.0, -validation_drawdown - 0.22) + 0.30 * max(0.0, -train_drawdown - 0.38)
     train_penalty = max(0.0, -train_alpha)
     return (
-        validation_alpha
-        + 0.05 * validation_sharpe
-        + 0.05 * validation_excess_sharpe
-        + train_bonus
+        1.35 * alpha_floor
+        + 0.35 * validation_alpha
+        + 0.20 * train_alpha
+        + 0.03 * sharpe_floor
+        + 0.04 * excess_sharpe_floor
+        - 0.65 * alpha_balance_penalty
         - 0.50 * train_penalty
         - 0.50 * drawdown_penalty
     )
@@ -1236,6 +1498,45 @@ def _choose_research_result(simulations: list[dict[str, Any]]) -> dict[str, Any]
 
 
 
+def _report_safe_selected_result(
+    simulations: list[dict[str, Any]],
+    baseline_result: dict[str, Any],
+    research_result: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Keep the legacy report-only veto: no report-period candidate ranking."""
+    del simulations
+    if research_result["candidate"] == baseline_result["candidate"]:
+        return research_result, None
+    if _passes_report_veto(research_result["metrics"], baseline_result["metrics"]):
+        return research_result, None
+    return baseline_result, {
+        "status": "vetoed_to_baseline",
+        "baseline": baseline_result["candidate"],
+        "research_candidate": research_result["candidate"],
+        "policy": "测试期只用于否决训练验证选出的唯一挑战者，不在测试期候选之间重新排序。",
+    }
+
+
+def _label_date_set(labels: pd.DataFrame) -> set[pd.Timestamp]:
+    cache_key = id(labels)
+    cached = _LABEL_DATE_SET_CACHE.get(cache_key)
+    if cached is None:
+        cached = set(pd.to_datetime(labels["trade_date"]).dropna().unique())
+        _LABEL_DATE_SET_CACHE[cache_key] = cached
+    return cached
+
+
+def _labels_on_date(labels: pd.DataFrame, date: pd.Timestamp, columns: list[str]) -> pd.DataFrame:
+    date_key = pd.Timestamp(date)
+    cache_key = (id(labels), date_key)
+    local = _LABEL_DATE_CACHE.get(cache_key)
+    if local is None:
+        local = labels.loc[labels["trade_date"].eq(date_key)].copy()
+        _LABEL_DATE_CACHE[cache_key] = local
+    available = [column for column in columns if column in local.columns]
+    return local.loc[:, available]
+
+
 def _stock_weights_for_groups(
     labels: pd.DataFrame,
     date: pd.Timestamp,
@@ -1243,26 +1544,56 @@ def _stock_weights_for_groups(
     groups: Iterable[str],
     group_weights: pd.Series,
 ) -> pd.Series:
-    local = labels.loc[labels["trade_date"].eq(date) & labels[label_column].isin(groups)].copy()
+    """按信号日缓存组内股票权重，避免候选回测反复扫描标签全表。"""
+    date_key = pd.Timestamp(date)
+    cache_key = (id(labels), label_column, date_key)
+    cached = _GROUP_WEIGHT_CACHE.get(cache_key)
+    if cached is None:
+        local = _labels_on_date(labels, date_key, ["ts_code", label_column, "circ_mv"])
+        cached = {}
+        for group, group_frame in local.groupby(label_column, sort=False):
+            base = _capped_weights(group_frame.set_index("ts_code")["circ_mv"])
+            if not base.empty:
+                cached[str(group)] = base
+        _GROUP_WEIGHT_CACHE[cache_key] = cached
     pieces: list[pd.Series] = []
-    for group, group_frame in local.groupby(label_column, sort=False):
-        base = _capped_weights(group_frame.set_index("ts_code")["circ_mv"])
-        if base.empty:
+    for group in groups:
+        base = cached.get(str(group))
+        if base is None or base.empty:
             continue
-        pieces.append(base.mul(float(group_weights.get(group, 0.0))))
+        weight = float(group_weights.get(group, group_weights.get(str(group), 0.0)))
+        if weight <= 0.0:
+            continue
+        pieces.append(base.mul(weight))
     if not pieces:
         return pd.Series(dtype=float)
     weights = pd.concat(pieces).groupby(level=0).sum()
-    return weights / weights.sum()
+    total = float(weights.sum())
+    return weights / total if total > 0.0 else pd.Series(dtype=float)
 
-
-def _target_groups(score: pd.Series, top_n: int) -> pd.Series:
-    available = score.dropna().sort_values(ascending=False, kind="stable")
+def _target_groups(
+    score: pd.Series,
+    top_n: int,
+    mode: str = "top_equal",
+    active_share: float = 0.50,
+    floor: float = 0.0,
+) -> pd.Series:
+    available = pd.to_numeric(score.dropna(), errors="coerce").dropna()
+    available = available.sort_values(ascending=False, kind="stable")
     if available.empty:
         return pd.Series(dtype=float)
+    if mode == "score_tilt":
+        rank = available.rank(method="average", pct=True)
+        centered = rank - float(rank.mean())
+        if float(centered.abs().sum()) <= 0.0:
+            return pd.Series(1.0 / len(available), index=available.index)
+        tilt = centered / float(centered.abs().sum())
+        base = pd.Series(1.0 / len(available), index=available.index)
+        weights = base.add(tilt.mul(float(active_share))).clip(lower=float(floor))
+        total = float(weights.sum())
+        return weights / total if total > 0.0 else base
     selected = available.head(min(top_n, len(available))).index
     return pd.Series(1.0 / len(selected), index=selected)
-
 
 def _simulate(
     labels: pd.DataFrame,
@@ -1272,9 +1603,13 @@ def _simulate(
     groups: Iterable[str],
     top_n: int,
     execution_dates: dict[pd.Timestamp, pd.Timestamp],
+    mode: str = "top_equal",
+    active_share: float = 0.50,
+    floor: float = 0.0,
 ) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     signals = [pd.Timestamp(date) for date in score.index if pd.Timestamp(date) in execution_dates]
-    signals = [date for date in signals if date in labels["trade_date"].values]
+    available_dates = _label_date_set(labels)
+    signals = [date for date in signals if date in available_dates]
     rows: list[dict[str, Any]] = []
     holdings: list[dict[str, Any]] = []
     previous_strategy = pd.Series(dtype=float)
@@ -1288,7 +1623,7 @@ def _simulate(
             if index + 1 < len(signals)
             else pd.Timestamp(returns.index.max())
         )
-        target_group_weights = _target_groups(score.loc[signal], top_n)
+        target_group_weights = _target_groups(score.loc[signal], top_n, mode=mode, active_share=active_share, floor=floor)
         if target_group_weights.empty:
             continue
         benchmark_group_weights = pd.Series(1.0 / len(tuple(groups)), index=list(groups))
@@ -1533,6 +1868,7 @@ def _run_group(source: SourceData, key: str, spec: dict[str, Any]) -> dict[str, 
     candidates, factor_diagnostics = _validated_candidate_scores(dimensions, factor_scores, forward, maturities)
     simulations: list[dict[str, Any]] = []
     for candidate_name, candidate_score in candidates.items():
+        execution = CANDIDATE_EXECUTION.get(candidate_name, {})
         nav, holdings = _simulate(
             source.labels,
             source.daily_returns,
@@ -1541,6 +1877,9 @@ def _run_group(source: SourceData, key: str, spec: dict[str, Any]) -> dict[str, 
             spec["groups"],
             int(spec["top_n"]),
             source.execution_dates,
+            mode=str(execution.get("mode", "top_equal")),
+            active_share=float(execution.get("active_share", 0.50)),
+            floor=float(execution.get("floor", 0.0)),
         )
         metrics = {"all": _performance(nav), **_split_metrics(nav)}
         simulations.append(
@@ -1551,24 +1890,40 @@ def _run_group(source: SourceData, key: str, spec: dict[str, Any]) -> dict[str, 
                 "holdings": holdings,
                 "metrics": metrics,
                 "objective": _selection_objective(metrics),
+                "execution": execution or {"mode": "top_equal"},
             }
         )
+    online_decisions: list[dict[str, Any]] = []
+    online_score, online_decisions = _online_meta_candidate_score(candidates, simulations)
+    candidates["在线稳定选择"] = online_score
+    execution = {"mode": "top_equal", "online_selector": True, "lookback_days": 252, "minimum_days": 126}
+    nav, holdings = _simulate(
+        source.labels,
+        source.daily_returns,
+        online_score,
+        spec["label_column"],
+        spec["groups"],
+        int(spec["top_n"]),
+        source.execution_dates,
+        mode="top_equal",
+    )
+    online_metrics = {"all": _performance(nav), **_split_metrics(nav)}
+    simulations.append(
+        {
+            "candidate": "在线稳定选择",
+            "score": online_score,
+            "nav": nav,
+            "holdings": holdings,
+            "metrics": online_metrics,
+            "objective": _selection_objective(online_metrics),
+            "execution": execution,
+            "online_decisions": online_decisions,
+        }
+    )
     simulations.sort(key=lambda row: (row["objective"], row["candidate"]), reverse=True)
     baseline_result = next((item for item in simulations if item["candidate"] == "均衡六维"), simulations[-1])
     research_result = _choose_research_result(simulations)
-    selected_result = research_result
-    report_veto = None
-    if research_result["candidate"] != baseline_result["candidate"] and not _passes_report_veto(
-        research_result["metrics"],
-        baseline_result["metrics"],
-    ):
-        report_veto = {
-            "status": "vetoed_to_baseline",
-            "baseline": baseline_result["candidate"],
-            "research_candidate": research_result["candidate"],
-            "policy": "测试期只用于否决训练验证选出的唯一挑战者，不在测试期候选之间重新排序。",
-        }
-        selected_result = baseline_result
+    selected_result, report_veto = _report_safe_selected_result(simulations, baseline_result, research_result)
     selected_name = str(selected_result["candidate"])
     score = selected_result["score"]
     nav = selected_result["nav"]
@@ -1586,6 +1941,7 @@ def _run_group(source: SourceData, key: str, spec: dict[str, Any]) -> dict[str, 
             "objective": _finite(item["objective"]),
             "selected": item["candidate"] == selected_name,
             "research_selected": item["candidate"] == research_result["candidate"],
+            "execution": item.get("execution", {"mode": "top_equal"}),
             "train": item["metrics"].get("train"),
             "validation": item["metrics"].get("validation"),
             "test_report_only": item["metrics"].get("test"),
@@ -1600,7 +1956,7 @@ def _run_group(source: SourceData, key: str, spec: dict[str, Any]) -> dict[str, 
         "selected_candidate": selected_name,
         "research_selected_candidate": research_result["candidate"],
         "report_veto": report_veto,
-        "selection_rule": "验证期优先、训练期不为负；验证目标二百分位以内按训练超额和验证回撤择简洁稳健候选；测试期只允许否决唯一挑战者并回到预声明均衡六维基线。",
+        "selection_rule": "训练/验证共同稳健：优先训练与验证年化超额下限、超额Sharpe下限、回撤和训练验证差异；新增在线稳定选择候选，每个信号日只用历史已实现表现选择预注册因子框架；测试期只报告且只允许否决唯一挑战者回到基线。",
         "model": "六维框架不变；原子因子先做PIT月频RankIC检验，训练期定方向，验证期定静态准入，滚动成熟样本动态压缩权重，再组合为景气、基本面、技术面、估值、资金面和拥挤度。",
         "factor_count": {
             "prosperity": len(PROSPERITY_FIELDS),
