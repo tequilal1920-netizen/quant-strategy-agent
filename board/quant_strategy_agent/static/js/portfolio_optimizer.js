@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   "use strict";
   const BASE = (window.APP_BOOT && window.APP_BOOT.basePath) || "",
     C = {
@@ -102,6 +102,7 @@
     run: null,
     pollTimer: null,
     plotlyPromise: null,
+    timingIndex: "",
   };
   function clone(v) {
     return JSON.parse(JSON.stringify(v));
@@ -1930,7 +1931,7 @@
     const n = num(x);
     return n == null ? null : n;
   }
-  function timing(v) {
+  function timingLegacy(v) {
     const t = obj(obj(v.result).timing_overlay),
       latest = obj(t.latest),
       periods = arr(t.periods),
@@ -2044,6 +2045,115 @@
       { showlegend: false },
     );
   }
+
+  function timingAnnualTable(rows, benchmarkName) {
+    const head = ["年度", "策略收益", benchmarkName || "基准", "超额收益", "最大回撤"];
+    return (
+      '<div class="ix-table-wrap"><div class="ix-table-title"><h3>年度收益明细</h3><p>与本地输出图片同口径</p></div><table class="ix-table"><thead><tr>' +
+      head.map((x) => '<th>' + esc(x) + '</th>').join("") +
+      '</tr></thead><tbody>' +
+      arr(rows).map((r) =>
+        '<tr><td>' + esc(r.year) + '</td><td>' + esc(r.strategy_return) + '</td><td>' + esc(r.benchmark_return) + '</td><td>' + esc(r.excess_return) + '</td><td>' + esc(r.max_drawdown) + '</td></tr>'
+      ).join("") +
+      '</tbody></table></div>'
+    );
+  }
+  function timing(v) {
+    const broad = obj(v.broad_index_timing), indices = arr(broad.indices);
+    if (!indices.length) return timingLegacy(v);
+    if (!state.timingIndex || !indices.some((x) => x.code === state.timingIndex)) {
+      const preferred = indices.find((x) => x.code === "000905.SH") || indices[0];
+      state.timingIndex = preferred.code;
+    }
+    const current = indices.find((x) => x.code === state.timingIndex) || indices[0],
+      s = obj(current.series),
+      dates = arr(s.dates),
+      strategyNav = arr(s.strategy_nav),
+      benchmarkNav = arr(s.benchmark_nav),
+      relative = arr(s.relative_strength),
+      position = arr(s.position),
+      navId = "broad-timing-nav",
+      posId = "broad-timing-position",
+      annualId = "broad-timing-annual",
+      scatterId = "broad-timing-frontier";
+    conclusion(
+      "宽基择时已接入最新本地回测快照；候选选择先锁定历史高超额版本，再在接近高超额的候选中比较胜率、回撤和下跌保护。",
+      false,
+    );
+    root().innerHTML =
+      '<div class="optimizer-shell">' +
+      '<section class="optimizer-section"><header class="optimizer-section-head"><div><h2>查看条件</h2><p>常用宽基指数日频择时回测</p></div></header><div class="optimizer-control-grid"><label class="optimizer-control"><span>宽基指数</span><div><select id="broad-timing-index">' +
+      indices.map((x) => '<option value="' + esc(x.code) + '">' + esc(x.index) + '</option>').join("") +
+      '</select></div></label><label class="optimizer-control"><span>当前模型</span><div><input value="' + esc(current.model || "--") + '" disabled></div></label><label class="optimizer-control"><span>样本区间</span><div><input value="' + esc(dateText(current.start)) + " - " + esc(dateText(current.end)) + '" disabled></div></label></div></section>' +
+      evidence([
+        ["年化收益", pct(current.strategy_ann), "策略", "is-primary"],
+        ["年化超额", pct(current.excess_ann), "相对基准"],
+        ["夏普", fixed(current.strategy_sharpe, 3), "基准 " + fixed(current.benchmark_sharpe, 3)],
+        ["最大回撤", pct(current.strategy_mdd), "基准 " + pct(current.benchmark_mdd)],
+        ["年度胜率", pct(current.annual_excess_win_rate, 1), "年度超额"],
+        ["月度胜率", pct(current.monthly_excess_win_rate, 1), "月度超额"],
+      ]) +
+      section(
+        "收益表现",
+        "净值、相对强度和仓位路径",
+        charts([
+          card("日频净值与相对强度", navId, "橙=基准 灰=策略 红=相对强度"),
+          card("仓位路径", posId, "T+1执行仓位"),
+        ]),
+      ) +
+      section(
+        "结果明细",
+        "年度收益、回撤和宽基横向比较",
+        charts([
+          card("年度收益", annualId, "策略 / 基准 / 超额"),
+          card("宽基模型比较", scatterId, "超额×夏普×回撤"),
+        ]) + timingAnnualTable(current.annual_rows, current.index),
+      ) +
+      '</div>';
+    const picker = document.getElementById("broad-timing-index");
+    if (picker) {
+      picker.value = state.timingIndex;
+      picker.onchange = (e) => {
+        state.timingIndex = e.target.value;
+        timing(v);
+      };
+    }
+    plot(
+      navId,
+      [
+        { type: "scatter", mode: "lines", name: current.index, x: dates, y: benchmarkNav, line: { color: C.gold, width: 2.4 } },
+        { type: "scatter", mode: "lines", name: "择时策略", x: dates, y: strategyNav, line: { color: "#bfbfbf", width: 2.4 } },
+        { type: "scatter", mode: "lines", name: "相对强度（右轴）", x: dates, y: relative, yaxis: "y2", line: { color: C.red, width: 2.8 } },
+      ],
+      { hovermode: "x unified", xaxis: { type: "date", showgrid: false }, yaxis: { title: "净值", gridcolor: C.grid }, yaxis2: { title: "相对强度", overlaying: "y", side: "right", showgrid: false }, legend: { orientation: "h", y: -0.22 } },
+    );
+    plot(
+      posId,
+      [
+        { type: "scatter", mode: "lines", name: "仓位", x: dates, y: position, fill: "tozeroy", line: { color: C.red, width: 2.4 } },
+      ],
+      { hovermode: "x unified", xaxis: { type: "date", showgrid: false }, yaxis: { title: "仓位", range: [Math.min(-0.12, Math.min.apply(null, position) - 0.03), Math.max(1.18, Math.max.apply(null, position) + 0.03)], gridcolor: C.grid }, showlegend: false },
+    );
+    const years = arr(current.annual_rows).filter((x) => String(x.year).indexOf("区间") < 0),
+      pctNumber = (value) => Number(String(value || "").replace("%", ""));
+    plot(
+      annualId,
+      [
+        { type: "bar", name: "策略", x: years.map((x) => x.year), y: years.map((x) => pctNumber(x.strategy_return)), marker: { color: "#bfbfbf" } },
+        { type: "bar", name: "基准", x: years.map((x) => x.year), y: years.map((x) => pctNumber(x.benchmark_return)), marker: { color: C.gold } },
+        { type: "scatter", mode: "lines+markers", name: "超额", x: years.map((x) => x.year), y: years.map((x) => pctNumber(x.excess_return)), yaxis: "y2", line: { color: C.red, width: 2.4 } },
+      ],
+      { barmode: "group", yaxis: { title: "收益(%)", gridcolor: C.grid }, yaxis2: { title: "超额(%)", overlaying: "y", side: "right", showgrid: false }, legend: { orientation: "h", y: -0.22 } },
+    );
+    plot(
+      scatterId,
+      [
+        { type: "scatter", mode: "markers+text", x: indices.map((x) => num(x.excess_ann) * 100), y: indices.map((x) => num(x.strategy_sharpe)), text: indices.map((x) => x.index), textposition: "top center", marker: { size: indices.map((x) => Math.max(10, Math.abs(num(x.strategy_mdd) || 0) * 70)), color: indices.map((x) => num(x.monthly_excess_win_rate) * 100), colorscale: "Portland", showscale: true, colorbar: { title: "月胜率%" } } },
+      ],
+      { xaxis: { title: "年化超额(%)", zeroline: false }, yaxis: { title: "夏普", zeroline: false }, showlegend: false },
+    );
+  }
+
 
   function home(v) {
     const o = metric(v, "constrained_optimizer"),

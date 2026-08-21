@@ -1455,6 +1455,15 @@ class OptimizerBackendService:
             },
         }
 
+        broad_index_timing_path = PROJECT_ROOT / "board" / "quant_strategy_agent" / "data" / "broad_index_timing_snapshot.json"
+        if broad_index_timing_path.is_file():
+            try:
+                broad_index_timing = json.loads(broad_index_timing_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError, TypeError) as exc:
+                broad_index_timing = {"status": BLOCKED_DATA, "message": f"broad_index_timing_read_failed:{type(exc).__name__}:{exc}"}
+        else:
+            broad_index_timing = {"status": BLOCKED_DATA, "message": "broad_index_timing_snapshot_missing"}
+
         return {
             "status": "ready" if len(assets) == 500 else BLOCKED_DATA,
             "universe": {
@@ -1468,6 +1477,7 @@ class OptimizerBackendService:
             "industry_summary": industries,
             "factor_weight_history": factor_weight_history,
             "framework": framework,
+            "broad_index_timing": broad_index_timing,
             "selected_run": selected_run,
             "latest_diagnostic_run": (
                 {
@@ -1850,14 +1860,25 @@ class OptimizerBackendService:
         ):
             if key in payload:
                 context[key] = copy.deepcopy(payload[key])
-        compiled = compiler.compile_mandate(
-            raw_request,
-            llm_client=self.llm_client,
-            require_llm=True,
-            mode=mode,
-            available_solvers=self._discover_solvers(),
-            context=context,
-        )
+        selected_plan = payload.get("selected_plan")
+        if isinstance(selected_plan, Mapping) and hasattr(compiler, "compile_selected_plan_mandate"):
+            compiled = compiler.compile_selected_plan_mandate(
+                raw_request,
+                selected_plan=selected_plan,
+                require_llm=True,
+                mode=mode,
+                available_solvers=self._discover_solvers(),
+                context=context,
+            )
+        else:
+            compiled = compiler.compile_mandate(
+                raw_request,
+                llm_client=self.llm_client,
+                require_llm=True,
+                mode=mode,
+                available_solvers=self._discover_solvers(),
+                context=context,
+            )
         draft_id = self.store.create_draft(
             raw_request=raw_request,
             mode=mode,
