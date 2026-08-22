@@ -853,6 +853,7 @@ def _exposure_budget_candidate(
     return out
 
 
+
 def _selection_rank(metrics: dict[str, float], *, max_excess: float) -> float:
     mdd_improve = metrics["strategy_mdd"] - metrics["benchmark_mdd"]
     excess_gap = max(0.0, max_excess - metrics["excess_ann"])
@@ -919,6 +920,9 @@ def _choose_model(raw: pd.DataFrame, basic: pd.DataFrame | None) -> tuple[pd.Dat
         _exposure_budget_candidate(features, macd_signal, name="MACD趋势修复增强", max_position=1.15, min_position=0.0),
         _exposure_budget_candidate(features, macd_signal, name="MACD趋势修复增强", max_position=1.15, min_position=-0.08),
         _exposure_budget_candidate(features, macd_signal, name="MACD趋势修复增强", max_position=1.15, min_position=-0.10),
+        _exposure_budget_candidate(features, macd_signal, name="MACD趋势修复增强", max_position=1.35, min_position=-0.15, down_scale=0.8, smooth=2),
+        _exposure_budget_candidate(features, macd_signal, name="MACD趋势修复增强", max_position=1.35, min_position=-0.15, down_scale=0.8, smooth=1),
+        _exposure_budget_candidate(features, macd_signal, name="MACD趋势修复增强", max_position=1.35, min_position=-0.15, up_add=0.10, down_scale=0.6, smooth=1),
         _exposure_budget_candidate(features, rsrs_signal, name="RSRS风险对冲增强", max_position=1.03, min_position=-0.08),
         _exposure_budget_candidate(features, dual_hedge_signal, name="双动量风险对冲增强", max_position=1.08, min_position=-0.08),
     ]
@@ -1136,7 +1140,7 @@ def main() -> None:
     if args.snapshot_output:
         payload = {
             "status": "ready",
-            "engine_version": "broad-index-timing/2.0-restored-best",
+            "engine_version": "broad-index-timing/2.2-champion-budget",
             "generated_at": pd.Timestamp.utcnow().isoformat(),
             "start": args.start,
             "end": args.end,
