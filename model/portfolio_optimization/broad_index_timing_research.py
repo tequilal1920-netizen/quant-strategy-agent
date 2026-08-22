@@ -377,13 +377,20 @@ def _effective_group_score(
     weights = []
     for column in columns:
         signal = pd.to_numeric(frame[column], errors="coerce").astype(float).clip(0.0, 1.0)
+        centered = signal - 0.5
         ic = signal.rolling(lookback, min_periods=252).corr(future).shift(forward_days)
-        stable = ic.rolling(63, min_periods=20).mean()
-        weight = (stable.clip(lower=0.0).fillna(0.0) * cfg.efficacy_strength).clip(0.0, 1.0)
-        early = weight.isna() | (weight <= 1.0e-8)
-        prior = pd.Series(np.where(frame.index.to_series() < 320, 1.0, 0.10), index=frame.index)
+        edge = (centered * future).rolling(lookback, min_periods=252).mean().shift(forward_days)
+        stable_ic = ic.rolling(63, min_periods=20).mean()
+        stable_edge = edge.rolling(63, min_periods=20).mean()
+        sign = np.where((stable_ic.fillna(0.0) + 8.0 * stable_edge.fillna(0.0)) >= 0.0, 1.0, -1.0)
+        signed_signal = pd.Series(np.where(sign >= 0.0, signal, 1.0 - signal), index=frame.index)
+        ic_strength = stable_ic.abs().fillna(0.0) * cfg.efficacy_strength
+        edge_scale = future.rolling(lookback, min_periods=252).std(ddof=0).shift(forward_days).replace(0.0, np.nan)
+        edge_strength = (stable_edge.abs() / edge_scale).replace([np.inf, -np.inf], np.nan).fillna(0.0) * 2.0
+        weight = (0.65 * ic_strength + 0.35 * edge_strength).clip(0.0, 1.0)
+        prior = pd.Series(np.where(frame.index.to_series() < 320, 1.0, 0.12), index=frame.index)
         weight = np.maximum(weight, prior)
-        scores.append(signal)
+        scores.append(signed_signal.clip(0.0, 1.0))
         weights.append(pd.Series(weight, index=frame.index))
     score_frame = pd.concat(scores, axis=1)
     weight_frame = pd.concat(weights, axis=1)
@@ -1140,11 +1147,11 @@ def main() -> None:
     if args.snapshot_output:
         payload = {
             "status": "ready",
-            "engine_version": "broad-index-timing/2.2-champion-budget",
+            "engine_version": "broad-index-timing/2.4-champion-locked-signed-efficacy",
             "generated_at": pd.Timestamp.utcnow().isoformat(),
             "start": args.start,
             "end": args.end,
-            "policy": "restore_high_excess_candidate_first_then_winrate_drawdown_tiebreak",
+            "policy": "champion_locked_high_excess_first_signed_factor_efficacy_then_winrate_drawdown_tiebreak; tested_floor_and_right_trend_candidates_rejected_when_excess_or_drawdown_worse",
             "indices": summaries,
         }
         args.snapshot_output.parent.mkdir(parents=True, exist_ok=True)
@@ -1165,3 +1172,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

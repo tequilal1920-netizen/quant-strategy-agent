@@ -1,10 +1,10 @@
 {
   "status": "ready",
-  "engine_version": "broad-index-timing/2.2-champion-budget",
-  "generated_at": "2026-08-22T03:16:16.027748+00:00",
+  "engine_version": "broad-index-timing/2.4-champion-locked-signed-efficacy",
+  "generated_at": "2026-08-22T03:57:28.463794+00:00",
   "start": "20160101",
   "end": "20260822",
-  "policy": "restore_high_excess_candidate_first_then_winrate_drawdown_tiebreak",
+  "policy": "champion_locked_high_excess_first_signed_factor_efficacy_then_winrate_drawdown_tiebreak; tested_floor_and_right_trend_candidates_rejected_when_excess_or_drawdown_worse",
   "indices": [
     {
       "index": "中证红利",
