@@ -956,6 +956,63 @@ def _active_excess_protection_candidate(
     return out
 
 
+def _annual_strength_follow_candidate(
+    features: pd.DataFrame,
+    base: pd.DataFrame,
+    *,
+    name: str = "年度强势跟随",
+    ytd_trigger: float = 0.08,
+    follow_position: float = 1.15,
+    mom20_floor: float = -0.02,
+    mom60_floor: float = 0.0,
+    rsrs_floor: float = -0.80,
+    risk_votes_max: int = 5,
+    max_position: float = 1.35,
+    min_position: float = -0.10,
+    smooth: int = 2,
+) -> pd.DataFrame:
+    """Follow confirmed calendar-year strength without changing base framework."""
+    out = features.copy()
+    raw = (
+        pd.to_numeric(base["position"], errors="coerce")
+        .fillna(0.65)
+        .astype(float)
+        .clip(float(min_position), float(max_position))
+    )
+    close = out["close"].astype(float)
+    dates = pd.to_datetime(out["date"])
+    ytd_values: list[float] = []
+    current_year: int | None = None
+    year_start = float(close.iloc[0]) if len(close) else 1.0
+    for dt, price in zip(dates, close):
+        if current_year != int(dt.year):
+            current_year = int(dt.year)
+            year_start = float(price)
+        ytd_values.append(float(price) / max(1.0e-12, year_start) - 1.0)
+    ytd_return = pd.Series(ytd_values, index=out.index)
+    follow = (
+        (ytd_return > float(ytd_trigger))
+        & (out["mom20"] > float(mom20_floor))
+        & (out["mom60"] > float(mom60_floor))
+        & (out["rsrs_z"] > float(rsrs_floor))
+        & (out["risk_votes"] <= int(risk_votes_max))
+    ).fillna(False)
+    crash = (
+        ((out["risk_votes"] >= 6) & (close < out["ma60"]) & (out["mom20"] < 0.0))
+        | ((out["rsrs_z"] < -1.20) & (out["mom20"] < -0.05))
+    ).fillna(False)
+    position = raw.mask(follow, np.maximum(raw, float(follow_position))).mask(crash, raw)
+    out["raw_position"] = position.clip(float(min_position), float(max_position))
+    out["position"] = out["raw_position"].rolling(max(1, int(smooth)), min_periods=1).mean().clip(float(min_position), float(max_position))
+    for column in ("left_score", "right_score", "sentiment_score", "risk_score", "composite_score"):
+        out[column] = pd.to_numeric(base.get(column, 0.5), errors="coerce").fillna(0.5)
+    out["model_name"] = name
+    out.attrs["min_position"] = float(min_position)
+    out.attrs["max_position"] = float(max_position)
+    out.attrs["borrow_annual"] = 0.035
+    return out
+
+
 
 def _selection_rank(metrics: dict[str, float], *, max_excess: float) -> float:
     mdd_improve = metrics["strategy_mdd"] - metrics["benchmark_mdd"]
@@ -1024,6 +1081,17 @@ def _choose_model(raw: pd.DataFrame, basic: pd.DataFrame | None) -> tuple[pd.Dat
         max_position=1.03,
         min_position=-0.08,
     )
+    rsrs_active_sharpe = _active_excess_protection_candidate(
+        features,
+        rsrs_budget,
+        name="主动超额保护",
+        anchor_position=1.15,
+        ytd_loss_limit=0.035,
+        rolling_loss_limit=0.030,
+        min_hold_days=5,
+        max_position=1.15,
+        min_position=-0.10,
+    )
     static_signals = [
         _legacy_left_right_candidate(features, groups),
         _risk_radar_path_candidate(features),
@@ -1077,14 +1145,15 @@ def _choose_model(raw: pd.DataFrame, basic: pd.DataFrame | None) -> tuple[pd.Dat
             max_position=1.15,
             min_position=-0.10,
         ),
-        _active_excess_protection_candidate(
+        rsrs_active_sharpe,
+        _annual_strength_follow_candidate(
             features,
-            rsrs_budget,
-            name="主动超额保护",
-            anchor_position=1.15,
-            ytd_loss_limit=0.035,
-            rolling_loss_limit=0.030,
-            min_hold_days=5,
+            rsrs_active_sharpe,
+            name="年度强势跟随",
+            ytd_trigger=0.08,
+            follow_position=1.15,
+            mom20_floor=-0.02,
+            mom60_floor=0.0,
             max_position=1.15,
             min_position=-0.10,
         ),
@@ -1303,7 +1372,7 @@ def main() -> None:
     if args.snapshot_output:
         payload = {
             "status": "ready",
-            "engine_version": "broad-index-timing/2.8-active-excess-sharpe",
+            "engine_version": "broad-index-timing/2.9-annual-strength-follow",
             "generated_at": pd.Timestamp.utcnow().isoformat(),
             "start": args.start,
             "end": args.end,
