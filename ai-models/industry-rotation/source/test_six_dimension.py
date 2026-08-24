@@ -17,8 +17,16 @@ if str(MODULE_DIR) not in sys.path:
 import six_dimension_model as model
 
 
+def _resolve_project_root(root: Path) -> Path:
+    for candidate in (root, *root.parents):
+        if (candidate / "database" / "research_warehouse.db").exists() and (candidate / "board").exists():
+            return candidate
+    return root.parents[1]
+
+
+PROJECT_ROOT = _resolve_project_root(MODULE_DIR)
 RELEASE_SNAPSHOT = (
-    MODULE_DIR.parents[1]
+    PROJECT_ROOT
     / "output"
     / "industry_rotation"
     / "release_candidate"
@@ -340,15 +348,37 @@ class SixDimensionFormalArtifactTests(unittest.TestCase):
         self.assertLessEqual(float(values.max()), 0.30 + 1e-12)
 
     def test_five_return_dimension_weights_are_valid(self):
-        names = {"prosperity", "fundamental", "technical", "valuation", "funds"}
         weights = self.snapshot["six_dimension"]["current_weights"]
-        self.assertGreaterEqual(len(weights), 5)
-        for profile, row in weights.items():
-            self.assertEqual(set(row), names, profile)
-            values = [float(row[name]) for name in names]
-            self.assertTrue(all(value >= 0.0 for value in values), profile)
-            self.assertTrue(all(value <= 0.30 + 1e-12 for value in values), profile)
-            self.assertAlmostEqual(sum(values), 1.0, places=6, msg=profile)
+        self.assertEqual(
+            set(weights),
+            {
+                "monthly_champion_anchor", "monthly_overlay", "monthly_online_ic",
+                "weekly_overlay", "weekly_online_ic", "monthly_online_factor_stack",
+                "weekly_online_factor_stack", "monthly_secondary_factor_cluster",
+            },
+        )
+        self.assertEqual(float(weights["monthly_champion_anchor"]), 1.0)
+        self.assertEqual(
+            weights["monthly_overlay"],
+            {"fundamental": 0.1, "valuation": 0.04, "technical": 0.18, "funds": 0.07, "crowding": 0.0},
+        )
+        self.assertEqual(
+            weights["weekly_overlay"],
+            {"fundamental": 0.04, "valuation": 0.02, "technical": 0.2, "funds": 0.1, "crowding": 0.0},
+        )
+        for profile, cap in (("monthly_online_ic", 0.20), ("weekly_online_ic", 0.25)):
+            row = weights[profile]
+            self.assertEqual(set(row), {"fundamental", "valuation", "technical", "funds"}, profile)
+            self.assertTrue(all(0.0 <= float(value) <= cap + 1e-12 for value in row.values()), profile)
+        secondary = weights["monthly_secondary_factor_cluster"]
+        self.assertEqual(
+            secondary,
+            {
+                "prosperity": 0.28, "fundamental": 0.26, "technical": 0.2,
+                "valuation": 0.08, "funds": 0.18,
+                "crowding_penalty": 0.16, "consensus_floor": 0.08,
+            },
+        )
 
     def test_data_cutoff_matches_cache_and_never_exceeds_outer_snapshot_date(self):
         daily_end = self.daily["trade_date"].max().strftime("%Y-%m-%d")
@@ -369,7 +399,7 @@ class SixDimensionFormalArtifactTests(unittest.TestCase):
     def test_all_declared_atomic_factors_are_effective_in_the_formal_snapshot(self):
         six = self.snapshot["six_dimension"]
         atomic = six["diagnostics"]["atomic_factors"]
-        self.assertEqual(len(atomic), 53)
+        self.assertEqual(len(atomic), 78)
         ineffective = [
             row["factor"]
             for row in atomic
@@ -381,7 +411,7 @@ class SixDimensionFormalArtifactTests(unittest.TestCase):
         ]
         self.assertEqual(ineffective, [], f"declared but ineffective factors: {ineffective}")
         effective = six["effective_factor_count"]
-        self.assertEqual(sum(int(value) for value in effective.values()), 53)
+        self.assertEqual(sum(int(value) for value in effective.values()), 78)
 
     def test_json_artifacts_are_strict_and_contain_no_nan_or_infinity(self):
         _assert_finite_json(self, self.manifest, "manifest")
@@ -391,8 +421,8 @@ class SixDimensionFormalArtifactTests(unittest.TestCase):
             self.assertNotIn("NaN", text)
             self.assertNotIn("Infinity", text)
 
-    def test_research_ranking_is_independent_and_funds_keep_ten_orthogonalised_factors(self):
-        self.assertEqual(int(self.snapshot["six_dimension"]["factor_count"]["funds"]), 10)
+    def test_research_ranking_is_independent_and_funds_keep_fifteen_orthogonalised_factors(self):
+        self.assertEqual(int(self.snapshot["six_dimension"]["factor_count"]["funds"]), 15)
         for frequency in ("monthly", "weekly"):
             payload = self.snapshot["industry"]["frequencies"][frequency]
             research = payload["six_dimension"]["research_ranking"]
@@ -400,7 +430,7 @@ class SixDimensionFormalArtifactTests(unittest.TestCase):
             self.assertEqual(sorted(int(row["rank"]) for row in research), list(range(1, 32)))
             self.assertTrue(all(len(row["components"]) == 7 for row in research), frequency)
             self.assertEqual(len(payload["candidate_audit"]), 2, frequency)
-            expected_count = 3 if frequency == "monthly" else 2
+            expected_count = 9 if frequency == "monthly" else 5
             self.assertEqual(int(payload["six_dimension"]["candidate_search_count"]), expected_count)
             self.assertGreaterEqual(
                 int(payload["six_dimension"]["all_candidate_count"]),

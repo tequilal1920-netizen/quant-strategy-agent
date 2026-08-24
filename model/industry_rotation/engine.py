@@ -44,6 +44,8 @@ DATA_DIR = PROJECT_ROOT / "board" / "quant_strategy_agent" / "data"
 CACHE_DIR = PROJECT_ROOT / "output" / "industry_rotation" / "cache" / "market"
 CMB_DATA_RAW = os.environ.get("INDUSTRY_ROTATION_SOURCE_XLSX", "").strip()
 CMB_DATA = Path(CMB_DATA_RAW) if CMB_DATA_RAW else None
+SIGNAL_CUTOFF_RAW = os.environ.get("INDUSTRY_ROTATION_SIGNAL_CUTOFF", "").strip()
+SIGNAL_CUTOFF = pd.Timestamp(SIGNAL_CUTOFF_RAW) if SIGNAL_CUTOFF_RAW else None
 KEYWORD_AUDIT = PROJECT_ROOT / "output" / "industry_rotation" / "evidence" / "rotation_keyword_columns_v4.json"
 WAREHOUSE = PROJECT_ROOT / "database" / "research_warehouse.db"
 OLD_SNAPSHOT = DATA_DIR / "rotation_snapshot.json"
@@ -510,6 +512,10 @@ def _candidate_scores(
 
 
 def _signal_dates(index: pd.DatetimeIndex, frequency: str) -> list[pd.Timestamp]:
+    if frequency == "monthly" and SIGNAL_CUTOFF is not None:
+        index = pd.DatetimeIndex(index[index <= SIGNAL_CUTOFF])
+        if index.empty:
+            return []
     labels = index.to_period("M") if frequency == "monthly" else index.to_period("W-FRI")
     values = pd.Series(index=index, data=index)
     return [pd.Timestamp(value) for value in values.groupby(labels).max().tolist()]

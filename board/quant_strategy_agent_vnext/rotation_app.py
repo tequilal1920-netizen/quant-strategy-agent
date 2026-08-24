@@ -13,12 +13,13 @@ from app import APP_VERSION as BASE_VERSION
 from app import PUBLIC_HOST, USERNAME, app
 
 
-APP_VERSION = f"{BASE_VERSION}-rotation-r2"
+APP_VERSION = f"{BASE_VERSION}-rotation-r3"
 ROOT = Path(__file__).resolve().parent
 ROTATION_SNAPSHOT = ROOT / "data" / "rotation_snapshot.json"
 ROTATION_TRACKING = ROOT / "data" / "rotation_tracking.json"
 ROTATION_FINAL_FIGURES = ROOT / "data" / "rotation_final_figures.json"
 ROTATION_FINAL_FIGURES_STATIC = ROOT / "static" / "rotation_figures" / "manifest.json"
+ROTATION_RESEARCH_DASHBOARD = ROOT / "data" / "industry_research_dashboard.json"
 _CACHE_LOCK = threading.RLock()
 _CACHE: dict[str, dict[str, Any]] = {}
 
@@ -122,7 +123,7 @@ def _snapshot_contract(payload: dict[str, Any]) -> dict[str, Any]:
 
 def rotation_index():
     return render_template(
-        "index_rotation.html",
+        "index_rotation_factor_lab.html",
         authenticated=True,
         user=session.get("user") or USERNAME,
         app_version=APP_VERSION,
@@ -174,7 +175,7 @@ def rotation_final_figures():
     try:
         source = ROTATION_FINAL_FIGURES if ROTATION_FINAL_FIGURES.exists() else ROTATION_FINAL_FIGURES_STATIC
         payload = _load_json(source)
-        if payload.get("schema_version") != "1.0":
+        if payload.get("schema_version") not in {"1.0", "1.1"}:
             return jsonify({"status": "failed", "message": "final_figure_schema_mismatch"}), 503
         public_payload = {
             "schema_version": payload.get("schema_version"),
@@ -309,6 +310,38 @@ def rotation_industry_dashboard():
         })
     except Exception as exc:  # noqa: BLE001
         return jsonify({"status": "failed", "message": str(exc)}), 503
+
+@app.get("/api/rotation/research-dashboard")
+def rotation_research_dashboard():
+    """Return the full industry prosperity and six-dimension rotation research dashboard."""
+    try:
+        payload = _load_json(ROTATION_RESEARCH_DASHBOARD)
+        prosperity = payload.get("prosperity", {})
+        rotation = payload.get("rotation", {})
+        errors: list[str] = []
+        if payload.get("schema_version") != "1.0":
+            errors.append("schema_version_not_1")
+        if len(prosperity.get("industries", [])) != 31:
+            errors.append("prosperity_industry_count_not_31")
+        if len(prosperity.get("industry_detail", {})) != 31:
+            errors.append("prosperity_detail_count_not_31")
+        if len(rotation.get("factor_table", [])) < 60:
+            errors.append("rotation_factor_table_too_short")
+        if len(rotation.get("ranking", [])) != 31:
+            errors.append("rotation_ranking_count_not_31")
+        figures = rotation.get("figures", {})
+        for field in ("annual_table", "daily_nav"):
+            value = str(figures.get(field) or "")
+            if value and (not value.startswith("/static/rotation_figures/") or not (ROOT / value.lstrip("/")).exists()):
+                errors.append(f"rotation_{field}_missing")
+        if errors:
+            return jsonify({"status": "failed", "errors": errors}), 503
+        public_payload = dict(payload)
+        public_payload["status"] = "ok"
+        return jsonify(public_payload)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"status": "failed", "message": str(exc)}), 503
+
 
 @app.get("/api/rotation/tracking")
 def rotation_tracking():

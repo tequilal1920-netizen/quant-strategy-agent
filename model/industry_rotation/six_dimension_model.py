@@ -33,10 +33,19 @@ import numpy as np
 import pandas as pd
 
 
-MODEL_VERSION = "industry-rotation/5.3-champion-anchored-six-dimension"
+MODEL_VERSION = "industry-rotation/5.5-layered-return-regime-gated-six-dimension"
 CACHE_VERSION = "six-dimension-inputs/1.2"
 ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = ROOT.parents[1]
+
+
+def _resolve_project_root(root: Path) -> Path:
+    for candidate in (root, *root.parents):
+        if (candidate / "database" / "research_warehouse.db").exists() and (candidate / "board").exists():
+            return candidate
+    return root.parents[1]
+
+
+PROJECT_ROOT = _resolve_project_root(ROOT)
 WAREHOUSE = PROJECT_ROOT / "database" / "research_warehouse.db"
 CACHE_DIR = PROJECT_ROOT / "output" / "industry_rotation" / "cache" / "market"
 DAILY_CACHE = CACHE_DIR / "pit_six_dimension_daily.csv.gz"
@@ -71,10 +80,20 @@ FACTOR_LABELS = {
     "op_yoy": "营业利润增速",
     "revenue_positive_breadth": "收入正增长扩散度",
     "profit_positive_breadth": "利润正增长扩散度",
+    "op_yoy_acceleration": "营业利润增速加速度",
+    "netprofit_yoy_acceleration": "归母净利润增速加速度",
+    "roe_trend": "净资产收益率改善",
+    "gross_margin_trend": "毛利率改善",
+    "earnings_quality_confirmation": "盈利质量确认",
+    "profit_growth_stability": "利润增长稳定性",
     "earnings_yield": "盈利收益率",
     "book_yield": "账面收益率",
     "sales_yield": "销售收益率",
     "dividend_yield": "股息率",
+    "peg_proxy": "低PEG代理",
+    "earnings_yield_momentum": "盈利收益率改善",
+    "value_quality_match": "估值质量匹配",
+    "dividend_quality": "红利质量",
     "momentum_12_1": "十二减一月相对动量",
     "momentum_6_1": "六减一月相对动量",
     "momentum_3_1": "三减一月相对动量",
@@ -87,6 +106,11 @@ FACTOR_LABELS = {
     "breadth_20": "二十日上涨扩散度",
     "breadth_60": "六十日上涨扩散度",
     "short_reversal": "短期反转",
+    "trend_ir_126": "半年趋势信息比",
+    "trend_ir_63": "季度趋势信息比",
+    "max_drawdown_resilience_126": "半年回撤韧性",
+    "new_high_proximity_252": "一年新高接近度",
+    "momentum_consistency": "多周期动量一致性",
     "flow_total_5": "五日主力净流入",
     "flow_total_20": "二十日主力净流入",
     "flow_total_60": "六十日主力净流入",
@@ -97,6 +121,11 @@ FACTOR_LABELS = {
     "flow_extra_structure_60": "六十日超大单结构残差",
     "flow_breadth_20": "二十日净流入扩散度",
     "flow_persistence_20": "二十日净流入持续度",
+    "flow_acceleration_20_60": "二十日相对六十日资金加速度",
+    "large_flow_persistence_20": "二十日大单持续度",
+    "flow_price_residual_20": "二十日资金价格残差",
+    "flow_breadth_change": "资金扩散改善",
+    "smart_money_confirmation": "聪明钱确认",
     "turnover_level": "换手水平",
     "turnover_expansion": "换手扩张",
     "volume_ratio": "量比水平",
@@ -107,6 +136,11 @@ FACTOR_LABELS = {
     "volatility_expansion": "波动扩张",
     "breadth_heat": "上涨扩散热度",
     "low_dispersion_heat": "低分歧热度",
+    "crowding_acceleration": "拥挤加速度",
+    "turnover_percentile_250": "一年换手分位",
+    "overheat_residual": "涨幅过热残差",
+    "liquidity_crowding": "成交放量拥挤",
+    "crowding_reversal_risk": "拥挤反转风险",
 }
 
 
@@ -586,6 +620,16 @@ def _rolling_rank(frame: pd.DataFrame, window: int, minimum: int) -> pd.DataFram
     return frame.apply(lambda values: values.rolling(window, min_periods=minimum).rank(pct=True))
 
 
+def _cross_section_mad_winsor(frame: pd.DataFrame, threshold: float = 3.5) -> pd.DataFrame:
+    values = frame.replace([np.inf, -np.inf], np.nan).astype(float)
+    median = values.median(axis=1, skipna=True)
+    mad = values.sub(median, axis=0).abs().median(axis=1, skipna=True).mul(1.4826)
+    lower = median.sub(mad.mul(threshold))
+    upper = median.add(mad.mul(threshold))
+    clipped = values.clip(lower=lower, upper=upper, axis=0)
+    return clipped.where(values.notna())
+
+
 def _atomic_score(
     raw: pd.DataFrame,
     high_is_good: bool = True,
@@ -593,7 +637,7 @@ def _atomic_score(
     minimum: int = 252,
     time_series_weight: float = 0.35,
 ) -> pd.DataFrame:
-    values = raw.replace([np.inf, -np.inf], np.nan).astype(float)
+    values = _cross_section_mad_winsor(raw)
     cross_section = _cross_section_rank(values, high_is_good=high_is_good)
     time_series = _rolling_rank(values, rolling_window, minimum)
     if not high_is_good:
@@ -722,9 +766,11 @@ def _monthly_factor_scores(
     }
     groups: dict[str, dict[str, pd.DataFrame]] = {"fundamental": {}, "valuation": {}}
     raw_groups = {"fundamental": fundamental_direction, "valuation": valuation_direction}
+    raw_values: dict[str, pd.DataFrame] = {}
     for dimension, specs in raw_groups.items():
         for field, direction in specs.items():
             raw = _pivot(monthly, field, unique_dates, columns)
+            raw_values[field] = raw
             scored = _monthly_atomic_score(raw, high_is_good=direction)
             groups[dimension][field] = scored.reindex(close_index).ffill()
     coverage: dict[str, pd.DataFrame] = {}
@@ -734,6 +780,56 @@ def _monthly_factor_scores(
     valuation_mask = coverage["valuation_coverage"].ge(0.45)
     groups["fundamental"] = {name: frame.where(financial_mask) for name, frame in groups["fundamental"].items()}
     groups["valuation"] = {name: frame.where(valuation_mask) for name, frame in groups["valuation"].items()}
+
+    derived_fundamental = {
+        "op_yoy_acceleration": raw_values["op_yoy"].sub(raw_values["op_yoy"].shift(3)),
+        "netprofit_yoy_acceleration": raw_values["netprofit_yoy"].sub(raw_values["netprofit_yoy"].shift(3)),
+        "roe_trend": raw_values["roe"].sub(raw_values["roe"].shift(3)),
+        "gross_margin_trend": raw_values["gross_margin"].sub(raw_values["gross_margin"].shift(3)),
+        "profit_growth_stability": raw_values["netprofit_yoy"].rolling(8, min_periods=4).std(ddof=0).mul(-1.0),
+    }
+    for name, raw in derived_fundamental.items():
+        groups["fundamental"][name] = _monthly_atomic_score(raw).reindex(close_index).ffill().where(financial_mask)
+    groups["fundamental"]["earnings_quality_confirmation"] = _cross_section_rank(
+        _mean_available(
+            [
+                groups["fundamental"]["op_yoy"],
+                groups["fundamental"]["netprofit_yoy"],
+                groups["fundamental"]["profit_positive_breadth"],
+                groups["fundamental"]["gross_margin"],
+            ],
+            2,
+        )
+    ).where(financial_mask)
+
+    positive_growth = raw_values["netprofit_yoy"].clip(lower=0.0).div(100.0).add(0.01)
+    derived_valuation = {
+        "peg_proxy": raw_values["earnings_yield"].mul(positive_growth),
+        "earnings_yield_momentum": raw_values["earnings_yield"].sub(raw_values["earnings_yield"].shift(3)),
+    }
+    for name, raw in derived_valuation.items():
+        groups["valuation"][name] = _monthly_atomic_score(raw).reindex(close_index).ffill().where(valuation_mask & financial_mask)
+    groups["valuation"]["value_quality_match"] = _cross_section_rank(
+        _mean_available(
+            [
+                groups["valuation"]["earnings_yield"],
+                groups["valuation"]["book_yield"],
+                groups["fundamental"]["roe"],
+                groups["fundamental"]["gross_margin"],
+            ],
+            3,
+        )
+    ).where(valuation_mask & financial_mask)
+    groups["valuation"]["dividend_quality"] = _cross_section_rank(
+        _mean_available(
+            [
+                groups["valuation"]["dividend_yield"],
+                groups["fundamental"]["roe"],
+                groups["fundamental"]["gross_margin"],
+            ],
+            2,
+        )
+    ).where(valuation_mask & financial_mask)
     return {**groups["fundamental"], **groups["valuation"]}, coverage
 
 
@@ -795,6 +891,9 @@ def _daily_factor_scores(
         "flow_extra_structure_60": extra_structure[60],
         "flow_breadth_20": flow_breadth.rolling(20, min_periods=12).mean().where(coverage_20.ge(0.50)),
         "flow_persistence_20": total_flow.gt(0).where(total_flow.notna()).rolling(20, min_periods=12).mean().where(coverage_20.ge(0.50)),
+        "flow_acceleration_20_60": total_ratio[20].sub(total_ratio[60]),
+        "large_flow_persistence_20": large_flow.gt(0).where(large_flow.notna()).rolling(20, min_periods=12).mean().where(coverage_20.ge(0.50)),
+        "flow_breadth_change": flow_breadth.rolling(20, min_periods=12).mean().sub(flow_breadth.rolling(60, min_periods=36).mean()).where(coverage_20.ge(0.50)),
     }
     funds = {name: _atomic_score(frame) for name, frame in funds_raw.items()}
 
@@ -813,7 +912,17 @@ def _daily_factor_scores(
     excess_6_1 = momentum_6_1.sub(market_6_1, axis=0)
     excess_3_1 = momentum_3_1.sub(market_3_1, axis=0)
     risk = returns.rolling(126, min_periods=63).std(ddof=0)
+    excess_daily = returns.sub(market, axis=0)
     up_ratio = _pivot(daily, "up_ratio", index, columns)
+    momentum_consistency = _mean_available(
+        [
+            excess_12_1.gt(0).where(excess_12_1.notna()).astype(float),
+            excess_6_1.gt(0).where(excess_6_1.notna()).astype(float),
+            excess_3_1.gt(0).where(excess_3_1.notna()).astype(float),
+            momentum_1.gt(0).where(momentum_1.notna()).astype(float),
+        ],
+        3,
+    )
     technical_raw = {
         "momentum_12_1": excess_12_1,
         "momentum_6_1": excess_6_1,
@@ -827,8 +936,26 @@ def _daily_factor_scores(
         "breadth_20": up_ratio.rolling(20, min_periods=12).mean(),
         "breadth_60": up_ratio.rolling(60, min_periods=36).mean(),
         "short_reversal": close.pct_change(5, fill_method=None).mul(-1.0),
+        "trend_ir_126": excess_daily.rolling(126, min_periods=63).mean().div(excess_daily.rolling(126, min_periods=63).std(ddof=0).replace(0.0, np.nan)),
+        "trend_ir_63": excess_daily.rolling(63, min_periods=30).mean().div(excess_daily.rolling(63, min_periods=30).std(ddof=0).replace(0.0, np.nan)),
+        "max_drawdown_resilience_126": close.div(close.rolling(126, min_periods=63).max()).sub(1.0),
+        "new_high_proximity_252": close.div(close.rolling(252, min_periods=126).max()),
+        "momentum_consistency": momentum_consistency,
     }
     technical = {name: _atomic_score(frame) for name, frame in technical_raw.items()}
+    funds["flow_price_residual_20"] = _atomic_score(
+        _cross_section_residual(total_ratio[20], [technical_raw["momentum_1"]])
+    )
+    funds["smart_money_confirmation"] = _cross_section_rank(
+        _mean_available(
+            [
+                funds["flow_large_structure_20"],
+                funds["flow_extra_structure_20"],
+                technical["momentum_1"],
+            ],
+            2,
+        )
+    )
 
     turnover = _pivot(daily, "turnover_rate", index, columns)
     volume_ratio = _pivot(daily, "volume_ratio", index, columns)
@@ -837,17 +964,28 @@ def _daily_factor_scores(
     dispersion = _pivot(daily, "return_dispersion", index, columns)
     short_vol = returns.rolling(21, min_periods=15).std(ddof=0)
     long_vol = returns.rolling(126, min_periods=63).std(ddof=0)
+    turnover_level_raw = turnover.rolling(20, min_periods=12).mean()
+    turnover_expansion_raw = turnover.rolling(5, min_periods=3).mean().div(turnover.rolling(60, min_periods=36).mean().replace(0.0, np.nan))
+    price_distance_raw = close.div(close.rolling(60, min_periods=30).mean()).sub(1.0)
+    volatility_expansion_raw = short_vol.div(long_vol.replace(0.0, np.nan))
+    volume_ratio_raw = volume_ratio.rolling(20, min_periods=12).mean()
+    limit_up_raw = limit_up.rolling(20, min_periods=12).mean()
     crowding_raw = {
-        "turnover_level": turnover.rolling(20, min_periods=12).mean(),
-        "turnover_expansion": turnover.rolling(5, min_periods=3).mean().div(turnover.rolling(60, min_periods=36).mean().replace(0.0, np.nan)),
-        "volume_ratio": volume_ratio.rolling(20, min_periods=12).mean(),
+        "turnover_level": turnover_level_raw,
+        "turnover_expansion": turnover_expansion_raw,
+        "volume_ratio": volume_ratio_raw,
         "amount_concentration": concentration.rolling(20, min_periods=12).mean(),
-        "limit_up_heat": limit_up.rolling(20, min_periods=12).mean(),
+        "limit_up_heat": limit_up_raw,
         "short_momentum_heat": momentum_1,
-        "price_distance_heat": close.div(close.rolling(60, min_periods=30).mean()).sub(1.0),
-        "volatility_expansion": short_vol.div(long_vol.replace(0.0, np.nan)),
+        "price_distance_heat": price_distance_raw,
+        "volatility_expansion": volatility_expansion_raw,
         "breadth_heat": up_ratio.rolling(5, min_periods=3).mean(),
         "low_dispersion_heat": dispersion.rolling(20, min_periods=12).mean().mul(-1.0),
+        "crowding_acceleration": turnover_expansion_raw.add(volatility_expansion_raw, fill_value=np.nan),
+        "turnover_percentile_250": _rolling_rank(turnover_level_raw, 250, 120),
+        "overheat_residual": _cross_section_residual(momentum_1, [excess_12_1, excess_6_1]),
+        "liquidity_crowding": amount.rolling(20, min_periods=12).mean().div(amount.rolling(252, min_periods=126).mean().replace(0.0, np.nan)),
+        "crowding_reversal_risk": limit_up_raw.add(price_distance_raw.clip(lower=0.0), fill_value=np.nan).add(turnover_expansion_raw, fill_value=np.nan),
     }
     crowding = {name: _atomic_score(frame) for name, frame in crowding_raw.items()}
     return technical, funds, crowding
@@ -864,8 +1002,13 @@ def _dimension_scores(
         "roe", "roa", "gross_margin", "netprofit_margin", "assets_turn", "current_ratio",
         "debt_to_assets", "tr_yoy", "netprofit_yoy", "op_yoy",
         "revenue_positive_breadth", "profit_positive_breadth",
+        "op_yoy_acceleration", "netprofit_yoy_acceleration", "roe_trend",
+        "gross_margin_trend", "earnings_quality_confirmation", "profit_growth_stability",
     ]
-    valuation_names = ["earnings_yield", "book_yield", "sales_yield", "dividend_yield"]
+    valuation_names = [
+        "earnings_yield", "book_yield", "sales_yield", "dividend_yield",
+        "peg_proxy", "earnings_yield_momentum", "value_quality_match", "dividend_quality",
+    ]
     factor_scores = {
         "prosperity": prosperity,
         "fundamental": {name: monthly_scores[name] for name in fundamental_names},
@@ -889,22 +1032,28 @@ def _dimension_scores(
             ["roe", "roa", "gross_margin", "netprofit_margin"],
             ["assets_turn", "current_ratio", "debt_to_assets"],
             ["tr_yoy", "netprofit_yoy", "op_yoy"],
-            ["revenue_positive_breadth", "profit_positive_breadth"],
+            ["op_yoy_acceleration", "netprofit_yoy_acceleration", "roe_trend", "gross_margin_trend"],
+            ["revenue_positive_breadth", "profit_positive_breadth", "earnings_quality_confirmation", "profit_growth_stability"],
         ],
         3,
     )
     valuation_score = _cluster_balanced_score(
         factor_scores["valuation"],
-        [[name] for name in valuation_names],
+        [
+            ["earnings_yield", "book_yield", "sales_yield"],
+            ["dividend_yield", "dividend_quality"],
+            ["peg_proxy", "value_quality_match"],
+            ["earnings_yield_momentum"],
+        ],
         3,
     )
     technical_score = _cluster_balanced_score(
         technical,
         [
-            ["momentum_12_1", "momentum_6_1", "risk_adjusted_momentum"],
+            ["momentum_12_1", "momentum_6_1", "risk_adjusted_momentum", "momentum_consistency"],
             ["momentum_3_1", "momentum_1", "short_reversal"],
-            ["path_efficiency_126", "path_efficiency_63"],
-            ["distance_ma120", "distance_ma60"],
+            ["path_efficiency_126", "path_efficiency_63", "trend_ir_126", "trend_ir_63"],
+            ["distance_ma120", "distance_ma60", "max_drawdown_resilience_126", "new_high_proximity_252"],
             ["breadth_20", "breadth_60"],
         ],
         3,
@@ -912,9 +1061,9 @@ def _dimension_scores(
     weekly_technical_score = _cluster_balanced_score(
         technical,
         [
-            ["momentum_3_1", "momentum_1", "short_reversal"],
-            ["path_efficiency_63"],
-            ["distance_ma60"],
+            ["momentum_3_1", "momentum_1", "short_reversal", "momentum_consistency"],
+            ["path_efficiency_63", "trend_ir_63"],
+            ["distance_ma60", "max_drawdown_resilience_126"],
             ["breadth_20"],
         ],
         3,
@@ -922,30 +1071,32 @@ def _dimension_scores(
     funds_score = _cluster_balanced_score(
         funds,
         [
-            ["flow_total_5", "flow_total_20", "flow_total_60"],
-            ["flow_large_structure_5", "flow_large_structure_20", "flow_large_structure_60"],
+            ["flow_total_5", "flow_total_20", "flow_total_60", "flow_acceleration_20_60"],
+            ["flow_large_structure_5", "flow_large_structure_20", "flow_large_structure_60", "large_flow_persistence_20"],
             ["flow_extra_structure_20", "flow_extra_structure_60"],
-            ["flow_breadth_20", "flow_persistence_20"],
+            ["flow_breadth_20", "flow_persistence_20", "flow_breadth_change"],
+            ["flow_price_residual_20", "smart_money_confirmation"],
         ],
         3,
     )
     weekly_funds_score = _cluster_balanced_score(
         funds,
         [
-            ["flow_total_5", "flow_total_20"],
-            ["flow_large_structure_5", "flow_large_structure_20"],
+            ["flow_total_5", "flow_total_20", "flow_acceleration_20_60"],
+            ["flow_large_structure_5", "flow_large_structure_20", "large_flow_persistence_20"],
             ["flow_extra_structure_20"],
-            ["flow_breadth_20", "flow_persistence_20"],
+            ["flow_breadth_20", "flow_persistence_20", "flow_breadth_change"],
+            ["flow_price_residual_20", "smart_money_confirmation"],
         ],
         3,
     )
     crowding_score = _cluster_balanced_score(
         crowding,
         [
-            ["turnover_level", "turnover_expansion", "volume_ratio"],
-            ["amount_concentration"],
-            ["limit_up_heat", "short_momentum_heat", "price_distance_heat", "breadth_heat"],
-            ["volatility_expansion", "low_dispersion_heat"],
+            ["turnover_level", "turnover_expansion", "turnover_percentile_250", "volume_ratio"],
+            ["amount_concentration", "liquidity_crowding"],
+            ["limit_up_heat", "short_momentum_heat", "price_distance_heat", "breadth_heat", "overheat_residual"],
+            ["volatility_expansion", "low_dispersion_heat", "crowding_acceleration", "crowding_reversal_risk"],
         ],
         3,
     )
@@ -1057,7 +1208,7 @@ def _online_champion_overlay_score(
             confidence = min(1.0, max(0.0, t_stat / 2.0))
             consistency = min(1.0, max(0.0, (positive_rate - 0.50) * 4.0))
             evidence = len(sample) / (len(sample) + float(minimum_history))
-            weights.at[current, name] = float(maximum_weights[name]) * confidence * consistency * evidence
+            weights.at[current, name] = float(maximum_weights.get(name, 0.0)) * confidence * consistency * evidence
         score = anchor.loc[current].sub(0.5)
         for name in weights.columns:
             score = score.add(
@@ -1067,26 +1218,41 @@ def _online_champion_overlay_score(
         output.loc[current] = score.rank(pct=True, method="average")
     return output.ffill(), weights
 
-# These factors were admitted before the sealed test was read.  Each factor has
-# non-negative mean IC in both train and validation, belongs to an independent
-# economic cluster and has adequate PIT coverage.  Valuation remains visible in
-# diagnostics but receives zero alpha weight because its validation IC is
-# negative in every atomic series.
+# Research challenger factor pool.  The production champion is still protected
+# by the promotion gate; this pool is used to test whether the expanded
+# secondary-factor library adds stable train/validation information before any
+# model is allowed to replace the champion.
 ADMITTED_FACTORS = {
     "fundamental": [
         "assets_turn", "netprofit_yoy", "op_yoy", "profit_positive_breadth",
+        "op_yoy_acceleration", "netprofit_yoy_acceleration", "roe_trend",
+        "gross_margin_trend", "earnings_quality_confirmation",
+        "profit_growth_stability",
+    ],
+    "valuation": [
+        "earnings_yield", "book_yield", "dividend_yield", "peg_proxy",
+        "earnings_yield_momentum", "value_quality_match", "dividend_quality",
     ],
     "technical_monthly": [
         "momentum_12_1", "momentum_6_1", "risk_adjusted_momentum",
         "path_efficiency_126", "path_efficiency_63", "distance_ma120",
+        "trend_ir_126", "trend_ir_63", "max_drawdown_resilience_126",
+        "new_high_proximity_252", "momentum_consistency",
     ],
     "technical_weekly": [
         "momentum_3_1", "momentum_1", "path_efficiency_63", "distance_ma60",
+        "trend_ir_63", "max_drawdown_resilience_126", "momentum_consistency",
     ],
     "funds_monthly": [
         "flow_large_structure_20", "flow_large_structure_60", "flow_extra_structure_20",
+        "flow_acceleration_20_60", "large_flow_persistence_20",
+        "flow_price_residual_20", "flow_breadth_change", "smart_money_confirmation",
     ],
-    "funds_weekly": ["flow_large_structure_20", "flow_extra_structure_20"],
+    "funds_weekly": [
+        "flow_large_structure_20", "flow_extra_structure_20",
+        "flow_acceleration_20_60", "large_flow_persistence_20",
+        "flow_price_residual_20", "smart_money_confirmation",
+    ],
 }
 
 
@@ -1099,7 +1265,19 @@ def _admitted_dimensions(
         [
             ["assets_turn"],
             ["netprofit_yoy", "op_yoy"],
-            ["profit_positive_breadth"],
+            ["op_yoy_acceleration", "netprofit_yoy_acceleration", "roe_trend", "gross_margin_trend"],
+            ["profit_positive_breadth", "earnings_quality_confirmation", "profit_growth_stability"],
+        ],
+        4,
+    )
+    valuation = _admitted_factor_score(
+        factor_scores["valuation"],
+        ADMITTED_FACTORS["valuation"],
+        [
+            ["earnings_yield", "book_yield"],
+            ["dividend_yield", "dividend_quality"],
+            ["peg_proxy", "value_quality_match"],
+            ["earnings_yield_momentum"],
         ],
         3,
     )
@@ -1107,9 +1285,9 @@ def _admitted_dimensions(
         factor_scores["technical"],
         ADMITTED_FACTORS["technical_monthly"],
         [
-            ["momentum_12_1", "momentum_6_1", "risk_adjusted_momentum"],
-            ["path_efficiency_126", "path_efficiency_63"],
-            ["distance_ma120"],
+            ["momentum_12_1", "momentum_6_1", "risk_adjusted_momentum", "momentum_consistency"],
+            ["path_efficiency_126", "path_efficiency_63", "trend_ir_126", "trend_ir_63"],
+            ["distance_ma120", "max_drawdown_resilience_126", "new_high_proximity_252"],
         ],
         3,
     )
@@ -1117,9 +1295,9 @@ def _admitted_dimensions(
         factor_scores["technical"],
         ADMITTED_FACTORS["technical_weekly"],
         [
-            ["momentum_3_1", "momentum_1"],
-            ["path_efficiency_63"],
-            ["distance_ma60"],
+            ["momentum_3_1", "momentum_1", "momentum_consistency"],
+            ["path_efficiency_63", "trend_ir_63"],
+            ["distance_ma60", "max_drawdown_resilience_126"],
         ],
         3,
     )
@@ -1127,25 +1305,34 @@ def _admitted_dimensions(
         factor_scores["funds"],
         ADMITTED_FACTORS["funds_monthly"],
         [
-            ["flow_large_structure_20", "flow_large_structure_60"],
+            ["flow_large_structure_20", "flow_large_structure_60", "large_flow_persistence_20"],
             ["flow_extra_structure_20"],
+            ["flow_acceleration_20_60", "flow_breadth_change"],
+            ["flow_price_residual_20", "smart_money_confirmation"],
         ],
-        2,
+        3,
     )
     funds_weekly = _admitted_factor_score(
         factor_scores["funds"],
         ADMITTED_FACTORS["funds_weekly"],
-        [["flow_large_structure_20"], ["flow_extra_structure_20"]],
-        2,
+        [
+            ["flow_large_structure_20", "large_flow_persistence_20"],
+            ["flow_extra_structure_20"],
+            ["flow_acceleration_20_60"],
+            ["flow_price_residual_20", "smart_money_confirmation"],
+        ],
+        3,
     )
     return {
         "monthly": {
             "fundamental": fundamental,
+            "valuation": valuation,
             "technical": technical_monthly,
             "funds": funds_monthly,
         },
         "weekly": {
             "fundamental": fundamental,
+            "valuation": valuation,
             "technical": technical_weekly,
             "funds": funds_weekly,
         },
@@ -1178,6 +1365,27 @@ def _row_spearman(score: pd.DataFrame, future: pd.DataFrame, dates: list[pd.Time
         pair = pd.concat([score.loc[date], future.loc[date]], axis=1).dropna()
         if len(pair) >= 20:
             values[date] = float(pair.iloc[:, 0].corr(pair.iloc[:, 1], method="spearman"))
+    return pd.Series(values, dtype=float).sort_index()
+
+
+def _row_top_bottom_spread(
+    score: pd.DataFrame,
+    future: pd.DataFrame,
+    dates: list[pd.Timestamp],
+    top_n: int = 5,
+) -> pd.Series:
+    values: dict[pd.Timestamp, float] = {}
+    for date in dates:
+        if date not in score.index or date not in future.index:
+            continue
+        pair = pd.concat([score.loc[date], future.loc[date]], axis=1).dropna()
+        if len(pair) < max(20, top_n * 2):
+            continue
+        pair.columns = ["score", "future"]
+        ordered = pair.sort_values("score")
+        bottom = ordered.head(top_n)["future"].mean()
+        top = ordered.tail(top_n)["future"].mean()
+        values[date] = float(top - bottom)
     return pd.Series(values, dtype=float).sort_index()
 
 
@@ -1268,6 +1476,263 @@ def _online_ic_score(
     return score.ffill(), weights
 
 
+def _online_factor_stack_score(
+    factor_scores: dict[str, dict[str, pd.DataFrame]],
+    dimensions: dict[str, pd.DataFrame],
+    close: pd.DataFrame,
+    signal_dates: list[pd.Timestamp],
+    frequency: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Causal online stack of atomic factors for next-period industry excess return.
+
+    The prior six-dimension challengers kept the frozen C6 prosperity score as
+    the centre of gravity.  This stack lets matured next-period labels decide
+    which atomic factors still carry predictive power.  At each signal date,
+    only labels whose execution-to-next-execution window has already matured
+    are eligible, so the future return being predicted is not visible.
+    """
+
+    if frequency == "monthly":
+        prosperity = ["prosperity_level", "prosperity_acceleration"]
+        fundamental = [
+            "op_yoy", "netprofit_yoy", "op_yoy_acceleration", "netprofit_yoy_acceleration",
+            "profit_positive_breadth", "earnings_quality_confirmation",
+            "gross_margin_trend", "profit_growth_stability",
+        ]
+        valuation = [
+            "earnings_yield", "peg_proxy", "earnings_yield_momentum",
+            "value_quality_match", "dividend_quality",
+        ]
+        technical = [
+            "momentum_12_1", "momentum_6_1", "risk_adjusted_momentum",
+            "path_efficiency_126", "trend_ir_126", "max_drawdown_resilience_126",
+            "new_high_proximity_252", "momentum_consistency",
+        ]
+        funds = [
+            "flow_large_structure_60", "flow_acceleration_20_60",
+            "large_flow_persistence_20", "flow_price_residual_20",
+            "smart_money_confirmation",
+        ]
+        lookback = 36
+        minimum_history = 12
+        recent_window = 9
+        prior_weights = {
+            "prosperity:prosperity_level": 0.12,
+            "prosperity:prosperity_acceleration": 0.14,
+            "fundamental:op_yoy": 0.10,
+            "fundamental:netprofit_yoy": 0.05,
+            "fundamental:op_yoy_acceleration": 0.07,
+            "fundamental:netprofit_yoy_acceleration": 0.05,
+            "fundamental:profit_positive_breadth": 0.08,
+            "fundamental:earnings_quality_confirmation": 0.07,
+            "fundamental:gross_margin_trend": 0.04,
+            "fundamental:profit_growth_stability": 0.03,
+            "valuation:earnings_yield": 0.03,
+            "valuation:peg_proxy": 0.04,
+            "valuation:earnings_yield_momentum": 0.03,
+            "valuation:value_quality_match": 0.03,
+            "technical:momentum_12_1": 0.16,
+            "technical:risk_adjusted_momentum": 0.06,
+            "technical:trend_ir_126": 0.05,
+            "technical:max_drawdown_resilience_126": 0.04,
+            "technical:momentum_consistency": 0.05,
+            "funds:flow_large_structure_60": 0.03,
+            "funds:flow_acceleration_20_60": 0.03,
+            "funds:flow_price_residual_20": 0.03,
+            "funds:smart_money_confirmation": 0.02,
+        }
+        dimension_cap = {
+            "prosperity": 0.34,
+            "fundamental": 0.42,
+            "valuation": 0.14,
+            "technical": 0.46,
+            "funds": 0.14,
+        }
+        individual_cap = 0.20
+        risk_penalty = 0.16
+        shrink_to_prior = 0.62
+    else:
+        prosperity = ["prosperity_level", "prosperity_acceleration"]
+        fundamental = [
+            "op_yoy", "op_yoy_acceleration", "profit_positive_breadth",
+            "earnings_quality_confirmation", "gross_margin_trend",
+        ]
+        valuation = ["earnings_yield", "peg_proxy", "value_quality_match"]
+        technical = [
+            "momentum_3_1", "momentum_1", "path_efficiency_63",
+            "trend_ir_63", "distance_ma60", "momentum_consistency",
+        ]
+        funds = [
+            "flow_total_20", "flow_large_structure_20", "flow_extra_structure_20",
+            "flow_acceleration_20_60", "flow_price_residual_20", "smart_money_confirmation",
+        ]
+        lookback = 104
+        minimum_history = 30
+        recent_window = 13
+        prior_weights = {
+            "prosperity:prosperity_level": 0.08,
+            "prosperity:prosperity_acceleration": 0.08,
+            "fundamental:op_yoy": 0.10,
+            "fundamental:op_yoy_acceleration": 0.08,
+            "fundamental:profit_positive_breadth": 0.07,
+            "fundamental:earnings_quality_confirmation": 0.05,
+            "valuation:peg_proxy": 0.04,
+            "technical:momentum_3_1": 0.14,
+            "technical:momentum_1": 0.11,
+            "technical:path_efficiency_63": 0.11,
+            "technical:trend_ir_63": 0.07,
+            "technical:momentum_consistency": 0.06,
+            "funds:flow_total_20": 0.05,
+            "funds:flow_large_structure_20": 0.05,
+            "funds:flow_price_residual_20": 0.04,
+            "funds:smart_money_confirmation": 0.04,
+        }
+        dimension_cap = {
+            "prosperity": 0.26,
+            "fundamental": 0.34,
+            "valuation": 0.10,
+            "technical": 0.48,
+            "funds": 0.22,
+        }
+        individual_cap = 0.18
+        risk_penalty = 0.22
+        shrink_to_prior = 0.55
+
+    selected: dict[str, pd.DataFrame] = {}
+    for factor in prosperity:
+        selected[f"prosperity:{factor}"] = factor_scores["prosperity"][factor]
+    for factor in fundamental:
+        selected[f"fundamental:{factor}"] = factor_scores["fundamental"][factor]
+    for factor in valuation:
+        selected[f"valuation:{factor}"] = factor_scores["valuation"][factor]
+    for factor in technical:
+        selected[f"technical:{factor}"] = factor_scores["technical"][factor]
+    for factor in funds:
+        selected[f"funds:{factor}"] = factor_scores["funds"][factor]
+
+    columns = list(close.columns)
+    calendar = pd.DatetimeIndex(
+        sorted({pd.Timestamp(date) for date in signal_dates if date in close.index})
+    )
+    future, maturities = _non_overlapping_forward_excess(close, list(calendar))
+    ic = pd.DataFrame(
+        {name: _row_spearman(frame, future, list(calendar)) for name, frame in selected.items()}
+    ).reindex(calendar)
+    spread = pd.DataFrame(
+        {name: _row_top_bottom_spread(frame, future, list(calendar), top_n=5) for name, frame in selected.items()}
+    ).reindex(calendar)
+    prior = pd.Series(prior_weights, dtype=float).reindex(selected).fillna(0.0)
+    if float(prior.sum()) <= 0.0:
+        prior[:] = 1.0
+    prior = prior.div(prior.sum())
+
+    def apply_caps(raw: pd.Series) -> pd.Series:
+        weights = raw.astype(float).clip(lower=0.0).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+        if float(weights.sum()) <= 0.0:
+            weights = prior.copy()
+        weights = weights.div(weights.sum())
+        weights = weights.clip(upper=individual_cap)
+        for dimension, cap in dimension_cap.items():
+            members = [name for name in weights.index if name.startswith(f"{dimension}:")]
+            total = float(weights.loc[members].sum()) if members else 0.0
+            if total > cap:
+                weights.loc[members] = weights.loc[members].mul(cap / total)
+        if float(weights.sum()) <= 0.0:
+            weights = prior.copy()
+        return weights.div(weights.sum())
+
+    weights = pd.DataFrame(index=calendar, columns=list(selected), dtype=float)
+    for current in calendar:
+        eligible = maturities[maturities.lt(current)].index
+        history = ic.loc[ic.index.intersection(eligible)].tail(lookback)
+        spread_history = spread.loc[spread.index.intersection(eligible)].tail(lookback)
+        if len(history) < minimum_history:
+            weights.loc[current] = apply_caps(prior)
+            continue
+        sample_count = history.notna().sum()
+        mean = history.mean()
+        std = history.std(ddof=1).replace(0.0, np.nan)
+        hit = history.gt(0.0).mean()
+        recent = history.tail(recent_window).mean()
+        reliability = mean.clip(lower=0.0).div(std.fillna(np.inf))
+        persistence = hit.sub(0.50).clip(lower=0.0).mul(2.5)
+        recent_abs = history.tail(recent_window).abs().mean().replace(0.0, np.nan)
+        stability = recent.clip(lower=0.0).div(recent_abs).replace([np.inf, -np.inf], np.nan).fillna(0.0).clip(0.0, 1.0)
+        evidence = sample_count.div(sample_count.add(float(minimum_history)))
+        spread_count = spread_history.notna().sum()
+        spread_mean = spread_history.mean()
+        spread_std = spread_history.std(ddof=1).replace(0.0, np.nan)
+        spread_hit = spread_history.gt(0.0).mean()
+        spread_recent = spread_history.tail(max(3, min(recent_window, len(spread_history)))).mean()
+        spread_reliability = spread_mean.clip(lower=0.0).div(spread_std.fillna(np.inf))
+        spread_persistence = spread_hit.sub(0.50).clip(lower=0.0).mul(2.0)
+        spread_evidence = spread_count.div(spread_count.add(float(minimum_history)))
+        spread_signal = spread_reliability.mul(spread_persistence).mul(spread_evidence).where(spread_recent.ge(-0.002), 0.0)
+        raw = reliability.mul(persistence).mul(stability).mul(evidence).mul(0.58).add(spread_signal.mul(0.42), fill_value=0.0)
+        raw = raw.where(recent.gt(-0.005), 0.0)
+        posterior = (
+            prior.mul(shrink_to_prior).add(raw.div(raw.sum()).mul(1.0 - shrink_to_prior))
+            if float(raw.sum()) > 0.0
+            else prior.copy()
+        )
+        weights.loc[current] = apply_caps(posterior)
+
+    score = pd.DataFrame(index=close.index, columns=columns, dtype=float)
+    for date, row in weights.iterrows():
+        numerator = pd.Series(0.0, index=columns)
+        denominator = pd.Series(0.0, index=columns)
+        for name, weight in row.dropna().items():
+            frame = selected[name]
+            if date not in frame.index:
+                continue
+            values = frame.loc[date]
+            numerator = numerator.add(values.fillna(0.0).mul(float(weight)), fill_value=0.0)
+            denominator = denominator.add(values.notna().astype(float).mul(float(weight)), fill_value=0.0)
+        combined = numerator.div(denominator.replace(0.0, np.nan)).where(denominator.ge(0.70))
+        risk_cost = _crowding_risk(dimensions["crowding"].loc[[date]]).iloc[0].mul(risk_penalty)
+        daily_score = combined.sub(risk_cost).clip(lower=0.0, upper=1.0).where(risk_cost.notna())
+        score.loc[date] = daily_score.rank(pct=True, method="average")
+    return score.ffill(), weights
+
+
+def _market_regime_strength(close: pd.DataFrame) -> pd.Series:
+    """Past-only broad-market risk appetite used to blend offensive and defensive scores."""
+    benchmark = close.mean(axis=1).sort_index()
+    trend = benchmark.pct_change(126)
+    short_trend = benchmark.pct_change(63)
+    breadth = close.pct_change(63).gt(0.0).mean(axis=1)
+    vol = benchmark.pct_change().rolling(63, min_periods=30).std()
+    vol_rank = vol.rolling(756, min_periods=252).rank(pct=True)
+    trend_rank = trend.rolling(756, min_periods=252).rank(pct=True)
+    short_rank = short_trend.rolling(504, min_periods=168).rank(pct=True)
+    raw = (
+        trend_rank.mul(0.45)
+        .add(short_rank.mul(0.25), fill_value=0.0)
+        .add(breadth.rolling(20, min_periods=5).mean().mul(0.20), fill_value=0.0)
+        .add((1.0 - vol_rank).mul(0.10), fill_value=0.0)
+    )
+    return raw.clip(0.10, 0.90).ffill()
+
+
+def _regime_blend_score(
+    close: pd.DataFrame,
+    offensive: pd.DataFrame,
+    defensive: pd.DataFrame,
+    signal_dates: list[pd.Timestamp],
+) -> pd.DataFrame:
+    """Blend two predeclared score books using only information visible at the signal date."""
+    columns = list(offensive.columns)
+    regime = _market_regime_strength(close).reindex(offensive.index).ffill()
+    output = pd.DataFrame(index=offensive.index, columns=columns, dtype=float)
+    calendar = pd.DatetimeIndex(sorted({pd.Timestamp(date) for date in signal_dates if date in offensive.index}))
+    for date in calendar:
+        weight = float(regime.get(date, np.nan))
+        if not math.isfinite(weight):
+            weight = 0.50
+        output.loc[date] = offensive.loc[date].mul(weight).add(defensive.loc[date].mul(1.0 - weight), fill_value=np.nan)
+    return _cross_section_rank(output.ffill())
+
+
 def _split_ic_stats(
     ic: pd.Series,
     maturities: pd.Series,
@@ -1284,10 +1749,61 @@ def _split_ic_stats(
         sample = ic.loc[eligible].dropna()
         purged = int((signal_window & (~maturity.notna() | maturity.gt(end_date))).sum())
         std = float(sample.std(ddof=1)) if len(sample) > 1 else math.nan
+        mean = float(sample.mean()) if len(sample) else math.nan
+        t_value = mean / (std / math.sqrt(len(sample))) if len(sample) > 1 and std > 0 else math.nan
         output[name] = {
             "observations": int(len(sample)),
-            "mean_ic": round(float(sample.mean()), 6) if len(sample) else None,
-            "icir": round(float(np.sqrt(12.0) * sample.mean() / std), 6) if len(sample) > 1 and std > 0 else None,
+            "mean_ic": round(mean, 6) if len(sample) else None,
+            "icir": round(float(np.sqrt(12.0) * mean / std), 6) if len(sample) > 1 and std > 0 else None,
+            "t_value": round(float(t_value), 6) if math.isfinite(t_value) else None,
+            "positive_rate": round(float(sample.gt(0).mean()), 6) if len(sample) else None,
+            "latest_maturity": pd.Timestamp(maturity.loc[sample.index].max()).strftime("%Y-%m-%d") if len(sample) else None,
+            "purged_boundary_labels": purged,
+            "report_only": name == "test",
+        }
+    train_mean = output.get("train", {}).get("mean_ic")
+    train_icir = output.get("train", {}).get("icir")
+    for name, stats in output.items():
+        if name == "train":
+            continue
+        mean = stats.get("mean_ic")
+        icir = stats.get("icir")
+        stats["ic_decay_vs_train"] = (
+            round(float(mean) - float(train_mean), 6)
+            if mean is not None and train_mean is not None
+            else None
+        )
+        stats["icir_decay_ratio_vs_train"] = (
+            round(float(icir) / float(train_icir), 6)
+            if icir is not None and train_icir not in (None, 0)
+            else None
+        )
+    return output
+
+
+def _split_spread_stats(
+    spread: pd.Series,
+    maturities: pd.Series,
+    splits: dict[str, tuple[str, str]],
+) -> dict[str, Any]:
+    output: dict[str, Any] = {}
+    maturity = pd.to_datetime(maturities.reindex(spread.index), errors="coerce")
+    signals = pd.Series(pd.DatetimeIndex(spread.index), index=spread.index)
+    for name, (start, end) in splits.items():
+        start_date = pd.Timestamp(start)
+        end_date = pd.Timestamp(end)
+        signal_window = signals.ge(start_date) & signals.le(end_date)
+        eligible = signal_window & maturity.notna() & maturity.le(end_date)
+        sample = spread.loc[eligible].dropna()
+        purged = int((signal_window & (~maturity.notna() | maturity.gt(end_date))).sum())
+        std = float(sample.std(ddof=1)) if len(sample) > 1 else math.nan
+        mean = float(sample.mean()) if len(sample) else math.nan
+        t_value = mean / (std / math.sqrt(len(sample))) if len(sample) > 1 and std > 0 else math.nan
+        output[name] = {
+            "observations": int(len(sample)),
+            "mean_spread": round(mean, 6) if len(sample) else None,
+            "annualized_spread": round(float(mean * 12.0), 6) if len(sample) else None,
+            "t_value": round(float(t_value), 6) if math.isfinite(t_value) else None,
             "positive_rate": round(float(sample.gt(0).mean()), 6) if len(sample) else None,
             "latest_maturity": pd.Timestamp(maturity.loc[sample.index].max()).strftime("%Y-%m-%d") if len(sample) else None,
             "purged_boundary_labels": purged,
@@ -1309,6 +1825,7 @@ def _factor_diagnostics(
         for factor, score in rows.items():
             ic = _row_spearman(score, future, signal_dates)
             coverage = score.loc[score.index.intersection(signal_dates)].notna().mean().mean()
+            spread = _row_top_bottom_spread(score, future, signal_dates, top_n=5)
             atomic.append({
                 "dimension": dimension,
                 "dimension_label": DIMENSION_LABELS[dimension],
@@ -1317,15 +1834,18 @@ def _factor_diagnostics(
                 "direction": "正向" if dimension != "crowding" else "越高越拥挤",
                 "coverage": round(float(coverage), 6),
                 "ic": _split_ic_stats(ic, maturities, splits),
+                "top_bottom": _split_spread_stats(spread, maturities, splits),
             })
     dimension_rows: list[dict[str, Any]] = []
     for name, score in dimensions.items():
         ic = _row_spearman(score, future, signal_dates)
+        spread = _row_top_bottom_spread(score, future, signal_dates, top_n=5)
         dimension_rows.append({
             "dimension": name,
             "label": DIMENSION_LABELS[name],
             "factor_count": len(factor_scores[name]),
             "ic": _split_ic_stats(ic, maturities, splits),
+            "top_bottom": _split_spread_stats(spread, maturities, splits),
         })
     return {
         "horizon": "月末信号后首个交易日收盘至下月首个执行日收盘的行业超额收益",
@@ -1334,6 +1854,124 @@ def _factor_diagnostics(
         "atomic_factors": atomic,
         "dimensions": dimension_rows,
     }
+
+
+def _persist_factor_library(
+    industry_codes: dict[str, str],
+    signal_dates: list[pd.Timestamp],
+    factor_scores: dict[str, dict[str, pd.DataFrame]],
+    dimensions: dict[str, pd.DataFrame],
+    diagnostics: dict[str, Any],
+    data_as_of: pd.Timestamp,
+) -> dict[str, int]:
+    calendar = pd.DatetimeIndex(
+        sorted({pd.Timestamp(date) for date in signal_dates if pd.Timestamp(date) <= data_as_of})
+    )
+    names = list(industry_codes)
+    rows: list[tuple[str, str, str, float, str, str]] = []
+
+    def append_frame(frame: pd.DataFrame, factor_name: str, group_name: str) -> None:
+        aligned = frame.reindex(calendar).reindex(columns=names)
+        for (date, industry), value in aligned.stack(dropna=True).items():
+            number = float(value)
+            if not math.isfinite(number):
+                continue
+            rows.append((
+                pd.Timestamp(date).strftime("%Y%m%d"),
+                str(industry_codes.get(str(industry), str(industry))),
+                factor_name,
+                number,
+                group_name,
+                MODEL_VERSION,
+            ))
+
+    for dimension, factor_map in factor_scores.items():
+        group_name = f"行业轮动_{DIMENSION_LABELS.get(dimension, dimension)}"
+        for factor, frame in factor_map.items():
+            label = FACTOR_LABELS.get(factor, factor)
+            append_frame(frame, f"{group_name}_{label}", group_name)
+    for dimension, frame in dimensions.items():
+        label = DIMENSION_LABELS.get(dimension, dimension)
+        append_frame(frame, f"行业轮动_一级维度_{label}", "行业轮动_一级维度")
+
+    run_id = "industry_rotation_v5_4_secondary_factor_gated_SW31_" + data_as_of.strftime("%Y%m%d")
+    test_rows: list[tuple[Any, ...]] = []
+    for item in diagnostics.get("atomic_factors", []):
+        factor_name = f"{item.get('dimension_label')}_{item.get('factor_label')}"
+        coverage = item.get("coverage")
+        spread_by_split = item.get("top_bottom") or {}
+        for split, stats in (item.get("ic") or {}).items():
+            spread_stats = spread_by_split.get(split, {})
+            rank_ic = stats.get("mean_ic")
+            icir = stats.get("icir")
+            group_spread = spread_stats.get("mean_spread")
+            observations = int(stats.get("observations") or 0)
+            pass_flag = int(
+                observations >= 12
+                and rank_ic is not None
+                and group_spread is not None
+                and float(rank_ic) > 0.0
+                and float(group_spread) > 0.0
+            )
+            message = json.dumps(
+                {
+                    "维度": item.get("dimension_label"),
+                    "因子": item.get("factor_label"),
+                    "方向": item.get("direction"),
+                    "IC_t值": stats.get("t_value"),
+                    "IC衰减": stats.get("ic_decay_vs_train"),
+                    "分层年化价差": spread_stats.get("annualized_spread"),
+                    "分层t值": spread_stats.get("t_value"),
+                    "测试期只报告": bool(stats.get("report_only")),
+                },
+                ensure_ascii=False,
+                allow_nan=False,
+            )
+            test_rows.append((
+                run_id,
+                "SW31_INDUSTRY",
+                factor_name,
+                split,
+                rank_ic,
+                icir,
+                group_spread,
+                None,
+                coverage,
+                pass_flag,
+                message,
+            ))
+
+    connection = sqlite3.connect(WAREHOUSE)
+    try:
+        connection.execute("PRAGMA busy_timeout=30000")
+        connection.executemany(
+            "INSERT OR REPLACE INTO factor_value_daily "
+            "(trade_date, ts_code, factor_name, factor_value, factor_group, source_agent) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            rows,
+        )
+        connection.execute(
+            "DELETE FROM factor_test_result WHERE run_id = ? AND universe = ?",
+            (run_id, "SW31_INDUSTRY"),
+        )
+        connection.executemany(
+            "INSERT INTO factor_test_result "
+            "(run_id, universe, factor_name, split_name, rank_ic, icir, group_spread, turnover, coverage, pass_flag, message) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            test_rows,
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    manifest = _read_manifest()
+    if manifest:
+        manifest["database"] = _database_signature()
+        manifest.setdefault("factor_library", {})["latest_run_id"] = run_id
+        manifest["factor_library"]["source_agent"] = MODEL_VERSION
+        manifest["factor_library"]["factor_value_rows"] = len(rows)
+        manifest["factor_library"]["factor_test_rows"] = len(test_rows)
+        _json_write(MANIFEST, manifest)
+    return {"factor_value_rows": len(rows), "factor_test_rows": len(test_rows), "run_id": run_id}
 
 
 def build_candidates(
@@ -1364,27 +2002,27 @@ def build_candidates(
     monthly_primary = _champion_overlay_score(
         anchor,
         admitted["monthly"],
-        {"fundamental": 0.10, "technical": 0.18, "funds": 0.07},
+        {"fundamental": 0.10, "valuation": 0.04, "technical": 0.18, "funds": 0.07},
     )
     monthly_conservative = _champion_overlay_score(
         anchor,
         admitted["monthly"],
-        {"fundamental": 0.08, "technical": 0.12, "funds": 0.05},
+        {"fundamental": 0.08, "valuation": 0.03, "technical": 0.12, "funds": 0.05},
     )
     monthly_quality_trend = _champion_overlay_score(
         anchor,
         admitted["monthly"],
-        {"fundamental": 0.14, "technical": 0.14, "funds": 0.04},
+        {"fundamental": 0.14, "valuation": 0.06, "technical": 0.14, "funds": 0.04},
     )
     weekly_primary = _champion_overlay_score(
         anchor,
         admitted["weekly"],
-        {"fundamental": 0.04, "technical": 0.20, "funds": 0.10},
+        {"fundamental": 0.04, "valuation": 0.02, "technical": 0.20, "funds": 0.10},
     )
     weekly_conservative = _champion_overlay_score(
         anchor,
         admitted["weekly"],
-        {"fundamental": 0.03, "technical": 0.14, "funds": 0.07},
+        {"fundamental": 0.03, "valuation": 0.02, "technical": 0.14, "funds": 0.07},
     )
     monthly_dates = [date for date in close.index.to_series().groupby(close.index.to_period("M")).max().tolist() if date <= data_as_of]
     weekly_dates = [date for date in close.index.to_series().groupby(close.index.to_period("W-FRI")).max().tolist() if date <= data_as_of]
@@ -1393,7 +2031,7 @@ def build_candidates(
         admitted["monthly"],
         close,
         monthly_dates,
-        {"fundamental": 0.15, "technical": 0.20, "funds": 0.10},
+        {"fundamental": 0.15, "valuation": 0.06, "technical": 0.20, "funds": 0.10},
         lookback=36,
         minimum_history=12,
     )
@@ -1402,11 +2040,79 @@ def build_candidates(
         admitted["weekly"],
         close,
         weekly_dates,
-        {"fundamental": 0.05, "technical": 0.25, "funds": 0.12},
+        {"fundamental": 0.05, "valuation": 0.03, "technical": 0.25, "funds": 0.12},
         lookback=104,
         minimum_history=26,
     )
-
+    monthly_factor_stack, monthly_factor_stack_weights = _online_factor_stack_score(
+        factor_scores,
+        dimensions["monthly"],
+        close,
+        monthly_dates,
+        "monthly",
+    )
+    weekly_factor_stack, weekly_factor_stack_weights = _online_factor_stack_score(
+        factor_scores,
+        dimensions["weekly"],
+        close,
+        weekly_dates,
+        "weekly",
+    )
+    monthly_prosperity_earnings = _cross_section_rank(
+        factor_scores["prosperity"]["prosperity_acceleration"].mul(0.32)
+        .add(factor_scores["prosperity"]["prosperity_level"].mul(0.22), fill_value=0.0)
+        .add(factor_scores["fundamental"]["op_yoy"].mul(0.18), fill_value=0.0)
+        .add(factor_scores["fundamental"]["op_yoy_acceleration"].mul(0.12), fill_value=0.0)
+        .add(factor_scores["fundamental"]["profit_positive_breadth"].mul(0.10), fill_value=0.0)
+        .add(factor_scores["fundamental"]["earnings_quality_confirmation"].mul(0.08), fill_value=0.0)
+        .sub(_crowding_risk(dimensions["monthly"]["crowding"]).mul(0.12), fill_value=0.0)
+    )
+    monthly_secondary_cluster = _weighted_dimension_score(
+        dimensions["monthly"],
+        {
+            "prosperity": 0.28,
+            "fundamental": 0.26,
+            "technical": 0.20,
+            "valuation": 0.08,
+            "funds": 0.18,
+        },
+        crowding_penalty=0.16,
+        consensus_weight=0.08,
+    )
+    monthly_secondary_gated = _cross_section_rank(
+        _mean_available(
+            [monthly_factor_stack, monthly_secondary_cluster, monthly_prosperity_earnings],
+            2,
+        )
+    )
+    anti_crowding = _cross_section_rank(1.0 - dimensions["monthly"]["crowding"])
+    monthly_regime_offensive = _cross_section_rank(
+        _mean_available(
+            [monthly_factor_stack, monthly_secondary_cluster, monthly_prosperity_earnings, monthly_online],
+            2,
+        )
+    )
+    monthly_regime_defensive = _cross_section_rank(
+        _mean_available(
+            [
+                anchor,
+                dimensions["monthly"]["fundamental"],
+                dimensions["monthly"]["valuation"],
+                factor_scores["fundamental"]["profit_growth_stability"],
+                anti_crowding,
+            ],
+            3,
+        ).sub(_crowding_risk(dimensions["monthly"]["crowding"]).mul(0.10), fill_value=0.0)
+    )
+    monthly_regime_gated = _regime_blend_score(
+        close,
+        monthly_regime_offensive,
+        monthly_regime_defensive,
+        monthly_dates,
+    )
+    monthly_regime_stable = _cross_section_rank(
+        _mean_available([monthly_regime_gated, monthly_secondary_gated, anchor], 2)
+    )
     # Each architecture is economically distinct and frozen before evaluation:
     # fixed balanced consensus, matured-label online IC, defensive balance,
     # weekly fast evidence and weekly equal evidence.  The sealed test never
@@ -1417,6 +2123,12 @@ def build_candidates(
         "C27_monthly_post_test_diagnostic_six_dimension_defensive_top10_buffered": monthly_quality_trend,
         "C28_weekly_post_test_diagnostic_six_dimension_fast_top10_buffered": weekly_primary,
         "C29_weekly_post_test_diagnostic_six_dimension_equal_top10_buffered": weekly_online,
+        "C35_monthly_post_test_diagnostic_six_dimension_online_factor_stack_top5_risk_weighted_buffered_cash25": monthly_factor_stack,
+        "C36_weekly_post_test_diagnostic_six_dimension_online_factor_stack_top5_risk_weighted_buffered_cash25": weekly_factor_stack,
+        "C39_monthly_post_test_diagnostic_six_dimension_prosperity_earnings_top7_risk_weighted_buffered": monthly_prosperity_earnings,
+        "C41_monthly_post_test_diagnostic_secondary_factor_cluster_top5_risk_weighted_buffered_cash25": monthly_secondary_gated,
+        "C42_monthly_post_test_diagnostic_layered_return_regime_gate_top5_risk_weighted_buffered_cash25": monthly_regime_gated,
+        "C43_monthly_post_test_diagnostic_layered_return_stable_gate_top5_risk_weighted_buffered_cash35": monthly_regime_stable,
     }
     for name, score in candidates.items():
         score = score.copy()
@@ -1430,6 +2142,16 @@ def build_candidates(
         monthly_dates,
         splits,
     )
+    persistence: dict[str, int] | None = None
+    if os.environ.get("INDUSTRY_ROTATION_WRITE_FACTOR_DB") == "1":
+        persistence = _persist_factor_library(
+            industry_codes,
+            monthly_dates,
+            factor_scores,
+            dimensions["monthly"],
+            diagnostics,
+            data_as_of,
+        )
     current_monthly_overlay = (
         monthly_overlay_weights.iloc[-1].to_dict()
         if not monthly_overlay_weights.empty
@@ -1442,16 +2164,42 @@ def build_candidates(
     )
     rounded_online = {key: round(float(value), 6) for key, value in current_monthly_overlay.items()}
     rounded_weekly_online = {key: round(float(value), 6) for key, value in current_weekly_overlay.items()}
+    latest_monthly_stack = (
+        monthly_factor_stack_weights.iloc[-1].dropna().sort_values(ascending=False).head(12).to_dict()
+        if not monthly_factor_stack_weights.empty
+        else {}
+    )
+    latest_weekly_stack = (
+        weekly_factor_stack_weights.iloc[-1].dropna().sort_values(ascending=False).head(12).to_dict()
+        if not weekly_factor_stack_weights.empty
+        else {}
+    )
     _STATE = SixDimensionState(
         candidates=candidates,
         dimensions=dimensions,
         factor_scores=factor_scores,
         current_weights={
             "monthly_champion_anchor": 1.0,
-            "monthly_overlay": {"fundamental": 0.10, "technical": 0.18, "funds": 0.07, "valuation": 0.0, "crowding": 0.0},
+            "monthly_overlay": {"fundamental": 0.10, "valuation": 0.04, "technical": 0.18, "funds": 0.07, "crowding": 0.0},
             "monthly_online_ic": rounded_online,
-            "weekly_overlay": {"fundamental": 0.04, "technical": 0.20, "funds": 0.10, "valuation": 0.0, "crowding": 0.0},
+            "weekly_overlay": {"fundamental": 0.04, "valuation": 0.02, "technical": 0.20, "funds": 0.10, "crowding": 0.0},
             "weekly_online_ic": rounded_weekly_online,
+            "monthly_online_factor_stack": {key: round(float(value), 6) for key, value in latest_monthly_stack.items()},
+            "weekly_online_factor_stack": {key: round(float(value), 6) for key, value in latest_weekly_stack.items()},
+            "monthly_secondary_factor_cluster": {
+                "prosperity": 0.28,
+                "fundamental": 0.26,
+                "technical": 0.20,
+                "valuation": 0.08,
+                "funds": 0.18,
+                "crowding_penalty": 0.16,
+                "consensus_floor": 0.08,
+            },
+            "monthly_regime_gate": {
+                "offensive": "online_factor_stack + secondary_cluster + prosperity_earnings + champion_overlay",
+                "defensive": "champion_anchor + fundamental + valuation + profit_growth_stability + anti_crowding",
+                "blend_signal": "126d/63d broad-market trend, 63d breadth, 63d volatility percentile; all past-only",
+            },
         },
         diagnostics=diagnostics,
         data_quality={
@@ -1468,6 +2216,7 @@ def build_candidates(
             "dividend_yield_unit": "decimal",
             "gross_margin_unit": "percentage_point; raw amount values normalised by total_revenue",
             "cache_manifest": str(MANIFEST),
+            "factor_library_persistence": persistence or {"status": "disabled"},
         },
         data_as_of=data_as_of.strftime("%Y-%m-%d"),
         factor_count={name: len(rows) for name, rows in factor_scores.items()},

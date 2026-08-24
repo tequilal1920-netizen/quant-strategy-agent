@@ -575,7 +575,7 @@
   const VIEW_BREADCRUMBS={
     data:{title:'数据看板',views:{macro:'宏观',global_markets:'全球市场',sw_industries:'一级行业',commodities:'大宗商品',stock:'个股',news_events:'新闻事件'}},
     allocation:{title:'资产配置',views:{home:'主页',cycle:'周期跟踪',strategy:'配置策略',backtest:'回测检验'}},
-    rotation:{title:'行业景气度',views:{industry:'行业景气度',style:'风格轮动',allocation:'配置策略'}},
+    rotation:{title:'行业景气度',views:{prosperity:'行业景气度',industry:'行业轮动',style:'风格轮动'}},
     liquidity:{title:'资金面跟踪',views:{home:'主页',retail:'散户资金',public:'公募基金',etf:'ETF资金',margin:'融资资金',primary:'一级市场',private:'私募基金',foreign:'外资资金'}},
     kline:{title:'K线记忆学习',views:{home:'主页',learn:'学习记忆',backtest:'策略回测',history:'历史记录'}},
     factor:{title:'LLM因子挖掘',views:{home:'主页',expression:'因子表达式',report:'因子检验结果',score:'综合打分',memory:'历史记忆'}}
@@ -1554,7 +1554,7 @@
   }
 
   /* Asset allocation r20: auditable cycle factors, profile-constrained solvers and sealed-test review. */
-  S.allocation = S.allocation || {snapshot:null,cycleModel:'pring',lookback:'60',factorMode:'components',strategy:'recommended',riskProfile:'equity_preferred',backtest:['recommended','all_weather','risk_parity'],backtestWindow:'full',navMode:'net',reportHtml:''};
+  S.allocation = S.allocation || {snapshot:null,cycleModel:'pring',lookback:'60',factorMode:'components',strategy:'recommended',riskProfile:'equity_preferred',backtest:['recommended','hrp'],backtestWindow:'full',navMode:'net',reportHtml:''};
   Object.assign(HEAD,{
     'allocation:home':['资产配置主页','多周期研判、风险预算与当前权重'],
     'allocation:cycle':['周期跟踪','因子轨迹、状态概率与历史复盘'],
@@ -1567,26 +1567,33 @@
     confidence:'置信度',state:'周期状态',month:'月份',annual_return:'年化收益',annual_volatility:'年化波动率',
     sharpe:'Sharpe',calmar:'Calmar',max_drawdown:'最大回撤',total_return:'累计收益',positive_month_rate:'月度胜率',
     average_annual_turnover:'年均换手',cost_drag:'成本拖累',months:'样本月数',average_monthly_return:'月均收益',positive_rate:'正收益占比',
-    horizon:'观察周期',inputs:'输入因子',transform:'变换方法',allocation_role:'配置作用',equity:'权益',bond:'债券',commodity:'商品',cash:'现金',
+    horizon:'观察周期',inputs:'输入因子',transform:'变换方法',allocation_role:'配置作用',equity:'权益',bond:'债券',gold:'黄金',commodity:'商品',cash:'现金',
     factor_1:'因子一',factor_2:'因子二',factor_3:'因子三',role:'因子角色',name:'名称',train_ic:'训练期IC',block_stability:'分块稳定度',
     band_power:'周期频带能量',score:'综合分',observations:'有效样本',max_selected_correlation:'最大入选相关性',sample_set:'样本区间',
     code:'ETF代码',provider:'数据来源',historical_predecessor:'历史衔接ETF',parameter:'参数',value:'取值',status:'状态',
     train_sharpe:'训练Sharpe',validation_sharpe:'验证Sharpe',test_sharpe_report_only:'测试Sharpe（仅报告）',validation_drawdown:'验证回撤',turnover:'换手率',
     transaction_cost_bps:'单边成本(bp)'
   });
-  const ALLOC_ASSETS=['equity','bond','commodity','cash'];
-  const ALLOC_ASSET_CN={equity:'权益',bond:'债券',commodity:'商品',cash:'现金'};
+  const ALLOC_ASSETS_V4=['equity','bond','commodity','cash'];
+  const ALLOC_ASSET_CN={equity:'权益',bond:'债券',gold:'黄金',commodity:'商品',cash:'现金'};
   const ALLOC_STRATEGY_CN={equal_weight:'等权',risk_parity:'风险平价',all_weather:'全天候',hrp:'层次风险平价',macro_risk_budget:'宏观风险预算',robust_bl:'稳健Black-Litterman',pring_stage:'普林格阶段配置',hmm_risk_parity:'HMM风险平价',cycle_risk_parity:'周期风险预算',recommended:'推荐组合'};
-  const ALLOC_COLORS={equity:'#c00000',bond:'#2f75b5',commodity:'#ed7d31',cash:'#808080'};
+  const ALLOC_COLORS={equity:'#c00000',bond:'#2f75b5',gold:'#d4a72c',commodity:'#ed7d31',cash:'#808080'};
   const PHASE_COLORS={1:'rgba(47,117,181,.10)',2:'rgba(192,0,0,.08)',3:'rgba(237,125,49,.10)',4:'rgba(255,192,0,.12)',5:'rgba(112,48,160,.09)',6:'rgba(0,176,80,.09)'};
   const SAMPLE_COLORS={train:'rgba(128,128,128,.08)',validation:'rgba(237,125,49,.08)',test:'rgba(0,176,80,.07)'};
   const SAMPLE_CN={train:'训练集',validation:'验证集',test:'测试集',full:'全样本'};
   function allocMonth(value){ const s=String(value||'').replace(/\D/g,''); return s.length>=6?s.slice(0,4)+'-'+s.slice(4,6):String(value||'--'); }
   function allocPct(value,digits){ let v=Number(value);if(Math.abs(v)<.00005)v=0;return Number.isFinite(v)?fmt(v*100,digits==null?2:digits)+'%':'--'; }
   function allocNumber(value){ const v=Number(value); return Number.isFinite(v)?fmt(v,2):'--'; }
-  function allocRangeSlider(){ return {visible:true,thickness:.06,bgcolor:'rgba(255,255,255,0)',bordercolor:'#d9dee5',borderwidth:1}; }
+  function allocRangeSlider(){ return {visible:false}; }
   function allocStrategyOptions(selected){ return Object.keys(ALLOC_STRATEGY_CN).map(function(key){return '<option value="'+key+'"'+(key===selected?' selected':'')+'>'+ALLOC_STRATEGY_CN[key]+'</option>';}).join(''); }
   async function needAllocation(){ if(S.allocation.snapshot)return S.allocation.snapshot;S.allocation.snapshot=await api('/api/allocation/snapshot');return S.allocation.snapshot; }
+  function allocAssets(data){ const requested=arr(obj(data).asset_order),seen=new Set(),assets=[];requested.forEach(function(value){const asset=String(value||'').trim();if(asset&&!seen.has(asset)){seen.add(asset);assets.push(asset);}});return assets.length?assets:ALLOC_ASSETS_V4.slice(); }
+  function allocAssetLabel(asset){ return ALLOC_ASSET_CN[asset]||String(asset||'--'); }
+  function allocAssetColor(asset,index){ return ALLOC_COLORS[asset]||CHART_PALETTE[index%CHART_PALETTE.length]; }
+  function allocAssetValue(values,asset,index){ const raw=Array.isArray(values)?values[index]:obj(values)[asset],value=Number(raw);return Number.isFinite(value)?value:0; }
+  function allocWeightSummary(data,weights){ return allocAssets(data).map(function(asset,index){return allocAssetLabel(asset)+' '+allocPct(allocAssetValue(weights,asset,index));}).join('、')+'。'; }
+  function allocWeightColumns(data){ return ['strategy'].concat(allocAssets(data)); }
+  function allocWeightRow(data,strategy,weights){ const row={strategy:strategy};allocAssets(data).forEach(function(asset,index){row[asset]=allocPct(allocAssetValue(weights,asset,index));});return row; }
   function allocCurrent(data){ return obj(obj(data.allocations).current_cycle); }
   function allocPortfolio(data,strategy,profile){ const allocations=obj(data.allocations);if(strategy==='recommended'&&obj(allocations.profiles)[profile])return obj(obj(allocations.profiles)[profile]);return obj(allocations[strategy]); }
   function allocWeights(data,strategy,profile){ return obj(allocPortfolio(data,strategy,profile).weights); }
@@ -1594,16 +1601,16 @@
   function allocStateCards(items){ return '<div class="allocation-state-grid">'+items.map(function(item){return '<article class="allocation-state-card '+esc(item.tone||'')+'"><small>'+esc(item.label)+'</small><strong>'+esc(item.value)+'</strong><p>'+esc(item.note||'')+'</p></article>';}).join('')+'</div>'; }
   function allocPhaseShapes(rows){ const shapes=[];if(!rows.length)return shapes;let start=0;for(let i=1;i<=rows.length;i++)if(i===rows.length||rows[i].pring_phase!==rows[start].pring_phase){shapes.push({type:'rect',xref:'x',yref:'paper',x0:allocMonth(rows[start].month)+'-01',x1:allocMonth(rows[Math.min(i,rows.length-1)].month)+'-28',y0:0,y1:1,fillcolor:PHASE_COLORS[rows[start].pring_phase]||'rgba(0,0,0,.03)',line:{width:0},layer:'below'});start=i;}return shapes; }
   function allocProfileSpec(data,profile){ return obj(obj(data.profiles)[profile]); }
-  function allocConstraint(data,profile,asset,weight){ const spec=allocProfileSpec(data,profile),index=ALLOC_ASSETS.indexOf(asset),floor=Number(arr(spec.floors)[index]),cap=Number(arr(spec.caps)[index]);if(Math.abs(weight-floor)<.001)return '下限 '+allocPct(floor);if(Math.abs(weight-cap)<.001)return '上限 '+allocPct(cap);return allocPct(floor)+' – '+allocPct(cap); }
-  function allocWeightRows(data){ return ['recommended','all_weather','risk_parity','hrp','macro_risk_budget','robust_bl','cycle_risk_parity','hmm_risk_parity'].map(function(strategy){const w=allocWeights(data,strategy,'equity_preferred');return {strategy:ALLOC_STRATEGY_CN[strategy],equity:allocPct(w.equity),bond:allocPct(w.bond),commodity:allocPct(w.commodity),cash:allocPct(w.cash)};}); }
-  function allocWeightDonut(id,weights,title){ plot(id,[{type:'pie',hole:.62,labels:ALLOC_ASSETS.map(function(a){return ALLOC_ASSET_CN[a];}),values:ALLOC_ASSETS.map(function(a){return Number(weights[a]||0);}),marker:{colors:ALLOC_ASSETS.map(function(a){return ALLOC_COLORS[a];})},texttemplate:'%{label}<br>%{percent:.2%}',textinfo:'label+percent',hovertemplate:'%{label} %{percent:.2%}<extra></extra>'}],{height:330,showlegend:false,annotations:[{text:title||'资本权重',showarrow:false,font:{size:14,color:'#344054'}}],margin:{l:20,r:20,t:20,b:20}}); }
-  function allocWeightCompare(id,data){ const keys=['recommended','all_weather','risk_parity','hrp','macro_risk_budget'];plot(id,ALLOC_ASSETS.map(function(asset){return {type:'bar',name:ALLOC_ASSET_CN[asset],x:keys.map(function(k){return ALLOC_STRATEGY_CN[k];}),y:keys.map(function(k){return Number(allocWeights(data,k,'equity_preferred')[asset]||0)*100;}),marker:{color:ALLOC_COLORS[asset]},hovertemplate:'%{x}<br>'+ALLOC_ASSET_CN[asset]+' %{y:.2f}%<extra></extra>'};}),{height:330,barmode:'stack',yaxis:{title:'资本权重（%）',range:[0,100]},xaxis:{showgrid:false},legend:{orientation:'h',y:-.25}}); }
-  function allocETFRows(data){ return ALLOC_ASSETS.map(function(asset){const p=obj(obj(data.asset_proxies)[asset]);return {asset:ALLOC_ASSET_CN[asset],code:p.ts_code,name:p.name,provider:p.provider,historical_predecessor:p.historical_predecessor||'--'};}); }
+  function allocConstraint(data,profile,asset,weight){ const spec=allocProfileSpec(data,profile),index=allocAssets(data).indexOf(asset),floorRaw=Array.isArray(spec.floors)?spec.floors[index]:obj(spec.floors)[asset],capRaw=Array.isArray(spec.caps)?spec.caps[index]:obj(spec.caps)[asset],floor=Number(floorRaw),cap=Number(capRaw);if(!Number.isFinite(floor)||!Number.isFinite(cap))return '--';if(Math.abs(weight-floor)<.001)return '下限 '+allocPct(floor);if(Math.abs(weight-cap)<.001)return '上限 '+allocPct(cap);return allocPct(floor)+' – '+allocPct(cap); }
+  function allocWeightRows(data){ return ['recommended','all_weather','risk_parity','hrp','macro_risk_budget','robust_bl','cycle_risk_parity','hmm_risk_parity'].map(function(strategy){return allocWeightRow(data,ALLOC_STRATEGY_CN[strategy],allocWeights(data,strategy,'equity_preferred'));}); }
+  function allocWeightDonut(id,data,weights,title){ const assets=allocAssets(data);plot(id,[{type:'pie',hole:.62,labels:assets.map(allocAssetLabel),values:assets.map(function(asset,index){return allocAssetValue(weights,asset,index);}),marker:{colors:assets.map(allocAssetColor)},texttemplate:'%{label}<br>%{percent:.2%}',textinfo:'label+percent',hovertemplate:'%{label} %{percent:.2%}<extra></extra>'}],{height:330,showlegend:false,annotations:[{text:title||'资本权重',showarrow:false,font:{size:14,color:'#344054'}}],margin:{l:20,r:20,t:20,b:20}}); }
+  function allocWeightCompare(id,data){ const keys=['recommended','all_weather','risk_parity','hrp','macro_risk_budget'],assets=allocAssets(data);plot(id,assets.map(function(asset,index){return {type:'bar',name:allocAssetLabel(asset),x:keys.map(function(k){return ALLOC_STRATEGY_CN[k];}),y:keys.map(function(k){return allocAssetValue(allocWeights(data,k,'equity_preferred'),asset,index)*100;}),marker:{color:allocAssetColor(asset,index)},hovertemplate:'%{x}<br>'+allocAssetLabel(asset)+' %{y:.2f}%<extra></extra>'};}),{height:330,barmode:'stack',yaxis:{title:'资本权重（%）',range:[0,100]},xaxis:{showgrid:false},legend:{orientation:'h',y:-.25}}); }
+  function allocETFRows(data){ const proxies=obj(data.asset_proxies),registry=obj(data.asset_series_registry);return allocAssets(data).map(function(asset){const p=obj(proxies[asset]||registry[asset]);return {asset:allocAssetLabel(asset),code:p.ts_code||p.execution_code||p.code||'--',name:p.name||p.label||'--',provider:p.provider||p.research_provider||p.primary_source||'--',historical_predecessor:p.historical_predecessor||p.research_series_id||'--'};}); }
   function allocSelectedFactors(data,roles){ const out=[],seen=new Set();roles.forEach(function(role){arr(obj(obj(data.factor_selection).roles)[role]).forEach(function(row){const key=role+':'+row.id;if(seen.has(key))return;seen.add(key);out.push({role:role,name:row.name,transform:row.transform,train_ic:allocNumber(row.train_ic),block_stability:allocPct(row.block_stability),band_power:allocPct(row.band_power),score:allocNumber(row.score),observations:Math.round(Number(row.observations)||0),max_selected_correlation:allocNumber(row.max_selected_correlation)});});});return out; }
   async function allocationHome(){
     const data=await needAllocation(),cycle=allocCurrent(data),w=allocWeights(data,'recommended','equity_preferred');
     header('资产配置主页','多周期研判、风险预算与当前权重','资产配置');setText('as-of',allocMonth(obj(data.data_as_of).market));setText('generated-at',String(data.generated_at||'--').replace('T',' ').replace('Z',''));
-    conclusion('宏观完整月 '+allocMonth(obj(data.data_as_of).macro_complete)+'：普林格'+esc(cycle.pring_phase_name||'--')+'，基钦'+esc(cycle.kitchin_state||'--')+'，朱格拉'+esc(cycle.juglar_state||'--')+'，康波'+esc(cycle.kondratieff_state||'--')+'，美林'+esc(cycle.merrill_state||'--')+'；权益偏好组合为权益 '+allocPct(w.equity)+'、债券 '+allocPct(w.bond)+'、商品 '+allocPct(w.commodity)+'、现金 '+allocPct(w.cash)+'。');
+    conclusion('宏观完整月 '+allocMonth(obj(data.data_as_of).macro_complete)+'：普林格'+esc(cycle.pring_phase_name||'--')+'，基钦'+esc(cycle.kitchin_state||'--')+'，朱格拉'+esc(cycle.juglar_state||'--')+'，康波'+esc(cycle.kondratieff_state||'--')+'，美林'+esc(cycle.merrill_state||'--')+'；权益偏好组合为'+allocWeightSummary(data,w));
     const states=allocStateCards([
       {label:'普林格',value:'阶段'+cycle.pring_phase+' · '+cycle.pring_phase_name,note:'置信度 '+allocPct(cycle.confidence),tone:'ok'},
       {label:'基钦周期',value:cycle.kitchin_state,note:'最高状态概率 '+allocPct(Math.max.apply(null,Object.values(obj(cycle.kitchin_probability)).map(Number))),tone:'ok'},
@@ -1612,8 +1619,8 @@
     ]);
     const c1=pid('ah'),c2=pid('ah'),c3=pid('ah');const registry=arr(data.factor_registry).map(function(row){return {name:row.name,horizon:row.horizon,inputs:arr(row.inputs).join('、'),transform:row.transform,allocation_role:row.allocation_role};});
     const selection=obj(data.factor_selection);const factors=allocSelectedFactors(data,['leading','coincident','lagging']);
-    root(states+'<div class="panel-grid">'+panel(c1,'推荐组合','权益偏好可行域')+panel(c2,'核心策略权重对照','统一四资产ETF口径')+'</div>'+panel(c3,'普林格三类复合因子','概率阶段底色与因子轨迹',true)+tableHTML('当前可交易ETF代理',allocETFRows(data),['asset','code','name','provider','historical_predecessor'])+tableHTML('训练期入选因子 · '+selection.candidate_count+'个候选 / '+selection.selected_unique_count+'个唯一入选',factors,['role','name','transform','train_ic','block_stability','band_power','score','observations','max_selected_correlation'])+tableHTML('策略权重矩阵',allocWeightRows(data),['strategy','equity','bond','commodity','cash'])+tableHTML('模型与因子注册表',registry,['name','horizon','inputs','transform','allocation_role']));
-    allocWeightDonut(c1,w,'权益偏好');allocWeightCompare(c2,data);allocPringFactorChart(c3,arr(data.cycle_history));
+    root(states+'<div class="panel-grid">'+panel(c1,'推荐组合','权益偏好可行域')+panel(c2,'核心策略权重对照','统一四资产ETF口径')+'</div>'+panel(c3,'普林格三类复合因子','概率阶段底色与因子轨迹',true)+tableHTML('当前可交易ETF代理',allocETFRows(data),['asset','code','name','provider','historical_predecessor'])+tableHTML('训练期入选因子 · '+selection.candidate_count+'个候选 / '+selection.selected_unique_count+'个唯一入选',factors,['role','name','transform','train_ic','block_stability','band_power','score','observations','max_selected_correlation'])+tableHTML('策略权重矩阵',allocWeightRows(data),allocWeightColumns(data))+tableHTML('模型与因子注册表',registry,['name','horizon','inputs','transform','allocation_role']));
+    allocWeightDonut(c1,data,w,'权益偏好');allocWeightCompare(c2,data);allocPringFactorChart(c3,arr(data.cycle_history));
   }
   function allocPringFactorChart(id,rows){ const x=rows.map(function(r){return allocMonth(r.month)+'-01';}),traces=[['leading','先行','#2f75b5'],['coincident','同步','#c00000'],['lagging','滞后','#ed7d31']].map(function(item){return {type:'scatter',mode:'lines',name:item[1],x:x,y:rows.map(function(r){return Number(r[item[0]])*100;}),line:{color:item[2],width:2.1},hovertemplate:'%{x|%Y-%m}<br>'+item[1]+' %{y:.2f}<extra></extra>'};});plot(id,traces,{height:390,hovermode:'x unified',shapes:allocPhaseShapes(rows),yaxis:{title:'方向概率（%）',range:[0,100]},xaxis:{type:'date',rangeselector:{buttons:[{count:3,label:'3年',step:'year',stepmode:'backward'},{count:5,label:'5年',step:'year',stepmode:'backward'},{step:'all',label:'全部'}]},rangeslider:allocRangeSlider()},legend:{orientation:'h',y:-.28}}); }
   function allocCycleSpec(model){ return {
@@ -1643,7 +1650,7 @@
     allocFactorChart(c1,data,rows,spec,S.allocation.factorMode);allocProbabilityChart(c2,rows,spec);
     $('alloc-cycle-model').onchange=function(){S.allocation.cycleModel=this.value;allocationCycle();};$('alloc-cycle-lookback').onchange=function(){S.allocation.lookback=this.value;allocationCycle();};$('alloc-factor-mode').onchange=function(){S.allocation.factorMode=this.value;allocationCycle();};
   }
-  function allocDynamicWeights(id,data,strategy){ const rows=arr(obj(obj(obj(data.backtest).strategies)[strategy]).weights),x=rows.map(function(r){return allocMonth(r.month)+'-01';});plot(id,ALLOC_ASSETS.map(function(a){return {type:'scatter',mode:'lines',stackgroup:'one',groupnorm:'percent',name:ALLOC_ASSET_CN[a],x:x,y:rows.map(function(r){return Number(r[a]);}),line:{width:.8,color:ALLOC_COLORS[a]},hovertemplate:'%{x|%Y-%m}<br>'+ALLOC_ASSET_CN[a]+' %{y:.2%}<extra></extra>'};}),{height:390,hovermode:'x unified',yaxis:{title:'资本权重（%）',ticksuffix:'%'},xaxis:{type:'date',rangeslider:allocRangeSlider()},legend:{orientation:'h',y:-.28}}); }
+  function allocDynamicWeights(id,data,strategy){ const rows=arr(obj(obj(obj(data.backtest).strategies)[strategy]).weights),x=rows.map(function(r){return allocMonth(r.month)+'-01';}),assets=allocAssets(data);plot(id,assets.map(function(asset,index){return {type:'scatter',mode:'lines',stackgroup:'one',groupnorm:'percent',name:allocAssetLabel(asset),x:x,y:rows.map(function(r){return allocAssetValue(r,asset,index);}),line:{width:.8,color:allocAssetColor(asset,index)},hovertemplate:'%{x|%Y-%m}<br>'+allocAssetLabel(asset)+' %{y:.2%}<extra></extra>'};}),{height:390,hovermode:'x unified',yaxis:{title:'资本权重（%）',ticksuffix:'%'},xaxis:{type:'date',rangeslider:allocRangeSlider()},legend:{orientation:'h',y:-.28}}); }
   function allocAuditRows(data){ const audit=obj(data.optimization),spec=obj(audit.selected_spec),gate=obj(audit.promotion_gate);return [
     {parameter:'候选规格',value:spec.id||'--'},{parameter:'协方差估计',value:spec.covariance_method||'--'},{parameter:'滚动窗口',value:Math.round(Number(spec.lookback)||0)+'个月'},
     {parameter:'候选数量',value:Math.round(Number(audit.trial_count)||0)},{parameter:'CSCV-PBO',value:allocPct(audit.pbo_cscv)},{parameter:'Deflated Sharpe概率',value:allocPct(audit.deflated_sharpe_probability)},
@@ -1652,13 +1659,13 @@
   async function allocationStrategy(){
     const data=await needAllocation(),strategy=S.allocation.strategy,requestedProfile=S.allocation.riskProfile,profile=strategy==='recommended'?requestedProfile:'balanced',portfolio=allocPortfolio(data,strategy,profile),w=obj(portfolio.weights),rc=obj(portfolio.risk_contribution);
     header('配置策略','全天候、风险平价与多模型求解','资产配置');setText('as-of',allocMonth(obj(data.data_as_of).market));setText('generated-at',String(data.generated_at||'--').replace('T',' ').replace('Z',''));
-    conclusion((ALLOC_STRATEGY_CN[strategy]||strategy)+' · '+(obj(obj(data.profiles)[profile]).label||profile)+'：权益 '+allocPct(w.equity)+'、债券 '+allocPct(w.bond)+'、商品 '+allocPct(w.commodity)+'、现金 '+allocPct(w.cash)+'。');
+    conclusion((ALLOC_STRATEGY_CN[strategy]||strategy)+' · '+(obj(obj(data.profiles)[profile]).label||profile)+'：'+allocWeightSummary(data,w));
     const c1=pid('as'),c2=pid('as'),spec=obj(data.optimization).selected_spec||{};const controls='<section class="control-card"><div class="control-grid"><label>配置策略<select id="alloc-strategy">'+allocStrategyOptions(strategy)+'</select></label><label>投资者画像<select id="alloc-risk"'+(strategy==='recommended'?'':' disabled')+'><option value="conservative">稳健</option><option value="balanced">平衡</option><option value="equity_preferred">权益偏好</option></select></label><div class="control-readout">选中规格<strong>'+esc(spec.id||'--')+'</strong></div><div class="control-readout">协方差 / 窗口<strong>'+esc(spec.covariance_method||'--')+' / '+Math.round(Number(spec.lookback)||0)+'月</strong></div></div></section>';
-    const weightRows=ALLOC_ASSETS.map(function(a){return {asset:ALLOC_ASSET_CN[a],capital_weight:allocPct(w[a]),risk_contribution:allocPct(rc[a]),constraint:allocConstraint(data,profile,a,Number(w[a]))};});
-    const strategyRows=Object.keys(ALLOC_STRATEGY_CN).map(function(k){const m=obj(obj(obj(obj(data.backtest).strategies)[k]).metrics),weights=allocWeights(data,k,k==='recommended'?'equity_preferred':'balanced');return {strategy:ALLOC_STRATEGY_CN[k],equity:allocPct(weights.equity),bond:allocPct(weights.bond),commodity:allocPct(weights.commodity),cash:allocPct(weights.cash),annual_return:allocPct(m.annual_return),annual_volatility:allocPct(m.annual_volatility),sharpe:allocNumber(m.sharpe),max_drawdown:allocPct(m.max_drawdown),average_annual_turnover:allocPct(m.average_annual_turnover)};});
+    const weightRows=allocAssets(data).map(function(asset,index){return {asset:allocAssetLabel(asset),capital_weight:allocPct(allocAssetValue(w,asset,index)),risk_contribution:allocPct(allocAssetValue(rc,asset,index)),constraint:allocConstraint(data,profile,asset,allocAssetValue(w,asset,index))};});
+    const strategyRows=Object.keys(ALLOC_STRATEGY_CN).map(function(k){const m=obj(obj(obj(obj(data.backtest).strategies)[k]).metrics),weights=allocWeights(data,k,k==='recommended'?'equity_preferred':'balanced'),row=allocWeightRow(data,ALLOC_STRATEGY_CN[k],weights);Object.assign(row,{annual_return:allocPct(m.annual_return),annual_volatility:allocPct(m.annual_volatility),sharpe:allocNumber(m.sharpe),max_drawdown:allocPct(m.max_drawdown),average_annual_turnover:allocPct(m.average_annual_turnover)});return row;});
     let blend=Object.entries(obj(spec.blend)).map(function(item){return {parameter:ALLOC_STRATEGY_CN[item[0]]||item[0],value:allocPct(item[1])};});if(!blend.length&&spec.anchor!=null)blend=[{parameter:'战略先验锚',value:allocPct(spec.anchor)},{parameter:'战术后验基础权重',value:allocPct(1-Number(spec.anchor))},{parameter:'稳定风险袖套上限',value:allocPct(Number(spec.stability_base||0)+Number(spec.stability_max||0))},{parameter:'权益防守转移上限',value:allocPct(spec.equity_guard_max)},{parameter:'宏观周期倾斜强度',value:allocPct(spec.macro_strength)}];
-    root(controls+'<div class="panel-grid">'+panel(c1,'求解后资本权重','服务端约束与多模型融合')+panel(c2,'历史动态权重','月末信号配置下一月')+'</div>'+tableHTML('资本权重与风险贡献',weightRows,['asset','capital_weight','risk_contribution','constraint'])+tableHTML('验证期选模审计',allocAuditRows(data),['parameter','value'])+tableHTML('入选规格的模型融合系数',blend,['parameter','value'])+tableHTML('策略与回测对照',strategyRows,['strategy','equity','bond','commodity','cash','annual_return','annual_volatility','sharpe','max_drawdown','average_annual_turnover']));
-    $('alloc-risk').value=profile;allocWeightDonut(c1,w,ALLOC_STRATEGY_CN[strategy]);allocDynamicWeights(c2,data,strategy);
+    root(controls+'<div class="panel-grid">'+panel(c1,'求解后资本权重','服务端约束与多模型融合')+panel(c2,'历史动态权重','月末信号配置下一月')+'</div>'+tableHTML('资本权重与风险贡献',weightRows,['asset','capital_weight','risk_contribution','constraint'])+tableHTML('验证期选模审计',allocAuditRows(data),['parameter','value'])+tableHTML('入选规格的模型融合系数',blend,['parameter','value'])+tableHTML('策略与回测对照',strategyRows,allocWeightColumns(data).concat(['annual_return','annual_volatility','sharpe','max_drawdown','average_annual_turnover'])));
+    $('alloc-risk').value=profile;allocWeightDonut(c1,data,w,ALLOC_STRATEGY_CN[strategy]);allocDynamicWeights(c2,data,strategy);
     $('alloc-strategy').onchange=function(){S.allocation.strategy=this.value;allocationStrategy();};$('alloc-risk').onchange=function(){S.allocation.riskProfile=this.value;allocationStrategy();};
   }
   function allocWindowRows(rows,windowName){ if(windowName==='3y')return rows.slice(-36);if(windowName==='5y')return rows.slice(-60);return rows; }
@@ -1678,7 +1685,7 @@
     $('alloc-backtest-window').value=S.allocation.backtestWindow;$('alloc-nav-mode').value=S.allocation.navMode;allocDrawBacktest(c1,c2,c3,data,chosen,S.allocation.backtestWindow,S.allocation.navMode);
     $('alloc-backtest-strategies').onchange=function(){const values=Array.from(this.selectedOptions).map(function(o){return o.value;}).slice(0,5);S.allocation.backtest=values.length?values:['recommended'];allocationBacktest();};$('alloc-backtest-window').onchange=function(){S.allocation.backtestWindow=this.value;allocationBacktest();};$('alloc-nav-mode').onchange=function(){S.allocation.navMode=this.value;allocationBacktest();};$('alloc-gpt-report').onclick=allocationGenerateReport;
   }
-  async function renderAllocation(view){if(view==='cycle')return await allocationCycle();if(view==='strategy')return await allocationStrategy();if(view==='backtest')return await allocationBacktest();return await allocationHome();}
+  async function renderAllocation(view){const data=await needAllocation();if(allocIsV5(data)){if(view==='cycle')return await allocationCycleV5(data);if(view==='strategy')return await allocationStrategyV5(data);if(view==='backtest')return await allocationBacktestV5(data);return await allocationHomeV5(data);}if(view==='cycle')return await allocationCycle();if(view==='strategy')return await allocationStrategy();if(view==='backtest')return await allocationBacktest();return await allocationHome();}
 
 
   /* Portfolio optimization r42: exact five-page research-to-production contract. */
@@ -1953,9 +1960,23 @@
     }
     arr(payload.server_runs).forEach(function(row){absorb(row,'服务器');});
     arr(payload.account_history).forEach(function(row){absorb(row,'账号');});
-    return Array.from(merged.values()).map(function(row){
+    const rows=Array.from(merged.values()).map(function(row){
       row.source_label=row._sources.join(' + ');row.source=row.source_label;return row;
     }).sort(function(a,b){return String(b.created_at||'').localeCompare(String(a.created_at||''));});
+    const eligible=rows.filter(function(row){
+      const status=String(row.status||'').toLowerCase();
+      const accepted=Number(row.accepted_count||row.passed_count||0);
+      return ['done','completed','success'].includes(status)&&Number.isFinite(accepted)&&accepted>0;
+    });
+    if(!eligible.length)return [];
+    eligible.sort(function(a,b){
+      const accepted=Number(b.accepted_count||b.passed_count||0)-Number(a.accepted_count||a.passed_count||0);
+      if(accepted!==0)return accepted;
+      const coverage=Number(b.months||b.sample_months||0)-Number(a.months||a.sample_months||0);
+      if(coverage!==0)return coverage;
+      return String(b.created_at||'').localeCompare(String(a.created_at||''));
+    });
+    return [eligible[0]];
   }
   async function factorDetail(jobId,force){
     await needFactor(false);
@@ -2716,7 +2737,7 @@
     test_excess_report_only:'测试年化超额（仅报告）',validation_information_ratio:'验证信息比率',family:'模型族'});
   if(!arr(S.allocation.backtest).includes('equal_weight'))S.allocation.backtest=['recommended','equal_weight'].concat(arr(S.allocation.backtest).filter(function(k){return !['recommended','equal_weight'].includes(k);}));
 
-  function allocWeightRows(data){ return ['recommended','equal_weight','dual_momentum','all_weather','risk_parity','hrp','macro_risk_budget','robust_bl','cycle_risk_parity','hmm_risk_parity'].map(function(strategy){const w=allocWeights(data,strategy,'equity_preferred');return {strategy:ALLOC_STRATEGY_CN[strategy],equity:allocPct(w.equity),bond:allocPct(w.bond),commodity:allocPct(w.commodity),cash:allocPct(w.cash)};}); }
+  function allocWeightRows(data){ return ['recommended','equal_weight','dual_momentum','all_weather','risk_parity','hrp','macro_risk_budget','robust_bl','cycle_risk_parity','hmm_risk_parity'].map(function(strategy){return allocWeightRow(data,ALLOC_STRATEGY_CN[strategy],allocWeights(data,strategy,'equity_preferred'));}); }
   function allocAuditRows(data){const audit=obj(data.optimization),spec=obj(audit.selected_spec),gate=obj(audit.promotion_gate);return [
     {parameter:'候选规格',value:spec.id||'--'},{parameter:'模型族',value:spec.family==='equity_preferred_dual_momentum'?'权益偏好趋势增强':spec.family||'--'},
     {parameter:'战略锚',value:arr(spec.prior).map(function(v){return allocPct(v);}).join(' / ')},{parameter:'动量窗口',value:arr(spec.horizons).join(' / ')+'个月'},
@@ -2757,6 +2778,294 @@
     const leaderboard=arr(audit.leaderboard).map(function(row){return {strategy:row.id,family:row.family==='equity_preferred_dual_momentum'?'趋势增强':row.family,status:row.id===obj(audit.selected_spec).id?'最终入选':row.validation_eligible?'验证入围':(row.train_eligible||row.shortlisted_by_train)?'训练入围':'未入围',train_excess:allocPct(row.train_excess),validation_excess:allocPct(row.validation_excess),validation_information_ratio:allocNumber(row.validation_information_ratio),test_excess_report_only:allocPct(row.test_excess_report_only),turnover:allocPct(row.turnover)};});const costs=arr(obj(obj(data.backtest).robustness).cost_sensitivity_test).map(function(row){return {transaction_cost_bps:fmt(row.transaction_cost_bps,0),annual_return:allocPct(row.annual_return),annual_excess_return:allocPct(row.annual_excess_return),information_ratio:allocNumber(row.information_ratio),max_drawdown:allocPct(row.max_drawdown),max_relative_drawdown:allocPct(row.max_relative_drawdown)};});
     root(controls+'<div id="allocation-report" class="ai-panel is-compact preserve-acronym">'+(S.allocation.reportHtml||'')+'</div>'+panel(c1,'推荐组合与等权基准','橙色面积为等权；红线为推荐；训练 / 验证 / 测试已分区',true)+panel(c2,'累计超额与主动收益','灰线为累计超额，柱形为月度主动收益',true)+'<div class="panel-grid">'+panel(c3,'动态回撤','推荐、等权与所选策略')+panel(c4,'年度收益热力图','统一成本口径')+'</div>'+tableHTML('分样本回测与主动指标',allocMetricRows(data,chosen),['strategy','sample_set','months','annual_return','annual_excess_return','information_ratio','tracking_error','active_month_hit_rate','max_relative_drawdown','sharpe','max_drawdown','total_return'])+tableHTML('候选模型审计 · PBO '+allocPct(audit.pbo_cscv)+' / DSR '+allocPct(audit.deflated_sharpe_probability),leaderboard,['strategy','family','status','train_excess','validation_excess','validation_information_ratio','test_excess_report_only','turnover'])+tableHTML('测试集成本敏感性',costs,['transaction_cost_bps','annual_return','annual_excess_return','information_ratio','max_drawdown','max_relative_drawdown']));
     $('alloc-backtest-window').value=S.allocation.backtestWindow;$('alloc-nav-mode').value=S.allocation.navMode;allocDrawBacktest(c1,c2,c3,c4,data,chosen,S.allocation.backtestWindow,S.allocation.navMode);$('alloc-backtest-strategies').onchange=function(){const values=Array.from(this.selectedOptions).map(function(o){return o.value;});S.allocation.backtest=allocRequiredStrategiesV3(values);allocationBacktest();};$('alloc-backtest-window').onchange=function(){S.allocation.backtestWindow=this.value;allocationBacktest();};$('alloc-nav-mode').onchange=function(){S.allocation.navMode=this.value;allocationBacktest();};$('alloc-gpt-report').onclick=allocationGenerateReport;}
+  /* Asset allocation schema 5.0: conditional evidence contract; v4 renderers remain unchanged. */
+  /* r64 asset allocation evidence labels:
+     因子可用性、来源与PIT时点 · 持续期与状态转移模型 · 周期贡献与观点方向冲突 · 跨周期冲突诊断 · OOS、概率夏普与生产晋级门禁
+     display · selection_uses_test · probabilistic_sharpe_ratio · cycle_contributions
+  */
+  Object.assign(COL,{
+    cycle:'周期',field:'维度',factor:'因子/支柱',available:'可用性',pit_status:'PIT状态',latest_value:'最新值',observation_period:'观察期',
+    release_time:'发布时间',available_time:'可用时间',vintage:'版本',admission_reason:'准入说明',view:'相对观点',
+    prior_view:'均衡先验',posterior_view:'BL后验',omega_diagonal:'观点误差方差',contribution:'周期贡献',conflict:'方向冲突',
+    target_budget:'目标风险预算',anchor_weight:'风险预算锚权重',budget_error:'预算误差',factor_risk_contribution:'因子风险贡献',
+    check:'门禁项',passed:'是否通过',detail:'审计明细',objective_term:'目标项',cost_value:'成本/惩罚',solver_status:'求解状态'
+  });
+  const ALLOC_V5_CYCLE_CN={merrill:'美林时钟',pring:'普林格'};
+  const ALLOC_V5_VIEW_CN=['权益－国债','商品－国债','黄金－国债'];
+  const ALLOC_V5_FIELD_CN={growth:'增长',inflation:'通胀',money:'货币',credit:'信用',liquidity:'流动性',rate:'利率',exchange_rate:'汇率'};
+  function allocIsV5(data){return /^5(?:\.|$)/.test(String(obj(data).schema_version||''));}
+  function allocV5Current(data){const direct=obj(obj(data.allocations).current_cycle);return Object.keys(direct).length?direct:(arr(data.cycle_history).slice(-1)[0]||{});}
+  function allocV5Cycle(data,model,row){row=row||allocV5Current(data);return obj(obj(row).cycles)[model]||{};}
+  function allocV5CycleName(model,payload){payload=obj(payload);if(model==='pring')return payload.state_name||('阶段'+(payload.state||'--'));return payload.state||'--';}
+  function allocV5CycleConfidence(payload){const values=Object.values(obj(obj(payload).probabilities)).map(Number).filter(Number.isFinite);return Number.isFinite(Number(obj(payload).confidence))?Number(payload.confidence):(values.length?Math.max.apply(null,values):0);}
+  function allocV5Registry(data){const out=[],seen=new Set(),quality=obj(data.quality),sources=[data.factor_registry,data.cycle_factor_registry,quality.factor_registry,quality.cycle_factor_registry];sources.forEach(function(source){if(Array.isArray(source))out.push.apply(out,source);else Object.entries(obj(source)).forEach(function(item){const value=obj(item[1]);if(Array.isArray(item[1]))item[1].forEach(function(row){out.push({...obj(row),cycle:obj(row).cycle||item[0]});});else if(Object.keys(value).length)out.push({...value,id:value.id||item[0]});});});return out.filter(function(row){const key=String(row.id||row.field||row.series_id||row.name||JSON.stringify(row));if(seen.has(key))return false;seen.add(key);return true;});}
+  function allocV5RegistryMatch(rows,field,model){const key=String(field||'').toLowerCase(),cn=String(ALLOC_V5_FIELD_CN[key]||field||'').toLowerCase(),cycleCn=String(ALLOC_V5_CYCLE_CN[model]||'').toLowerCase();return rows.find(function(row){const cycle=String(row.cycle||row.model||'').toLowerCase(),tokens=[row.id,row.field,row.field_cn,row.pillar,row.name,row.label,row.series_id,row.code].map(function(value){return String(value||'').toLowerCase();}).filter(Boolean);return (!cycle||cycle===model||cycle===cycleCn)&&tokens.some(function(value){return value===key||value===cn||value.includes(key)||value.includes(cn)||key.includes(value)||cn.includes(value);});})||{};}
+  function allocV5FactorRows(data,model,current){const payload=allocV5Cycle(data,model,current),evidence=obj(payload.factor_evidence),registry=allocV5Registry(data),latest=obj(evidence.latest_values),present=new Set(arr(evidence.present_pillars).map(String)),missing=new Set(arr(evidence.missing_pillars).map(String)),cycleCn=ALLOC_V5_CYCLE_CN[model];const cycleRegistry=registry.filter(function(row){const cycle=String(row.cycle||row.model||'').toLowerCase();return cycle===model||cycle===String(cycleCn||'').toLowerCase();});if(cycleRegistry.length){const seen=new Set();return cycleRegistry.filter(function(row){const key=[row.cycle,row.id,row.field,row.name].map(function(v){return String(v||'');}).join('|');if(seen.has(key))return false;seen.add(key);return true;}).map(function(row){const field=row.field||row.pillar||'--',fieldKey=Object.keys(ALLOC_V5_FIELD_CN).find(function(k){return ALLOC_V5_FIELD_CN[k]===field;})||String(field).toLowerCase(),raw=latest[fieldKey]??latest[field]??row.latest_value??row.value;return {cycle:cycleCn,field:field,factor:row.name||row.label||row.id||field,available:row.pit_verified||row.production_admitted?'D3/PIT已准入':(row.data_status||row.available_time||'研究可用/D3待验'),provider:row.provider||row.source||row.primary_source||current.source||'--',pit_status:(row.pit_verified||row.production_admitted)?'已核验':'未核验',latest_value:raw==null?'--':allocNumber(raw),observation_period:row.observation_period||row.latest_observation_period||'月频',release_time:row.release_time||row.latest_release_time||'需落库官方发布日期',available_time:row.available_time||row.latest_available_time||'D3/PIT待完成',vintage:row.vintage||row.revision||'需落库vintage',admission_reason:row.admission_reason||evidence.admission_reason||payload.data_status||'仅训练/验证检验；不含价格确认代理'};});}let fields=arr(evidence.observed_fields).map(function(item){return typeof item==='string'?item:(item.field||item.id||item.name);}).filter(Boolean);if(!fields.length)fields=arr(evidence.required_pillars).concat(arr(evidence.present_pillars),arr(evidence.missing_pillars));if(model==='pring'&&!fields.length)fields=['money','credit','growth'];fields=Array.from(new Set(fields.map(String)));return fields.map(function(field){const record=allocV5RegistryMatch(registry,field,model),market=obj(obj(payload.market_detail)[field]),has=missing.has(field)?false:(present.has(field)||Object.keys(record).length>0||Object.keys(market).length>0),raw=latest[field]??record.latest_value??record.value??market.bull_probability;return {cycle:cycleCn,field:ALLOC_V5_FIELD_CN[field]||field,factor:record.name||record.label||field,available:has?'可用':'缺失',provider:record.provider||record.source||record.primary_source||current.source||'--',pit_status:(evidence.pit_verified??record.pit_verified)?'已核验':'未核验',latest_value:raw==null?'--':allocNumber(raw),observation_period:record.observation_period||record.latest_observation_period||'--',release_time:record.release_time||record.latest_release_time||'--',available_time:record.available_time||record.latest_available_time||'--',vintage:record.vintage||record.revision||'--',admission_reason:evidence.admission_reason||payload.data_status||'--'};});}
+  function allocV5SourceRows(data){const proxies=obj(data.asset_proxies),quality=obj(data.quality),panel=obj(quality.price_panel),local=obj(obj(quality.local_shadow_lineage).coverage);return allocAssets(data).map(function(asset){const row=obj(proxies[asset]),primary=obj(panel[asset]),coverage=Object.keys(primary).length?primary:obj(local[asset]);return {asset:allocAssetLabel(asset),provider:row.research_provider||row.provider||row.primary_source||'--',code:row.research_series_id||row.series_id||row.execution_code||row.code||'--',status:row.verification_status||row.data_status||'--',available_time:row.available_time_field||'--',vintage:row.revision_field||'--',observations:coverage.valid_months??coverage.rows??'--',observation_period:(coverage.first_month||coverage.first||'--')+' → '+(coverage.last_month||coverage.last||'--')};});}
+  function allocV5QualityRows(data){const quality=obj(data.quality),registry=obj(quality.asset_registry),macro=obj(quality.macro_point_in_time),promotion=obj(quality.promotion_gate);return [
+    {check:'四资产D3注册',passed:registry.production_ready?'通过':'未通过',detail:(arr(registry.errors).concat(arr(registry.warnings))).join('；')||registry.status||'--'},
+    {check:'宏观PIT覆盖',passed:allocPct(macro.pit_verified_fraction),detail:(macro.pit_verified_rows||0)+' / '+(macro.rows||0)+' 行'},
+    {check:'共同历史',passed:obj(quality.price_panel).common?String(obj(obj(quality.price_panel).common).months||'--')+'个月':'未形成',detail:obj(obj(quality.price_panel).common).first_month?(obj(obj(quality.price_panel).common).first_month+' → '+obj(obj(quality.price_panel).common).last_month):String(data.reason||'--')},
+    {check:'生产晋级',passed:promotion.status==='passed'?'通过':'阻断',detail:arr(promotion.failed).join('；')||quality.status||data.status||'--'}
+  ];}
+  function allocV5Blocked(data,title,subtitle){header(title,subtitle,'资产配置');setText('as-of',allocMonth(obj(data.data_as_of).market||obj(data.data_as_of).macro_complete));setText('generated-at',String(data.generated_at||'--').replace('T',' ').replace('Z',''));conclusion('schema 5.0 影子链路当前为“'+esc(data.status||'blocked')+'”：'+esc(data.reason||'权威数据或统计门禁尚未通过')+'；阻断清单只用于审计，不会覆盖旧 v4 生产快照。');root(allocStateCards([{label:'模型引擎',value:data.engine_version||'v5',note:'schema '+(data.schema_version||'5.0'),tone:'muted'},{label:'当前状态',value:data.status||'blocked',note:'禁止冒充可交易结论',tone:'warn'},{label:'资产范围',value:allocAssets(data).map(allocAssetLabel).join(' / '),note:'不含现金；商品排除黄金',tone:'muted'}])+tableHTML('权威数据与PIT门禁',allocV5QualityRows(data),['check','passed','detail'])+tableHTML('四资产数据血缘',allocV5SourceRows(data),['asset','provider','code','status','available_time','vintage','observations','observation_period']));}
+  function allocV5CycleRows(data){const current=allocV5Current(data);return Object.keys(ALLOC_V5_CYCLE_CN).map(function(model){const payload=allocV5Cycle(data,model,current);return {cycle:ALLOC_V5_CYCLE_CN[model],state:allocV5CycleName(model,payload),confidence:allocPct(allocV5CycleConfidence(payload)),available:payload.eligible_for_views?'进入风险预算/BL':'仅展示或阻断',status:payload.data_status||payload.method||'--'};});}
+  function allocV5ProbabilityChart(id,data,model,lookback){let rows=arr(data.cycle_history);if(lookback!=='all')rows=rows.slice(-Number(lookback));const states=Array.from(new Set(rows.flatMap(function(row){return Object.keys(obj(allocV5Cycle(data,model,row).probabilities));}))),x=rows.map(function(row){return allocMonth(row.month)+'-01';});plot(id,states.map(function(state,index){return {type:'scatter',mode:'lines',stackgroup:'one',groupnorm:'percent',name:state,x:x,y:rows.map(function(row){return Number(obj(allocV5Cycle(data,model,row).probabilities)[state]||0);}),line:{width:1.5,color:CHART_PALETTE[index%CHART_PALETTE.length]},hovertemplate:'%{x|%Y-%m}<br>'+esc(state)+' %{y:.2%}<extra></extra>'};}),{height:390,hovermode:'x unified',yaxis:{title:'阶段概率（%）',ticksuffix:'%'},xaxis:{type:'date',rangeslider:allocRangeSlider()},legend:{orientation:'h',y:-.28}});}
+  function allocV5FactorChart(id,data,model,lookback){
+    let rows=arr(data.cycle_history); if(lookback!=='all') rows=rows.slice(-Number(lookback));
+    const axisNames=model==='pring'?['money','credit','growth']:['growth','inflation'];
+    const axisCn={growth:'增长因子',inflation:'通胀因子',money:'货币因子',credit:'信用因子'};
+    const x=rows.map(function(row){return allocMonth(row.month)+'-01';});
+    const valuesByAxis={};
+    axisNames.forEach(function(axis){
+      valuesByAxis[axis]=rows.map(function(row){
+        const c=obj(obj(row.cycles)[model]);
+        const v=obj(c.axis_scores)[axis]??obj(c.pillar_scores)[axis]??obj(c.factor_scores)[axis]??obj(c.normalized_scores)[axis]??obj(c)[axis+'_score']??obj(c)[axis];
+        return Number.isFinite(Number(v))?Number(v):0;
+      });
+    });
+    const directions=rows.map(function(_,i){
+      const score=axisNames.reduce(function(acc,axis){const v=Number(valuesByAxis[axis][i]); return acc+(Number.isFinite(v)?v:0);},0);
+      return score>=0?1:-1;
+    });
+    const colors=['#c00000','#f0b400','#2f7d32','#1b66b1'];
+    const traces=axisNames.map(function(axis,i){return {type:'scatter',mode:'lines',name:axisCn[axis]||axis,x:x,y:allocV5Smooth(valuesByAxis[axis],3),line:{color:colors[i%colors.length],width:2.2},hovertemplate:'%{x}<br>'+ (axisCn[axis]||axis) +' %{y:.2f}<extra></extra>'};});
+    plot(id,traces,{height:390,margin:{l:62,r:36,t:18,b:46},font:{family:'Arial,"KaiTi","Microsoft YaHei",sans-serif'},shapes:allocV5DirectionShapesFromRows(rows,directions),xaxis:{type:'date',showgrid:false,rangeslider:{visible:true,thickness:.07}},yaxis:{title:'连续因子得分（3月平滑）',zeroline:true,zerolinecolor:'#aaa'},legend:{orientation:'h',y:-.22},showlegend:true});
+  }
+  function allocV5DurationRows(data,model,current){const duration=obj(allocV5Cycle(data,model,current).duration_model);return Object.keys(duration).length?[{cycle:ALLOC_V5_CYCLE_CN[model],method:duration.method||'--',observations:duration.learned_through||'--',minimum_months:duration.minimum_months??'--',expected_months:duration.expected_months??duration.expected_elapsed_months??'--',maximum_months:duration.maximum_months??'--'}]:[];}
+  function allocV5ConflictRows(data,current){const diagnostics=obj(current.cycle_diagnostics),raw=arr(diagnostics.conflicts);return raw.map(function(item,index){if(typeof item==='string')return {cycle:'综合',view:'冲突'+(index+1),conflict:'是',detail:item};const row=obj(item);return {cycle:ALLOC_V5_CYCLE_CN[row.cycle]||row.cycle||'综合',view:row.view||row.factor||'--',conflict:row.conflict===false?'否':'是',detail:row.detail||row.reason||row.message||'--'};});}
+  function allocV5Meta(data,strategy){return obj(obj(obj(data.allocations)[strategy||'recommended']).metadata);}
+  function allocV5ViewBundle(data){const meta=allocV5Meta(data,'recommended'),bl=obj(meta.black_litterman),diagnostics=obj(meta.view_diagnostics||meta.cycle_views||bl.view_diagnostics||bl.diagnostics),contributions=obj(meta.cycle_contributions||diagnostics.cycle_contributions||bl.cycle_contributions||obj(data.optimization).cycle_contributions);return {bl:bl,diagnostics:diagnostics,contributions:contributions,labels:arr(diagnostics.view_labels).length?arr(diagnostics.view_labels):ALLOC_V5_VIEW_CN};}
+  function allocV5Dot(row,vector){return arr(row).reduce(function(sum,value,index){return sum+Number(value||0)*Number(arr(vector)[index]||0);},0);}
+  function allocV5ViewRows(data){const bundle=allocV5ViewBundle(data),bl=bundle.bl,P=arr(bl.P),omega=arr(bl.omega),pi=arr(bl.pi),posterior=arr(bl.posterior_mean);return P.map(function(row,index){return {view:bundle.labels[index]||('观点'+(index+1)),prior_view:allocPct(allocV5Dot(row,pi)),value:allocPct(arr(bl.q)[index]),posterior_view:allocPct(allocV5Dot(row,posterior)),omega_diagonal:allocNumber(arr(omega[index])[index])};});}
+  function allocV5OmegaRows(data){const bundle=allocV5ViewBundle(data),omega=arr(bundle.bl.omega);return omega.map(function(row,index){const out={view:bundle.labels[index]||('观点'+(index+1))};arr(row).forEach(function(value,column){out['omega_'+(column+1)]=Number(value).toExponential(3);});return out;});}
+  function allocV5ContributionRows(data){const bundle=allocV5ViewBundle(data),entries=Object.entries(bundle.contributions);if(!entries.length)return [{cycle:'快照未序列化',view:'三个BL相对观点',contribution:'--',conflict:'不可判断',detail:'后端须输出 cycle_contributions，前端不以近似值代替'}];const signs=bundle.labels.map(function(_,index){return entries.map(function(item){return Number(arr(item[1])[index]||0);}).filter(function(value){return Math.abs(value)>1e-12;});});const rows=[];entries.forEach(function(item){bundle.labels.forEach(function(label,index){const values=signs[index],conflict=values.some(function(v){return v>0;})&&values.some(function(v){return v<0;});rows.push({cycle:ALLOC_V5_CYCLE_CN[item[0]]||item[0],view:label,contribution:allocPct(arr(item[1])[index]),conflict:conflict?'正负周期并存':'无'});});});return rows;}
+  function allocV5RiskRows(data,strategy){const portfolio=obj(obj(data.allocations)[strategy]),weights=obj(portfolio.weights),rc=obj(portfolio.risk_contribution),meta=obj(portfolio.metadata),budget=obj(meta.risk_budget),anchor=arr(budget.weights),target=arr(budget.target_budget),budgetRc=arr(budget.relative_risk_contribution),error=arr(budget.budget_error);return allocAssets(data).map(function(asset,index){return {asset:allocAssetLabel(asset),capital_weight:allocPct(allocAssetValue(weights,asset,index)),risk_contribution:allocPct(allocAssetValue(rc,asset,index)),target_budget:allocPct(target[index]),anchor_weight:allocPct(anchor[index]),budget_error:allocPct(error[index]),detail:budgetRc[index]==null?'--':'锚风险贡献 '+allocPct(budgetRc[index])};});}
+  function allocV5FactorRiskRows(data){const meta=allocV5Meta(data,'recommended'),cov=obj(meta.covariance),payload=meta.factor_risk_contribution||cov.factor_risk_contribution||obj(cov.diagnostics).factor_risk_contribution||obj(data.optimization).factor_risk_contribution;if(Array.isArray(payload))return payload.map(function(row,index){row=obj(row);return {factor:row.factor||row.name||('因子'+(index+1)),factor_risk_contribution:allocPct(row.contribution??row.risk_contribution??row.value),detail:row.detail||row.method||'--'};});const entries=Object.entries(obj(payload));if(entries.length)return entries.map(function(item){return {factor:item[0],factor_risk_contribution:allocPct(typeof item[1]==='object'?(item[1].contribution??item[1].value):item[1]),detail:typeof item[1]==='object'?(item[1].detail||'--'):'--'};});return [{factor:'宏观因子风险贡献',factor_risk_contribution:'--',detail:'当前快照未输出逐因子分解；前端不从协方差近似杜撰'}];}
+  function allocV5ConstraintRows(data,strategy){const meta=allocV5Meta(data,strategy),optimizer=obj(meta.optimizer),slack=obj(optimizer.constraint_slack);return Object.entries(slack).map(function(item){return {constraint:item[0],value:typeof item[1]==='number'?allocNumber(item[1]):JSON.stringify(item[1]),status:item[0]==='max_violation'&&Number(item[1])>1e-7?'失败':'通过',detail:'硬约束未静默放宽'};});}
+  function allocV5CostRows(data,strategy){const meta=allocV5Meta(data,strategy),optimizer=obj(meta.optimizer),terms=obj(optimizer.objective_terms),config=obj(data.config),linear=arr(config.transaction_cost_bps),quadratic=arr(config.quadratic_cost),rows=allocAssets(data).map(function(asset,index){return {asset:allocAssetLabel(asset),objective_term:'单边交易成本 / 二次冲击',cost_value:(linear[index]??'--')+'bp / '+(quadratic[index]??'--')};});Object.entries(terms).forEach(function(item){rows.push({asset:'组合',objective_term:item[0],cost_value:allocNumber(item[1])});});rows.push({asset:'组合',objective_term:'预期交易成本 / 单边换手',cost_value:allocNumber(optimizer.expected_cost)+' / '+allocPct(optimizer.turnover)});return rows;}
+  function allocV5GateRows(data){const quality=obj(data.quality),gate=obj(quality.promotion_gate),selection=obj(obj(data.backtest).selection_audit),rows=Object.entries(obj(gate.checks)).map(function(item){return {check:item[0],passed:item[1]?'通过':'失败',detail:item[1]?'满足冻结门槛':'阻断生产晋级'};});rows.push({check:'测试集是否参与选模',passed:selection.selection_uses_test?'失败':'通过',detail:selection.selection_rule||'测试集仅用于封存报告'});rows.push({check:'概率夏普 / 多重试验门槛',passed:allocPct(gate.probabilistic_sharpe_ratio),detail:'门槛 '+allocNumber(gate.multiple_trial_sharpe_hurdle)});rows.push({check:'总晋级状态',passed:gate.status==='passed'?'通过':'阻断',detail:arr(gate.failed).join('；')||'全部门槛通过'});return rows;}
+  function allocV5WeightCompare(id,data){const keys=['recommended','risk_parity','macro_risk_budget','robust_bl'].filter(function(key){return Object.keys(obj(obj(data.allocations)[key]).weights).length;}),assets=allocAssets(data);plot(id,assets.map(function(asset,index){return {type:'bar',name:allocAssetLabel(asset),x:keys.map(function(key){return ALLOC_STRATEGY_CN[key]||key;}),y:keys.map(function(key){return allocAssetValue(obj(obj(data.allocations)[key]).weights,asset,index)*100;}),marker:{color:allocAssetColor(asset,index)}};}),{height:340,barmode:'stack',yaxis:{title:'资本权重（%）',range:[0,100]},legend:{orientation:'h',y:-.25}});}
+  function allocV5RiskChart(id,data,strategy){const rows=allocV5RiskRows(data,strategy);plot(id,[{type:'bar',name:'最终资本权重',x:rows.map(function(r){return r.asset;}),y:rows.map(function(r){return Number(String(r.capital_weight).replace('%',''));})},{type:'bar',name:'风险预算锚权重',x:rows.map(function(r){return r.asset;}),y:rows.map(function(r){return Number(String(r.anchor_weight).replace('%',''));})},{type:'bar',name:'最终风险贡献',x:rows.map(function(r){return r.asset;}),y:rows.map(function(r){return Number(String(r.risk_contribution).replace('%',''));})}],{height:360,barmode:'group',yaxis:{title:'比例（%）'},legend:{orientation:'h',y:-.25}});}
+  function allocV5ViewChart(id,data){const rows=allocV5ViewRows(data);plot(id,[{type:'bar',name:'均衡先验',x:rows.map(function(r){return r.view;}),y:rows.map(function(r){return Number(String(r.prior_view).replace('%',''));})},{type:'bar',name:'周期观点q',x:rows.map(function(r){return r.view;}),y:rows.map(function(r){return Number(String(r.value).replace('%',''));})},{type:'bar',name:'BL后验',x:rows.map(function(r){return r.view;}),y:rows.map(function(r){return Number(String(r.posterior_view).replace('%',''));})}],{height:360,barmode:'group',yaxis:{title:'月度相对收益观点（%）'},legend:{orientation:'h',y:-.25}});}
+  function allocV5OmegaChart(id,data){const bundle=allocV5ViewBundle(data),omega=arr(bundle.bl.omega);plot(id,[{type:'heatmap',x:bundle.labels,y:bundle.labels,z:omega,colorscale:'Blues',texttemplate:'%{z:.3e}',hovertemplate:'%{y} × %{x}<br>%{z:.4e}<extra></extra>'}],{height:360,xaxis:{side:'bottom'},yaxis:{autorange:'reversed'},margin:{l:100,r:30,t:25,b:85}});}
+  function allocV5ReturnSeries(data,key,windowName,mode){const strategy=obj(obj(obj(data.backtest).strategies)[key]),field=mode==='gross'?'gross_return':'net_return';let rows=arr(strategy.returns).map(function(row){return {month:row.month,sample_set:row.sample_set,ret:Number(row[field]??row.net_return??0),turnover:Number(row.turnover||0),cost:Number(row.cost||0)};});if(windowName==='3y')rows=rows.slice(-36);else if(windowName==='5y')rows=rows.slice(-60);let nav=1;return {rows:rows,x:rows.map(function(row){return allocMonth(row.month)+'-01';}),nav:rows.map(function(row){nav*=1+row.ret;return nav;})};}
+  function allocV5BacktestMetricRows(data){const rows=[];['recommended','equal_weight'].forEach(function(key){const metrics=obj(obj(obj(data.backtest).strategies)[key]).metrics;Object.entries(obj(metrics)).forEach(function(item){const m=obj(item[1]);rows.push({strategy:ALLOC_STRATEGY_CN[key]||key,sample_set:SAMPLE_CN[item[0]]||item[0],months:m.months||0,annual_return:allocPct(m.annual_return),annual_volatility:allocPct(m.annual_volatility),sharpe:allocNumber(m.sharpe),max_drawdown:allocPct(m.max_drawdown),average_annual_turnover:allocPct(m.average_turnover),cost_drag:allocPct(m.annual_cost_drag)});});});return rows;}
+  function allocV5BacktestCharts(navId,activeId,drawdownId,annualId,recentId,data,windowName,mode){
+    const recommended=allocV5Series(data,'recommended',windowName,mode);
+    const equal=allocV5Series(data,'equal_weight',windowName,mode);
+    const deco=allocSampleDecorations(recommended.rows);
+    plot(navId,[
+      {type:'scatter',mode:'lines',name:'最新最优策略',x:recommended.x,y:recommended.nav,line:{color:'#c00000',width:2.6},hovertemplate:'%{x}<br>策略净值 %{y:.3f}<extra></extra>'},
+      {type:'scatter',mode:'lines',name:'四资产等权基准',x:equal.x,y:equal.nav,line:{color:'#bfbfbf',width:2.2},hovertemplate:'%{x}<br>等权净值 %{y:.3f}<extra></extra>'}
+    ],{height:380,margin:{l:56,r:42,t:18,b:46},font:{family:'Arial,"KaiTi","Microsoft YaHei",sans-serif'},shapes:deco.shapes,annotations:deco.annotations,xaxis:{type:'date',rangeslider:{visible:true,thickness:.07}},yaxis:{title:recommended.frequency+'复权净值'},legend:{orientation:'h',y:-.22},showlegend:true});
+    const n=Math.min(recommended.nav.length,equal.nav.length);
+    const active=[],strength=[];
+    for(let i=0;i<n;i++){active.push(recommended.nav[i]/Math.max(equal.nav[i],1e-12)-1);strength.push(recommended.nav[i]/Math.max(equal.nav[i],1e-12));}
+    plot(activeId,[
+      {type:'bar',name:'超额收益',x:recommended.x.slice(-n),y:active.map(function(v){return v*100;}),marker:{color:'rgba(237,125,49,.35)'},hovertemplate:'%{x}<br>超额 %{y:.2f}%<extra></extra>'},
+      {type:'scatter',mode:'lines',name:'相对强弱（右轴）',x:recommended.x.slice(-n),y:strength,yaxis:'y2',line:{color:'#c00000',width:2.4},hovertemplate:'%{x}<br>相对强弱 %{y:.3f}<extra></extra>'}
+    ],{height:330,margin:{l:58,r:64,t:18,b:46},font:{family:'Arial,"KaiTi","Microsoft YaHei",sans-serif'},xaxis:{type:'date'},yaxis:{title:'累计超额（%）',zeroline:true,zerolinecolor:'#999'},yaxis2:{title:'相对强弱',overlaying:'y',side:'right',showgrid:false},legend:{orientation:'h',y:-.22},showlegend:true});
+    const draw=function(values){let peak=1;return values.map(function(v){peak=Math.max(peak,v);return v/peak-1;});};
+    plot(drawdownId,[
+      {type:'scatter',mode:'lines',name:'策略回撤',x:recommended.x,y:draw(recommended.nav).map(function(v){return v*100;}),line:{color:'#c00000',width:2.1},fill:'tozeroy',fillcolor:'rgba(192,0,0,.10)'},
+      {type:'scatter',mode:'lines',name:'等权回撤',x:equal.x,y:draw(equal.nav).map(function(v){return v*100;}),line:{color:'#bfbfbf',width:1.8}}
+    ],{height:310,margin:{l:56,r:32,t:18,b:46},font:{family:'Arial,"KaiTi","Microsoft YaHei",sans-serif'},xaxis:{type:'date'},yaxis:{title:'回撤（%）'},legend:{orientation:'h',y:-.22},showlegend:true});
+    const years=arr(obj(obj(data.backtest).annual_returns).recommended).map(function(row){return row.year;});
+    const metrics=['annual_return','benchmark_annual_return','annual_excess_return','max_drawdown'];
+    const z=metrics.map(function(m){return years.map(function(y){const row=arr(obj(obj(data.backtest).annual_returns).recommended).find(function(r){return r.year===y;});return Number(row?row[m]:0)*100;});});
+    plot(annualId,[{type:'heatmap',x:years,y:['策略收益','等权基准','超额收益','最大回撤'],z:z,colorscale:[[0,'#9dcc9f'],[.5,'#f7f2df'],[1,'#c00000']],text:z.map(function(row){return row.map(function(v){return v.toFixed(1)+'%';});}),texttemplate:'%{text}',showscale:false}],{height:320,margin:{l:86,r:20,t:18,b:60},font:{family:'Arial,"KaiTi","Microsoft YaHei",sans-serif'},xaxis:{tickangle:-35},yaxis:{autorange:'reversed'}});
+    if(recentId) allocV5RecentRelativeChart(recentId,data);
+  }
+  Object.assign(COL,{omega_1:'Ω[1]',omega_2:'Ω[2]',omega_3:'Ω[3]',method:'持续期模型',minimum_months:'最短月数',expected_months:'期望月数',maximum_months:'最长月数',eligible:'是否入围',validation_score:'验证得分',selected_id:'入选规格'});
+  function allocV5VisibleFactorRows(data,model,current){const rows=allocV5FactorRows(data,model,current);if(rows.length)return rows;const payload=allocV5Cycle(data,model,current),defaults={merrill:['growth','inflation'],pring:['money','credit','growth']}[model]||[],values={...obj(payload.axis_scores),...obj(payload.pillar_scores),...obj(payload.market_probabilities)};return defaults.map(function(field){const value=values[field];return {cycle:ALLOC_V5_CYCLE_CN[model],factor:field,available:value==null?'缺失':'可用',provider:current.source||'--',pit_status:payload.eligible_for_views?'已核验':'未核验',latest_value:value==null?'--':allocNumber(value),observation_period:current.month||'--',release_time:'--',available_time:'--',vintage:'--',admission_reason:payload.data_status||'未提供逐因子元数据'};});}
+
+
+const allocV5Style=document.createElement('style');
+allocV5Style.textContent=`
+.alloc-merrill-clock{position:relative;margin:18px 0 20px;height:430px;background:#fff;font-family:Arial,"KaiTi","Microsoft YaHei",sans-serif;}
+.alloc-clock-frame{position:absolute;left:22%;right:10%;top:48px;bottom:48px;border:12px solid #c00000;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:34px;padding:58px 78px;background:#fff;}
+.alloc-clock-cell{background:#e9e9e9;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#111;line-height:1.55;}
+.alloc-clock-cell b{font-family:"KaiTi","STKaiti",serif;font-size:28px;font-weight:700;margin-bottom:16px;}
+.alloc-clock-cell span{font-family:"KaiTi","STKaiti",serif;font-size:20px;margin-bottom:22px;}
+.alloc-clock-cell em{font-family:"KaiTi","STKaiti",serif;font-style:normal;font-size:26px;line-height:1.28;}
+.alloc-clock-axis{position:absolute;font-family:"KaiTi","STKaiti",serif;font-size:28px;color:#111;z-index:2;}
+.alloc-clock-top{top:10px;left:56%;transform:translateX(-50%);} .alloc-clock-bottom{bottom:6px;left:56%;transform:translateX(-50%);}
+.alloc-clock-left{left:5%;top:49%;transform:translateY(-50%);} .alloc-clock-right{right:1%;top:49%;transform:translateY(-50%);}
+@media(max-width:900px){.alloc-merrill-clock{height:520px}.alloc-clock-frame{left:8%;right:8%;padding:42px 28px;gap:18px}.alloc-clock-axis{font-size:22px}.alloc-clock-left,.alloc-clock-right{display:none}.alloc-clock-cell b{font-size:24px}.alloc-clock-cell em{font-size:22px}.alloc-clock-cell span{font-size:17px}}
+`;
+document.head.appendChild(allocV5Style);
+
+function allocV5Smooth(values,span){
+  const out=[]; const n=Math.max(1,Number(span)||1);
+  for(let i=0;i<values.length;i++){
+    let sum=0,cnt=0;
+    for(let j=Math.max(0,i-n+1);j<=i;j++){
+      const v=Number(values[j]);
+      if(Number.isFinite(v)){sum+=v;cnt++;}
+    }
+    out.push(cnt?sum/cnt:null);
+  }
+  return out;
+}
+function allocV5DateOf(row){
+  const d=row.date||row.trade_date;
+  if(d) return String(d).slice(0,10);
+  return allocMonth(row.month)+'-01';
+}
+function allocV5NextMonthDate(month){
+  const m=allocMonth(month);
+  const d=new Date(m+'-01T00:00:00Z');
+  d.setUTCMonth(d.getUTCMonth()+1);
+  return d.toISOString().slice(0,10);
+}
+function allocV5NextDateFromRows(rows,i){
+  if(i+1<rows.length) return allocV5DateOf(rows[i+1]);
+  return allocV5NextMonthDate(rows[i].month||String(rows[i].date||'').slice(0,7).replace('-',''));
+}
+function allocV5DirectionShapesFromRows(rows,directions){
+  const shapes=[];
+  rows.forEach(function(row,i){
+    const v=Number(directions[i]);
+    if(!Number.isFinite(v)) return;
+    shapes.push({
+      type:'rect',xref:'x',yref:'paper',x0:allocV5DateOf(row),x1:allocV5NextDateFromRows(rows,i),
+      y0:v>=0?0.50:0.00,y1:v>=0?1.00:0.50,
+      fillcolor:'rgba(237,125,49,.32)',line:{width:0},layer:'below'
+    });
+  });
+  return shapes;
+}
+function allocV5StageName(model,payload){
+  if(!payload) return '未识别';
+  const stage=payload.current_stage||payload.stage||payload.phase||payload.current_phase||payload.state;
+  if(model==='merrill') return obj(ALLOC_V5_MERRILL_STAGE_CN)[stage]||stage||'未识别';
+  if(model==='pring') return obj(ALLOC_V5_PRING_STAGE_CN)[stage]||stage||'未识别';
+  return stage||'未识别';
+}
+function allocV5StageOrder(model){
+  if(model==='merrill') return ['recovery','overheat','stagflation','recession'];
+  if(model==='pring') return ['phase_1','phase_2','phase_3','phase_4','phase_5','phase_6'];
+  return [];
+}
+function allocV5CycleStageRows(data,model,lookback){
+  let rows=arr(data.cycle_history);
+  if(lookback!=='all') rows=rows.slice(-Number(lookback));
+  const order=allocV5StageOrder(model);
+  return rows.map(function(row){
+    const payload=obj(obj(row.cycles)[model]);
+    const raw=payload.current_stage||payload.stage||payload.phase||payload.current_phase||payload.state;
+    let idx=order.indexOf(raw);
+    if(idx<0){
+      const phaseNum=String(raw||'').match(/(\d+)/);
+      idx=phaseNum?Number(phaseNum[1])-1:0;
+    }
+    return {month:row.month,stage:raw,stage_name:allocV5StageName(model,payload),stage_index:idx+1,confidence:Number(payload.confidence??payload.current_confidence??payload.stage_probability??0)};
+  }).filter(function(row){return row.month;});
+}
+function allocV5CycleStageChart(id,data,model,lookback){
+  const rows=allocV5CycleStageRows(data,model,lookback);
+  const order=allocV5StageOrder(model);
+  const tickvals=order.map(function(_,i){return i+1;});
+  const ticktext=order.map(function(stage){return obj(model==='merrill'?ALLOC_V5_MERRILL_STAGE_CN:ALLOC_V5_PRING_STAGE_CN)[stage]||stage;});
+  plot(id,[{type:'scatter',mode:'lines+markers',x:rows.map(function(r){return allocMonth(r.month)+'-01';}),y:rows.map(function(r){return r.stage_index;}),
+    text:rows.map(function(r){return r.stage_name+'<br>置信度 '+pct(r.confidence);}),hovertemplate:'%{x}<br>%{text}<extra></extra>',
+    line:{color:'#c00000',width:2.2,shape:'hv'},marker:{color:'#c00000',size:5},name:'周期划分'}],
+    {height:330,margin:{l:96,r:24,t:18,b:46},font:{family:'Arial,"KaiTi","Microsoft YaHei",sans-serif'},xaxis:{type:'date',showgrid:false,rangeslider:{visible:true,thickness:.07}},
+     yaxis:{tickmode:'array',tickvals:tickvals,ticktext:ticktext,range:[0.5,Math.max(order.length,1)+0.5],showgrid:false},showlegend:false});
+}
+function allocV5MerrillClockHTML(){
+  return '<div class="alloc-merrill-clock">'
+    +'<div class="alloc-clock-axis alloc-clock-top">通胀上行</div><div class="alloc-clock-axis alloc-clock-bottom">通胀下行</div><div class="alloc-clock-axis alloc-clock-left">经济上行</div><div class="alloc-clock-axis alloc-clock-right">经济下行</div>'
+    +'<div class="alloc-clock-frame">'
+    +'<div class="alloc-clock-cell"><b>复苏期</b><span>增长上行 / 通胀下行</span><em>股票优先<br>商品跟随</em></div>'
+    +'<div class="alloc-clock-cell"><b>过热期</b><span>增长上行 / 通胀上行</span><em>商品优先<br>股票跟随</em></div>'
+    +'<div class="alloc-clock-cell"><b>衰退期</b><span>增长下行 / 通胀下行</span><em>债券优先<br>黄金跟随</em></div>'
+    +'<div class="alloc-clock-cell"><b>滞胀期</b><span>增长下行 / 通胀上行</span><em>黄金优先<br>商品跟随</em></div>'
+    +'</div></div>';
+}
+function allocV5StrategyObject(data,key){return obj(obj(obj(data.backtest).strategies)[key]);}
+function allocV5Series(data,key,windowName,mode){
+  const strategy=allocV5StrategyObject(data,key);
+  const field=mode==='gross'?'gross_return':'net_return';
+  const daily=arr(strategy.daily_returns);
+  let rows=[];
+  if(daily.length){
+    rows=daily.map(function(row){const d=allocV5DateOf(row);return {date:d,month:String(row.month||d.slice(0,7).replace('-','')),sample_set:row.sample_set||row.sample||'',ret:Number(row[field]??row.net_return??row.gross_return??row.return??0)};});
+  }else{
+    rows=arr(strategy.returns).map(function(row){return {date:allocMonth(row.month)+'-01',month:row.month,sample_set:row.sample_set||row.sample||'',ret:Number(row[field]??row.net_return??row.gross_return??0)};});
+  }
+  const step=daily.length?252:12;
+  if(windowName==='3y') rows=rows.slice(-3*step);
+  else if(windowName==='5y') rows=rows.slice(-5*step);
+  let nav=1; const navs=rows.map(function(row){nav*=1+(Number.isFinite(row.ret)?row.ret:0); return nav;});
+  return {rows:rows,x:rows.map(function(row){return row.date;}),nav:navs,frequency:daily.length?'日度':'月度'};
+}
+function allocV5RecentRelativeRows(data){
+  const root=arr(obj(data.backtest).recent_relative_diagnostics);
+  if(root.length) return root;
+  const out=[];
+  Object.entries(obj(obj(data.backtest).strategies)).forEach(function(kv){
+    const key=kv[0],strategy=obj(kv[1]);
+    arr(strategy.recent_relative_diagnostics).forEach(function(row){out.push(Object.assign({model:key},row));});
+  });
+  return out;
+}
+function allocV5RecentRelativeChart(id,data){
+  const rows=allocV5RecentRelativeRows(data);
+  if(!rows.length){document.getElementById(id).innerHTML='<div class="empty">暂无近期相对强弱诊断</div>';return;}
+  const labels=rows.map(function(row){return (obj(ALLOC_STRATEGY_CN)[row.model]||row.model||'模型')+' · '+(row.window||row.sample||'近期');});
+  const excess=rows.map(function(row){return Number(row.annual_excess_return??row.excess_return??0)*100;});
+  const ir=rows.map(function(row){return Number(row.information_ratio??row.ir??0);});
+  plot(id,[
+    {type:'bar',x:labels,y:excess,name:'年化超额收益',marker:{color:'#c00000'},hovertemplate:'%{x}<br>年化超额 %{y:.2f}%<extra></extra>'},
+    {type:'scatter',mode:'lines+markers',x:labels,y:ir,name:'信息比率（右轴）',yaxis:'y2',line:{color:'#f0b400',width:2.4},marker:{size:6},hovertemplate:'%{x}<br>IR %{y:.2f}<extra></extra>'}
+  ],{height:340,margin:{l:60,r:62,t:18,b:92},font:{family:'Arial,"KaiTi","Microsoft YaHei",sans-serif'},xaxis:{tickangle:-35},yaxis:{title:'年化超额收益（%）',zeroline:true,zerolinecolor:'#999'},yaxis2:{title:'信息比率',overlaying:'y',side:'right',showgrid:false},legend:{orientation:'h',y:-.25},showlegend:true});
+}
+Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权年化',annual_excess_return:'年化超额',information_ratio:'信息比率',diagnosis:'诊断',used_for_selection:'参与选模'});
+
+  async function allocationHomeV5(data){if(data.status==='blocked')return allocV5Blocked(data,'资产配置主页','两周期研判、BL/风险平价/宏观因子与当前权重');const current=allocV5Current(data),weights=obj(obj(data.allocations).recommended).weights,promotion=obj(obj(data.quality).promotion_gate),cards=Object.keys(ALLOC_V5_CYCLE_CN).map(function(model){const payload=allocV5Cycle(data,model,current);return {label:ALLOC_V5_CYCLE_CN[model],value:allocV5CycleName(model,payload),note:(payload.eligible_for_views?'已准入':'仅展示/阻断')+' · '+allocPct(allocV5CycleConfidence(payload)),tone:payload.eligible_for_views?'ok':'muted'};});header('资产配置主页','多周期研判、风险预算与当前权重','资产配置');setText('as-of',allocMonth(obj(data.data_as_of).market));setText('generated-at',String(data.generated_at||'--').replace('T',' ').replace('Z',''));conclusion('当前四资产推荐权重：'+allocWeightSummary(data,weights)+'生产晋级门为'+(promotion.status==='passed'?'通过':'阻断')+'；周期仅保留美林时钟与普林格，商品口径严格排除黄金。');const c1=pid('av5h'),c2=pid('av5h'),c3=pid('av5h'),factorRows=Object.keys(ALLOC_V5_CYCLE_CN).flatMap(function(model){return allocV5VisibleFactorRows(data,model,current);});root(allocStateCards(cards)+'<div class="panel-grid">'+panel(c1,'推荐组合','权益 / 国债 / 黄金 / 非黄金商品')+panel(c2,'四类模型权重对照','风险平价、风险预算与BL统一口径')+'</div>'+panel(c3,'两周期准入与当前阶段','美林按增长/通胀，普林格按货币/信用/增长',true)+tableHTML('两周期当前状态',allocV5CycleRows(data),['cycle','state','confidence','available','status'])+tableHTML('周期因子可用性与PIT证据',factorRows,['cycle','factor','available','provider','pit_status','latest_value','observation_period','release_time','available_time','vintage','admission_reason'])+tableHTML('周期对BL相对观点的贡献与冲突',allocV5ContributionRows(data),['cycle','view','contribution','conflict','detail'])+tableHTML('四资产数据血缘',allocV5SourceRows(data),['asset','provider','code','status','available_time','vintage','observations','observation_period'])+tableHTML('权威数据与生产门禁',allocV5QualityRows(data),['check','passed','detail']));allocWeightDonut(c1,data,weights,'推荐权重');allocV5WeightCompare(c2,data);const cycleRows=allocV5CycleRows(data);plot(c3,[{type:'bar',x:cycleRows.map(function(row){return row.cycle;}),y:cycleRows.map(function(row){return Number(String(row.confidence).replace('%',''));}),marker:{color:cycleRows.map(function(row){return row.available.includes('进入')?'#c00000':'#98a2b3';})},text:cycleRows.map(function(row){return row.state;}),textposition:'outside',hovertemplate:'%{x}<br>%{text}<br>置信度 %{y:.2f}%<extra></extra>'}],{height:340,yaxis:{title:'最高阶段概率（%）',range:[0,105]},xaxis:{showgrid:false}});}
+  async function allocationCycleV5(data){
+    const model=S.allocation.cycleModel||'merrill';
+    const lookback=S.allocation.lookback||'84';
+    const current=obj(obj(data.current).cycles);
+    const payload=obj(current[model]);
+    const cids=['alloc-v5-cycle-factor','alloc-v5-cycle-prob','alloc-v5-cycle-stage'];
+    const controls='<div class="module-controls"><label>周期模型 '+selectHTML('allocCycleModel',S.allocation.cycleModel||'merrill',[['merrill','美林时钟'],['pring','普林格周期']])+'</label><label>样本窗口 '+selectHTML('allocLookback',lookback,[['36','近3年'],['60','近5年'],['84','近7年'],['all','全样本']])+'</label></div>';
+    const stateCards='<div class="cards"><div class="card"><b>当前阶段</b><strong>'+allocV5StageName(model,payload)+'</strong><span>'+pct(Number(payload.confidence??payload.current_confidence??payload.stage_probability??0))+'</span></div><div class="card"><b>周期状态</b><strong>'+((payload.view_scope||payload.data_status||'研究跟踪')+'</strong><span>生产准入 '+(payload.eligible_for_production_views?'是':'否')+'</span>')+'</div><div class="card"><b>资产映射</b><strong>股票 / 债券 / 黄金 / 商品</strong><span>商品：ex-AU/AG期货篮子</span></div></div>';
+    const clock=model==='merrill'?allocV5MerrillClockHTML():'';
+    ROOT.innerHTML=pageTitle('资产配置 / 周期跟踪')+controls+stateCards+clock+
+      '<div class="grid two"><div class="panel"><h3>连续因子与方向背景</h3><div id="'+cids[0]+'"></div></div><div class="panel"><h3>阶段概率 / 置信度</h3><div id="'+cids[1]+'"></div></div></div>'+
+      '<div class="panel"><h3>历史阶段划分</h3><div id="'+cids[2]+'"></div></div>'+
+      '<div class="panel"><h3>周期证据与资产映射</h3>'+tableHTML(allocV5VisibleFactorRows(data,model,allocV5Current(data)),['cycle','field','factor','available','provider','pit_status','latest_value','observation_period','release_time','available_time','vintage','admission_reason'])+'</div>'+
+      '<div class="panel"><h3>周期阶段下四资产表现</h3>'+tableHTML(allocV5CycleAssetRows(data,model),['cycle','stage','equity','bond','gold','commodity'])+'</div>';
+    wireControls();
+    allocV5FactorChart(cids[0],data,model,lookback);
+    allocV5ProbabilityChart(cids[1],data,model,lookback);
+    allocV5CycleStageChart(cids[2],data,model,lookback);
+  }
+  async function allocationStrategyV5(data){if(data.status==='blocked')return allocV5Blocked(data,'配置策略','全天候、风险平价与多模型求解');const supported=['recommended','risk_parity','macro_risk_budget','robust_bl'].filter(function(key){return Object.keys(obj(obj(data.allocations)[key]).weights).length;}),strategy=supported.includes(S.allocation.strategy)?S.allocation.strategy:'recommended',portfolio=obj(obj(data.allocations)[strategy]),weights=obj(portfolio.weights),meta=obj(portfolio.metadata),optimizer=obj(meta.optimizer);S.allocation.strategy=strategy;header('配置策略','全天候、风险平价与多模型求解','资产配置');setText('as-of',allocMonth(obj(data.data_as_of).market));setText('generated-at',String(data.generated_at||'--').replace('T',' ').replace('Z',''));conclusion((ALLOC_STRATEGY_CN[strategy]||strategy)+'当前权重：'+allocWeightSummary(data,weights)+'求解状态 '+esc(optimizer.status||meta.status||'--')+'，硬约束'+(obj(optimizer.diagnostics).hard_constraints_relaxed?'曾被放宽（异常）':'未静默放宽')+'。');const ids=[pid('av5s'),pid('av5s'),pid('av5s'),pid('av5s'),pid('av5s')],controls='<section class="control-card"><div class="control-grid"><label>配置策略<select id="alloc-strategy">'+supported.map(function(key){return '<option value="'+key+'">'+(ALLOC_STRATEGY_CN[key]||key)+'</option>';}).join('')+'</select></label><div class="control-readout">资产范围<strong>权益 / 国债 / 黄金 / 商品</strong></div><div class="control-readout">BL观点<strong>三组相对观点＋完整Ω</strong></div><div class="control-readout">求解状态<strong>'+esc(optimizer.status||meta.status||'--')+'</strong></div></div></section>';root(controls+'<div class="panel-grid">'+panel(ids[0],'求解后四资产权重','资本权重')+panel(ids[1],'风险预算锚与最终风险贡献','Richard–Roncalli约束风险预算')+'</div><div class="panel-grid">'+panel(ids[2],'Black–Litterman观点与后验','权益/商品/黄金分别相对国债')+panel(ids[3],'完整观点误差协方差Ω','非对角项保留观点相关性')+'</div>'+panel(ids[4],'推荐组合历史动态权重','月末信号用于下一月',true)+tableHTML('四资产权重、风险预算锚与资产风险贡献',allocV5RiskRows(data,strategy),['asset','capital_weight','target_budget','anchor_weight','risk_contribution','budget_error','detail'])+tableHTML('BL相对观点、均衡先验与后验',allocV5ViewRows(data),['view','prior_view','value','posterior_view','omega_diagonal'])+tableHTML('完整Omega矩阵',allocV5OmegaRows(data),['view','omega_1','omega_2','omega_3'])+tableHTML('各周期对BL观点贡献及冲突',allocV5ContributionRows(data),['cycle','view','contribution','conflict','detail'])+tableHTML('宏观因子风险贡献',allocV5FactorRiskRows(data),['factor','factor_risk_contribution','detail'])+tableHTML('硬约束与可行域残差',allocV5ConstraintRows(data,strategy),['constraint','value','status','detail'])+tableHTML('交易成本与目标函数惩罚',allocV5CostRows(data,strategy),['asset','objective_term','cost_value'])+tableHTML('样本外与晋级门禁',allocV5GateRows(data),['check','passed','detail']));$('alloc-strategy').value=strategy;allocWeightDonut(ids[0],data,weights,ALLOC_STRATEGY_CN[strategy]);allocV5RiskChart(ids[1],data,strategy);allocV5ViewChart(ids[2],data);allocV5OmegaChart(ids[3],data);allocDynamicWeights(ids[4],data,'recommended');$('alloc-strategy').onchange=function(){S.allocation.strategy=this.value;allocationStrategyV5(data);};}
+  async function allocationBacktestV5(data){
+    const windowName=S.allocation.backtestWindow||'all';
+    const mode=S.allocation.returnMode||'net';
+    const ids=['alloc-v5-nav','alloc-v5-active','alloc-v5-drawdown','alloc-v5-annual','alloc-v5-recent'];
+    const controls='<div class="module-controls"><label>样本窗口 '+selectHTML('allocBacktestWindow',windowName,[['all','全样本'],['5y','近5年'],['3y','近3年']])+'</label><label>收益口径 '+selectHTML('allocReturnMode',mode,[['net','扣成本'],['gross','不扣成本']])+'</label><button class="primary" id="allocGenerateReport">生成本地报告</button></div>';
+    const quality=obj(data.governance);
+    const selection=obj(obj(data.model_selection).selected);
+    const metrics=arr(obj(obj(data.backtest).summary).rows);
+    const annual=arr(obj(obj(data.backtest).annual_returns).recommended);
+    ROOT.innerHTML=pageTitle('资产配置 / 回测与模型效果')+controls+
+      '<div class="cards"><div class="card"><b>最新最优策略</b><strong>'+((obj(ALLOC_STRATEGY_CN)[selection.selected_id]||selection.selected_id||'研究策略')+'</strong><span>测试期仅报告，不参与选模</span>')+'</div><div class="card"><b>治理状态</b><strong>'+((quality.deployment_allowed?'可部署':'研究观察')+'</strong><span>'+ (quality.service_contract||quality.status||'') +'</span>')+'</div><div class="card"><b>基准</b><strong>四资产等权 25%/25%/25%/25%</strong><span>与模型同成本口径比较</span></div></div>'+
+      '<div class="grid two"><div class="panel"><h3>日度/可用频率净值走势</h3><div id="'+ids[0]+'"></div></div><div class="panel"><h3>超额收益与相对强弱</h3><div id="'+ids[1]+'"></div></div></div>'+
+      '<div class="grid two"><div class="panel"><h3>回撤走势</h3><div id="'+ids[2]+'"></div></div><div class="panel"><h3>年度收益热力图</h3><div id="'+ids[3]+'"></div></div></div>'+
+      '<div class="panel"><h3>近期相对强弱诊断</h3><div id="'+ids[4]+'"></div></div>'+
+      '<div class="panel"><h3>模型收益汇总</h3>'+tableHTML(metrics,['strategy','sample','annual_return','volatility','sharpe','max_drawdown','annual_excess_return','information_ratio'])+'</div>'+
+      '<div class="panel"><h3>年度收益明细</h3>'+tableHTML(annual,['year','annual_return','benchmark_annual_return','annual_excess_return','max_drawdown','used_for_selection'])+'</div>';
+    wireControls();
+    const btn=document.getElementById('allocGenerateReport'); if(btn)btn.onclick=allocationGenerateReport;
+    allocV5BacktestCharts(ids[0],ids[1],ids[2],ids[3],ids[4],data,windowName,mode);
+  }
+
   /* r27: common-window data-quality repair */
   const R27_SW=['农林牧渔','基础化工','钢铁','有色金属','电子','家用电器','食品饮料','纺织服饰','轻工制造','医药生物','公用事业','交通运输','房地产','商贸零售','社会服务','综合','建筑材料','建筑装饰','电力设备','国防军工','计算机','传媒','通信','银行','非银金融','汽车','机械设备','煤炭','石油石化','环保','美容护理'];
   function r27Date(value){
@@ -2864,7 +3173,7 @@
     return R35_INDUSTRY_CACHE.get(key);
   }
   function r35ScoreSeries(row){
-    const history=arr(row&&row.score_history),definitions=[['score','行业景气评分'],['growth','增长分项'],['quality','质量分项'],['m250x20','中期动量分项'],['anti_crowding','反拥挤分项']];
+    const history=arr(row&&row.score_history),definitions=[['score','行业综合评分'],['prosperity','景气度'],['fundamental','基本面'],['technical','技术面'],['valuation','估值'],['funds','资金面'],['anti_crowding','低拥挤']];
     return definitions.map(function(def){return {id:'r35_score_'+def[0]+'_'+row.industry,name:def[1],unit:'分',data:history.map(function(item){const value=def[0]==='score'?item.score:obj(item.components)[def[0]];return {date:item.date,value:value};}).filter(function(item){return item.date&&Number.isFinite(Number(item.value));})};}).filter(function(series){return series.data.length>=2;});
   }
   function r35HighFrequency(row){
@@ -2986,7 +3295,7 @@
     data:{title:'数据看板',views:{macro:'宏观',global_markets:'全球市场',sw_industries:'行业',commodities:'大宗商品',stock:'个股',news_events:'新闻事件',ai_monitor:'AI监控'}},
     allocation:{title:'资产配置',views:{cycle:'周期跟踪',strategy:'配置策略'}},
     liquidity:{title:'资金面跟踪',views:{retail:'散户',public:'公募',private:'私募',foreign:'外资',etf:'ETF',primary:'一级市场',margin:'融资资金'}},
-    rotation:{title:'行业景气度',views:{industry:'行业景气度',style:'风格轮动',allocation:'配置策略'}},
+    rotation:{title:'行业景气度',views:{prosperity:'行业景气度',industry:'行业轮动',style:'风格轮动'}},
     factorlab:{title:'因子实验室',views:{dashboard:'因子看板',mining:'因子挖掘',strategy:'配置策略'}},
     technical:{title:'技术分析',views:{learning:'K线学习',strategy:'配置策略'}},
     portfolio:{title:'组合优化',views:{solve:'优化求解',strategy:'配置策略'}}
@@ -3013,7 +3322,8 @@
     'liquidity:etf':{group:'资金面跟踪',title:'ETF',subtitle:'份额申赎、资金流与结构分解',sections:[{id:'etf',label:'ETF',kind:'liquidity',page:'etf'}]},
     'liquidity:primary':{group:'资金面跟踪',title:'一级市场',subtitle:'IPO、定增与可转债融资供给',sections:[{id:'primary',label:'一级市场',kind:'liquidity',page:'primary'}]},
     'liquidity:margin':{group:'资金面跟踪',title:'融资资金',subtitle:'净买入、余额、活跃度与担保结构',sections:[{id:'margin',label:'融资资金',kind:'liquidity',page:'margin'}]},
-    'rotation:industry':{group:'行业景气度',title:'行业景气度',subtitle:'31个申万一级行业专属景气指标',sections:[{id:'industry',label:'行业景气度',kind:'rotation',page:'industry'}]},
+    'rotation:prosperity':{group:'行业景气度',title:'行业景气度',subtitle:'高频景气指标、财务锚、工业锚、五大检验与景气合成',sections:[{id:'prosperity',label:'行业景气度',kind:'rotation',page:'prosperity'}]},
+    'rotation:industry':{group:'行业景气度',title:'行业轮动',subtitle:'六维因子构造、因子检验、打分、回测与归因',sections:[{id:'industry',label:'行业轮动',kind:'rotation',page:'industry'}]},
     'rotation:style':{group:'行业景气度',title:'风格轮动',subtitle:'大/中/小盘 × 成长/均衡/价值/红利 · 季度个股标签',sections:[{id:'style',label:'风格轮动',kind:'rotation',page:'style'}]},
     'rotation:allocation':{group:'行业景气度',title:'配置策略',subtitle:'综合状态、行业Top10（月/周）、风格Top3（季度）与策略回测',sections:[{id:'overview',label:'综合状态',kind:'rotation',page:'home'},{id:'weights',label:'配置权重',kind:'rotation',page:'allocation'},{id:'backtest',label:'策略回测',kind:'rotation',page:'backtest'}]},
     'factorlab:dashboard':{group:'因子实验室',title:'因子看板',subtitle:'因子状态、联合检验与历史任务',sections:[{id:'overview',label:'实验室总览',kind:'factorlab',page:'home'},{id:'dashboard',label:'因子看板',kind:'factorlab',page:'dashboard'},{id:'testing',label:'联合检验',kind:'factorlab',page:'testing'},{id:'history',label:'历史任务',kind:'factorlab',page:'history'}]},
@@ -3027,7 +3337,7 @@
   const LEGACY_ROUTE_ALIAS={
     'allocation:home':['allocation:strategy','overview'],'allocation:backtest':['allocation:strategy','backtest'],
     'liquidity:home':['liquidity:retail','overview'],
-    'rotation:home':['rotation:allocation','overview'],'rotation:backtest':['rotation:allocation','backtest'],
+    'rotation:home':['rotation:prosperity','prosperity'],'rotation:backtest':['rotation:industry','industry'],'rotation:allocation':['rotation:industry','industry'],
     'portfolio:home':['portfolio:strategy','overview'],'portfolio:pool':['portfolio:strategy','pool'],'portfolio:risk':['portfolio:strategy','risk'],'portfolio:backtest':['portfolio:strategy','backtest'],
     'index:home':['factorlab:strategy','index-home'],'index:universe':['factorlab:strategy','universe'],'index:alpha':['factorlab:strategy','alpha'],'index:smartbeta':['factorlab:strategy','smartbeta'],'index:risk':['factorlab:strategy','risk'],'index:tracking':['factorlab:strategy','tracking'],
     'factorlab:home':['factorlab:dashboard','overview'],'factorlab:testing':['factorlab:dashboard','testing'],'factorlab:history':['factorlab:dashboard','history'],
@@ -3231,7 +3541,7 @@
     const monthlyHolding=arr(monthly.holdings).slice(-1)[0]||{},weeklyHolding=arr(weekly.holdings).slice(-1)[0]||{},styleHolding=arr(styleQuarterly.holdings).slice(-1)[0]||{};
     const finalWeights=arr(obj(portfolio.home).current_weights).slice().sort(function(a,b){return Number(b.weight)-Number(a.weight);});
     const liqPages=obj(liquidity.pages),liqText=['retail','public','private','foreign','etf','primary','margin'].map(function(key){return obj(liqPages[key]).conclusion;}).filter(Boolean).slice(0,3).join('；');
-    const assetRows=[{name:'权益',weight:Number(assetWeights.equity||0)},{name:'债券',weight:Number(assetWeights.bond||0)},{name:'商品',weight:Number(assetWeights.commodity||0)},{name:'现金',weight:Number(assetWeights.cash||0)}];
+    const assetRows=allocAssets(allocation).map(function(asset,index){return {name:allocAssetLabel(asset),weight:allocAssetValue(assetWeights,asset,index)};});
     const monthIndustries=arr(monthlyHolding.names).map(function(name){return {name:name,weight:Number(monthlyHolding.weight||0)};}),weekIndustries=arr(weeklyHolding.names).map(function(name){return {name:name,weight:Number(weeklyHolding.weight||0)};});
     const styleRows=arr(styleHolding.names).map(function(name){return {name:name,weight:Number(styleHolding.weight||0)};});
     conclusion('数据、资产配置、资金面、行业风格、个股观察和组合优化已在同一页联动；<strong>红色重点</strong>表示本期最需要复核的方向，所有权重均直接来自现有模型快照。');

@@ -147,6 +147,23 @@ def _rows_from_calendar(calendar: list[dict[str, Any]], nav: pd.DataFrame) -> li
                 "最大回撤": item.get("最大回撤", item.get("max_drawdown")),
             }
         )
+    if not rows and not nav.empty:
+        for year, group in nav.groupby(nav["date"].dt.year):
+            local = group.dropna(subset=["strategy_nav", "benchmark_nav"])
+            if len(local) < 2:
+                continue
+            strategy_return = float(local["strategy_nav"].iloc[-1] / local["strategy_nav"].iloc[0] - 1.0)
+            benchmark_return = float(local["benchmark_nav"].iloc[-1] / local["benchmark_nav"].iloc[0] - 1.0)
+            label = f"{int(year)}YTD" if last_year and int(year) == last_year else str(int(year))
+            rows.append(
+                {
+                    "年度": label,
+                    "策略收益": strategy_return,
+                    "基准收益": benchmark_return,
+                    "超额收益": strategy_return - benchmark_return,
+                    "最大回撤": _drawdown_from_nav(local),
+                }
+            )
     if not nav.empty:
         strategy = _annualised_from_nav(nav, "strategy_nav")
         benchmark = _annualised_from_nav(nav, "benchmark_nav")
@@ -284,12 +301,24 @@ def build() -> dict[str, Any]:
     style = _read_json(SOURCE_DATA_DIR / "style_six_dimension_monthly.json")
     figures: dict[str, Any] = {}
     industry = rotation["industry"]["frequencies"]["monthly"]
+    industry_research = industry.get("research_result", {}) if isinstance(industry.get("research_result"), dict) else {}
+    if industry_research.get("nav"):
+        industry_calendar = industry_research.get("calendar_year", [])
+        industry_nav = industry_research.get("nav", [])
+        industry_metrics = industry_research.get("metrics", {})
+    else:
+        industry_calendar = industry.get("return_loss_diagnostics", {}).get("calendar_year", [])
+        industry_nav = industry.get("nav", [])
+        industry_metrics = industry.get("metrics", {})
     figures["industry_monthly"] = _build_one(
         "industry_monthly",
-        industry.get("return_loss_diagnostics", {}).get("calendar_year", []),
-        industry.get("nav", []),
-        industry.get("metrics", {}),
+        industry_calendar,
+        industry_nav,
+        industry_metrics,
     )
+    figures["industry_monthly"]["selected_candidate"] = industry.get("selected_candidate")
+    figures["industry_monthly"]["research_selected_candidate"] = industry.get("research_selected_candidate")
+    figures["industry_monthly"]["published_candidate"] = industry_research.get("candidate") or industry.get("selected_candidate")
     for key in ["style12", "size3", "style4"]:
         strategy = style["strategies"][key]
         row = _build_one(key, strategy.get("calendar_year", []), strategy.get("nav", []), strategy.get("metrics", {}))

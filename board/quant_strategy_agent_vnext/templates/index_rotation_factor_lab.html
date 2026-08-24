@@ -60,9 +60,9 @@
         <section class="nav-group">
           <button class="nav-group-toggle" type="button" aria-expanded="false">行业景气度<span aria-hidden="true"></span></button>
           <div class="nav-children" hidden>
-            <button class="nav-item" data-target="rotation:industry">行业景气度<i></i></button>
+            <button class="nav-item" data-target="rotation:prosperity">行业景气度<i></i></button>
+            <button class="nav-item" data-target="rotation:industry">行业轮动<i></i></button>
             <button class="nav-item" data-target="rotation:style">风格轮动<i></i></button>
-            <button class="nav-item" data-target="rotation:allocation">配置策略<i></i></button>
           </div>
         </section>
         <section class="nav-group" data-module="factor-lab">
@@ -76,8 +76,8 @@
         <section class="nav-group">
           <button class="nav-group-toggle" type="button" aria-expanded="false">技术分析<span aria-hidden="true"></span></button>
           <div class="nav-children" hidden>
+            <button class="nav-item" data-target="technical:factors">技术因子<i></i></button>
             <button class="nav-item" data-target="technical:learning">K线学习<i></i></button>
-            <button class="nav-item" data-target="technical:strategy">配置策略<i></i></button>
           </div>
         </section>
         <section class="nav-group portfolio-optimization-nav">
@@ -127,3 +127,5 @@
   <script defer src="{{ url_for('static', filename='js/factor_lab.js', v=app_version) }}"></script>
 </body>
 </html>
+
+

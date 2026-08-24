@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import pickle
 import sqlite3
 import sys
@@ -57,6 +58,8 @@ DATA_OUTPUT = (
 
 MODEL_VERSION = "style-six-dimension-monthly/1.5-size-online-stability"
 START_SIGNAL = "20120131"
+SIGNAL_CUTOFF_RAW = os.environ.get("STYLE_ROTATION_SIGNAL_CUTOFF", "").strip()
+SIGNAL_CUTOFF = pd.Timestamp(SIGNAL_CUTOFF_RAW) if SIGNAL_CUTOFF_RAW else None
 CHART_START = "2016-01-01"
 COST_RATE = 0.001
 MAX_STOCK_WEIGHT = 0.08
@@ -246,11 +249,14 @@ def _month_end_dates(connection: sqlite3.Connection) -> tuple[pd.DatetimeIndex, 
         connection,
     )["trade_date"].astype(str)
     trade_dates = pd.DatetimeIndex(pd.to_datetime(dates, format="%Y%m%d"))
-    month_end_dates = trade_dates.to_series(index=trade_dates).groupby(trade_dates.to_period("M")).max()
+    signal_trade_dates = trade_dates
+    if SIGNAL_CUTOFF is not None:
+        signal_trade_dates = pd.DatetimeIndex(trade_dates[trade_dates <= SIGNAL_CUTOFF])
+    month_end_dates = signal_trade_dates.to_series(index=signal_trade_dates).groupby(signal_trade_dates.to_period("M")).max()
     industry_signal_dates = pd.read_sql_query(
-        "SELECT DISTINCT rebalance_date FROM v3_industry_signal ORDER BY rebalance_date",
+        "SELECT DISTINCT rebalance_date AS signal_date FROM v3_industry_signal ORDER BY rebalance_date",
         connection,
-    )["rebalance_date"].astype(str)
+    )["signal_date"].astype(str)
     signal_set = set(industry_signal_dates)
     signals = pd.DatetimeIndex(
         [
@@ -259,7 +265,7 @@ def _month_end_dates(connection: sqlite3.Connection) -> tuple[pd.DatetimeIndex, 
             if pd.Timestamp(date).strftime("%Y%m%d") >= START_SIGNAL
             and pd.Timestamp(date).strftime("%Y%m%d") in signal_set
         ]
-    )
+    ).drop_duplicates().sort_values()
     return trade_dates, signals
 
 
@@ -757,6 +763,7 @@ def _source_cache_signature() -> dict[str, Any]:
         "database_size": int(stat.st_size),
         "database_mtime_ns": int(stat.st_mtime_ns),
         "start_signal": START_SIGNAL,
+        "signal_cutoff": SIGNAL_CUTOFF_RAW,
     }
 
 
@@ -1757,6 +1764,8 @@ def _performance(nav: pd.DataFrame) -> dict[str, Any]:
 
 def _split_metrics(nav: pd.DataFrame) -> dict[str, dict[str, Any]]:
     output: dict[str, dict[str, Any]] = {}
+    if nav.empty or "date" not in nav.columns:
+        return {name: {} for name in SPLITS}
     dates = pd.to_datetime(nav["date"])
     for name, (start, end) in SPLITS.items():
         mask = dates.ge(pd.Timestamp(start)) & dates.le(pd.Timestamp(end))
@@ -2011,6 +2020,7 @@ def _run_group(source: SourceData, key: str, spec: dict[str, Any]) -> dict[str, 
             for rank, (name, value) in enumerate(latest_score.items(), start=1)
         ],
         "latest_holding": holdings[-1] if holdings else {},
+        "holdings": holdings,
         "metrics": selected_result["metrics"],
         "candidate_audit": candidate_audit,
         "factor_diagnostics": factor_diagnostics,

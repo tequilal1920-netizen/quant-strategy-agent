@@ -7,6 +7,7 @@
   <link rel="icon" href="{{ url_for('static', filename='favicon.svg', v=app_version) }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v=app_version) }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/index_enhancement.css', v=app_version) }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/portfolio_optimizer.css', v=app_version) }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/rotation_module.css', v=app_version) }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/factor_lab.css', v=app_version) }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/ui_unified.css', v=app_version) }}">
@@ -27,13 +28,8 @@
         <section class="nav-group">
           <button class="nav-group-toggle" type="button" aria-expanded="false">数据看板<span aria-hidden="true"></span></button>
           <div class="nav-children" hidden>
-            <button class="nav-item" data-target="data:macro">宏观<i></i></button>
-            <button class="nav-item" data-target="data:global_markets">全球市场<i></i></button>
-            <button class="nav-item" data-target="data:sw_industries">行业<i></i></button>
-            <button class="nav-item" data-target="data:commodities">大宗商品<i></i></button>
-            <button class="nav-item" data-target="data:stock">个股<i></i></button>
-            <button class="nav-item" data-target="data:news_events">新闻事件<i></i></button>
-            <button class="nav-item" data-target="data:ai_monitor">AI监控<i></i></button>
+            <button class="nav-item" data-target="data:market_monitor">市场监控<i></i></button>
+            <button class="nav-item" data-target="data:topic_tracking">专题跟踪<i></i></button>
           </div>
         </section>
         <section class="nav-group">
@@ -43,24 +39,13 @@
             <button class="nav-item" data-target="allocation:strategy">配置策略<i></i></button>
           </div>
         </section>
-        <section class="nav-group">
-          <button class="nav-group-toggle" type="button" aria-expanded="false">资金面跟踪<span aria-hidden="true"></span></button>
-          <div class="nav-children" hidden>
-            <button class="nav-item" data-target="liquidity:retail">散户<i></i></button>
-            <button class="nav-item" data-target="liquidity:public">公募<i></i></button>
-            <button class="nav-item" data-target="liquidity:private">私募<i></i></button>
-            <button class="nav-item" data-target="liquidity:foreign">外资<i></i></button>
-            <button class="nav-item" data-target="liquidity:etf">ETF<i></i></button>
-            <button class="nav-item" data-target="liquidity:primary">一级市场<i></i></button>
-            <button class="nav-item" data-target="liquidity:margin">融资资金<i></i></button>
-          </div>
-        </section>
+
         <section class="nav-group">
           <button class="nav-group-toggle" type="button" aria-expanded="false">行业景气度<span aria-hidden="true"></span></button>
           <div class="nav-children" hidden>
-            <button class="nav-item" data-target="rotation:industry">行业景气度<i></i></button>
+            <button class="nav-item" data-target="rotation:prosperity">行业景气度<i></i></button>
+            <button class="nav-item" data-target="rotation:industry">行业轮动<i></i></button>
             <button class="nav-item" data-target="rotation:style">风格轮动<i></i></button>
-            <button class="nav-item" data-target="rotation:allocation">配置策略<i></i></button>
           </div>
         </section>
         <section class="nav-group" data-module="factor-lab">
@@ -74,8 +59,8 @@
         <section class="nav-group">
           <button class="nav-group-toggle" type="button" aria-expanded="false">技术分析<span aria-hidden="true"></span></button>
           <div class="nav-children" hidden>
+            <button class="nav-item" data-target="technical:factors">技术因子<i></i></button>
             <button class="nav-item" data-target="technical:learning">K线学习<i></i></button>
-            <button class="nav-item" data-target="technical:strategy">配置策略<i></i></button>
           </div>
         </section>
         <section class="nav-group portfolio-optimization-nav">
@@ -120,7 +105,10 @@
   <script defer src="{{ url_for('static', filename='ai_monitor/js/shell.js', v=app_version) }}"></script>
   <script defer src="{{ url_for('static', filename='js/app.js', v=app_version) }}"></script>
   <script defer src="{{ url_for('static', filename='js/index_enhancement.js', v=app_version) }}"></script>
+  <script defer src="{{ url_for('static', filename='js/portfolio_optimizer.js', v=app_version) }}"></script>
   <script defer src="{{ url_for('static', filename='js/rotation_module.js', v=app_version) }}"></script>
   <script defer src="{{ url_for('static', filename='js/factor_lab.js', v=app_version) }}"></script>
 </body>
 </html>
+
+
