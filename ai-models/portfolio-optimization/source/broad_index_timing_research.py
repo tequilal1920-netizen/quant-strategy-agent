@@ -961,11 +961,11 @@ def _selection_rank(metrics: dict[str, float], *, max_excess: float) -> float:
     mdd_improve = metrics["strategy_mdd"] - metrics["benchmark_mdd"]
     excess_gap = max(0.0, max_excess - metrics["excess_ann"])
     return (
-        5.0 * metrics["excess_ann"]
-        + 0.70 * metrics["strategy_sharpe"]
+        6.5 * metrics["excess_ann"]
+        + 0.85 * metrics["strategy_sharpe"]
         + 0.55 * metrics.get("annual_excess_win_rate", 0.0)
-        + 0.35 * metrics.get("monthly_excess_win_rate", 0.0)
-        + 0.30 * mdd_improve
+        + 0.30 * metrics.get("monthly_excess_win_rate", 0.0)
+        + 0.24 * mdd_improve
         + 0.18 * metrics.get("down_month_protection_rate", 0.0)
         + 0.10 * metrics.get("up_month_capture_rate", 0.0)
         - 12.0 * excess_gap
@@ -1074,6 +1074,17 @@ def _choose_model(raw: pd.DataFrame, basic: pd.DataFrame | None) -> tuple[pd.Dat
             ytd_loss_limit=0.035,
             rolling_loss_limit=0.020,
             min_hold_days=40,
+            max_position=1.15,
+            min_position=-0.10,
+        ),
+        _active_excess_protection_candidate(
+            features,
+            rsrs_budget,
+            name="主动超额保护",
+            anchor_position=1.15,
+            ytd_loss_limit=0.035,
+            rolling_loss_limit=0.030,
+            min_hold_days=5,
             max_position=1.15,
             min_position=-0.10,
         ),
@@ -1292,7 +1303,7 @@ def main() -> None:
     if args.snapshot_output:
         payload = {
             "status": "ready",
-            "engine_version": "broad-index-timing/2.7-active-excess-consistency",
+            "engine_version": "broad-index-timing/2.8-active-excess-sharpe",
             "generated_at": pd.Timestamp.utcnow().isoformat(),
             "start": args.start,
             "end": args.end,
