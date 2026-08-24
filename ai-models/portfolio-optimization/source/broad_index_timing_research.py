@@ -860,6 +860,102 @@ def _exposure_budget_candidate(
     return out
 
 
+def _active_excess_protection_candidate(
+    features: pd.DataFrame,
+    base: pd.DataFrame,
+    *,
+    name: str = "主动超额保护",
+    anchor_position: float = 0.98,
+    ytd_loss_limit: float = 0.025,
+    rolling_loss_limit: float = 0.020,
+    min_hold_days: int = 20,
+    release_buffer: float = -0.003,
+    severe_level: int = 5,
+    max_position: float = 1.15,
+    min_position: float = -0.10,
+    smooth: int = 1,
+) -> pd.DataFrame:
+    """Causal active-risk stop for timing underperformance.
+
+    The base timing signal remains responsible for crash protection. This
+    wrapper only suppresses active timing bets after realised YTD or rolling
+    relative underperformance; the decision at date T is applied by _backtest
+    at T+1, so it does not use future returns.
+    """
+    out = features.copy()
+    raw = (
+        pd.to_numeric(base["position"], errors="coerce")
+        .fillna(0.65)
+        .astype(float)
+        .clip(float(min_position), float(max_position))
+    )
+    dates = pd.to_datetime(out["date"])
+    ret = out["ret"].fillna(0.0).astype(float).to_numpy()
+    close = out["close"].astype(float)
+    severe = (
+        ((out["risk_votes"] >= severe_level) & (close < out["ma60"]) & (out["mom20"] < 0.0))
+        | ((out["rsrs_z"] < -1.05) & (out["mom20"] < -0.04))
+        | ((out["drawdown60"] < -0.13) & (out["mom20"] < 0.0))
+    ).fillna(False).to_numpy()
+    strong = (
+        (out["risk_votes"] <= 3)
+        & (out["mom20"] > 0.0)
+        & ((out["mom60"] > 0.0) | (close > out["ma60"]))
+        & (out["rsrs_z"] > -0.35)
+    ).fillna(False).to_numpy()
+
+    adjusted = raw.to_numpy(dtype=float).copy()
+    active_ytd = 1.0
+    active_logs: list[float] = []
+    riskoff_until = -1
+    current_year = int(dates.iloc[0].year) if len(dates) else 0
+    cash_daily = (1.0 + 0.018) ** (1.0 / 252.0) - 1.0
+    borrow_daily = (1.0 + 0.035) ** (1.0 / 252.0) - 1.0
+
+    for i in range(len(adjusted)):
+        year = int(dates.iloc[i].year)
+        if year != current_year:
+            current_year = year
+            active_ytd = 1.0
+            active_logs = []
+            riskoff_until = -1
+
+        if i > 0:
+            applied = float(adjusted[i - 1])
+            turnover = abs(float(adjusted[i - 1]) - float(adjusted[i - 2])) * 0.0001 if i > 1 else 0.0
+            funding = (1.0 - applied) * cash_daily if applied <= 1.0 else (1.0 - applied) * borrow_daily
+            strategy_return = applied * ret[i] + funding - turnover
+            benchmark_return = ret[i]
+            relative_return = (1.0 + strategy_return) / max(1.0e-12, 1.0 + benchmark_return)
+            active_ytd *= relative_return
+            active_logs.append(math.log(max(1.0e-12, relative_return)))
+            if len(active_logs) > 63:
+                active_logs = active_logs[-63:]
+
+        rolling_active = math.exp(sum(active_logs)) - 1.0 if active_logs else 0.0
+        ytd_active = active_ytd - 1.0
+        if (ytd_active <= -float(ytd_loss_limit)) or (rolling_active <= -float(rolling_loss_limit)):
+            riskoff_until = max(riskoff_until, i + int(min_hold_days))
+        elif i > riskoff_until and ytd_active > float(release_buffer) and rolling_active > -0.004 and strong[i]:
+            riskoff_until = -1
+
+        if i <= riskoff_until:
+            adjusted[i] = min(float(raw.iloc[i]), 0.25) if severe[i] else float(anchor_position)
+        else:
+            adjusted[i] = float(raw.iloc[i])
+
+    position = pd.Series(adjusted, index=out.index).clip(float(min_position), float(max_position))
+    out["raw_position"] = position
+    out["position"] = position.rolling(max(1, int(smooth)), min_periods=1).mean().clip(float(min_position), float(max_position))
+    for column in ("left_score", "right_score", "sentiment_score", "risk_score", "composite_score"):
+        out[column] = pd.to_numeric(base.get(column, 0.5), errors="coerce").fillna(0.5)
+    out["model_name"] = name
+    out.attrs["min_position"] = float(min_position)
+    out.attrs["max_position"] = float(max_position)
+    out.attrs["borrow_annual"] = 0.035
+    return out
+
+
 
 def _selection_rank(metrics: dict[str, float], *, max_excess: float) -> float:
     mdd_improve = metrics["strategy_mdd"] - metrics["benchmark_mdd"]
@@ -912,6 +1008,22 @@ def _choose_model(raw: pd.DataFrame, basic: pd.DataFrame | None) -> tuple[pd.Dat
     macd_signal = _macd_trend_repair_candidate(features)
     rsrs_signal = _rsrs_hedge_candidate(features)
     dual_hedge_signal = _dual_momentum_hedge_candidate(features)
+    macd_budget_smooth1 = _exposure_budget_candidate(
+        features,
+        macd_signal,
+        name="MACD趋势修复增强",
+        max_position=1.35,
+        min_position=-0.15,
+        down_scale=0.8,
+        smooth=1,
+    )
+    rsrs_budget = _exposure_budget_candidate(
+        features,
+        rsrs_signal,
+        name="RSRS风险对冲增强",
+        max_position=1.03,
+        min_position=-0.08,
+    )
     static_signals = [
         _legacy_left_right_candidate(features, groups),
         _risk_radar_path_candidate(features),
@@ -928,10 +1040,43 @@ def _choose_model(raw: pd.DataFrame, basic: pd.DataFrame | None) -> tuple[pd.Dat
         _exposure_budget_candidate(features, macd_signal, name="MACD趋势修复增强", max_position=1.15, min_position=-0.08),
         _exposure_budget_candidate(features, macd_signal, name="MACD趋势修复增强", max_position=1.15, min_position=-0.10),
         _exposure_budget_candidate(features, macd_signal, name="MACD趋势修复增强", max_position=1.35, min_position=-0.15, down_scale=0.8, smooth=2),
-        _exposure_budget_candidate(features, macd_signal, name="MACD趋势修复增强", max_position=1.35, min_position=-0.15, down_scale=0.8, smooth=1),
+        macd_budget_smooth1,
         _exposure_budget_candidate(features, macd_signal, name="MACD趋势修复增强", max_position=1.35, min_position=-0.15, up_add=0.10, down_scale=0.6, smooth=1),
-        _exposure_budget_candidate(features, rsrs_signal, name="RSRS风险对冲增强", max_position=1.03, min_position=-0.08),
+        rsrs_budget,
         _exposure_budget_candidate(features, dual_hedge_signal, name="双动量风险对冲增强", max_position=1.08, min_position=-0.08),
+        _active_excess_protection_candidate(
+            features,
+            macd_budget_smooth1,
+            name="主动超额保护",
+            anchor_position=1.15,
+            ytd_loss_limit=0.035,
+            rolling_loss_limit=0.012,
+            min_hold_days=40,
+            max_position=1.35,
+            min_position=-0.10,
+        ),
+        _active_excess_protection_candidate(
+            features,
+            rsrs_budget,
+            name="主动超额保护",
+            anchor_position=1.03,
+            ytd_loss_limit=0.035,
+            rolling_loss_limit=0.012,
+            min_hold_days=20,
+            max_position=1.15,
+            min_position=-0.10,
+        ),
+        _active_excess_protection_candidate(
+            features,
+            rsrs_budget,
+            name="主动超额保护",
+            anchor_position=0.96,
+            ytd_loss_limit=0.035,
+            rolling_loss_limit=0.020,
+            min_hold_days=40,
+            max_position=1.15,
+            min_position=-0.10,
+        ),
     ]
     static_signals.extend(_monthly_consistency_hybrid_candidates(features, groups))
     for signal in static_signals:
@@ -1147,11 +1292,11 @@ def main() -> None:
     if args.snapshot_output:
         payload = {
             "status": "ready",
-            "engine_version": "broad-index-timing/2.4-champion-locked-signed-efficacy",
+            "engine_version": "broad-index-timing/2.7-active-excess-consistency",
             "generated_at": pd.Timestamp.utcnow().isoformat(),
             "start": args.start,
             "end": args.end,
-            "policy": "champion_locked_high_excess_first_signed_factor_efficacy_then_winrate_drawdown_tiebreak; tested_floor_and_right_trend_candidates_rejected_when_excess_or_drawdown_worse",
+            "policy": "champion_locked_high_excess_first_signed_factor_efficacy_then_active_excess_protection_winrate_drawdown_tiebreak",
             "indices": summaries,
         }
         args.snapshot_output.parent.mkdir(parents=True, exist_ok=True)
@@ -1172,4 +1317,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
 
