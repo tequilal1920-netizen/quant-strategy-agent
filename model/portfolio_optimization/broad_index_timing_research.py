@@ -48,6 +48,7 @@ INDEXES = [
     ("中证红利", "000922.CSI"),
     ("中证500", "000905.SH"),
     ("沪深300", "000300.SH"),
+    ("科创50", "000688.SH"),
     ("中证1000", "000852.SH"),
     ("中证2000", "932000.CSI"),
 ]
@@ -1372,7 +1373,7 @@ def main() -> None:
     if args.snapshot_output:
         payload = {
             "status": "ready",
-            "engine_version": "broad-index-timing/2.9-annual-strength-follow",
+            "engine_version": "broad-index-timing/2.10-add-star50",
             "generated_at": pd.Timestamp.utcnow().isoformat(),
             "start": args.start,
             "end": args.end,
