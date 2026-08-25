@@ -301,15 +301,29 @@ def build() -> dict[str, Any]:
     style = _read_json(SOURCE_DATA_DIR / "style_six_dimension_monthly.json")
     figures: dict[str, Any] = {}
     industry = rotation["industry"]["frequencies"]["monthly"]
+    dashboard_path = SOURCE_DATA_DIR / "industry_research_dashboard.json"
+    dashboard_rotation: dict[str, Any] = {}
+    if dashboard_path.exists():
+        try:
+            dashboard_rotation = (_read_json(dashboard_path).get("rotation") or {})
+        except Exception:
+            dashboard_rotation = {}
     industry_research = industry.get("research_result", {}) if isinstance(industry.get("research_result"), dict) else {}
-    if industry_research.get("nav"):
+    if dashboard_rotation.get("nav"):
+        industry_calendar = dashboard_rotation.get("calendar_year", [])
+        industry_nav = dashboard_rotation.get("nav", [])
+        industry_metrics = dashboard_rotation.get("metrics", {})
+        industry_candidate = dashboard_rotation.get("model_id") or industry.get("research_selected_candidate")
+    elif industry_research.get("nav"):
         industry_calendar = industry_research.get("calendar_year", [])
         industry_nav = industry_research.get("nav", [])
         industry_metrics = industry_research.get("metrics", {})
+        industry_candidate = industry_research.get("candidate") or industry.get("research_selected_candidate")
     else:
         industry_calendar = industry.get("return_loss_diagnostics", {}).get("calendar_year", [])
         industry_nav = industry.get("nav", [])
         industry_metrics = industry.get("metrics", {})
+        industry_candidate = industry.get("selected_candidate")
     figures["industry_monthly"] = _build_one(
         "industry_monthly",
         industry_calendar,
@@ -318,7 +332,7 @@ def build() -> dict[str, Any]:
     )
     figures["industry_monthly"]["selected_candidate"] = industry.get("selected_candidate")
     figures["industry_monthly"]["research_selected_candidate"] = industry.get("research_selected_candidate")
-    figures["industry_monthly"]["published_candidate"] = industry_research.get("candidate") or industry.get("selected_candidate")
+    figures["industry_monthly"]["published_candidate"] = industry_candidate
     for key in ["style12", "size3", "style4"]:
         strategy = style["strategies"][key]
         row = _build_one(key, strategy.get("calendar_year", []), strategy.get("nav", []), strategy.get("metrics", {}))

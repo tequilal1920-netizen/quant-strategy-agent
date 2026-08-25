@@ -9,6 +9,8 @@
 - `build_snapshot.py`：正式轮动快照入口。
 - `style_box_rotation.py`：季度股票级 3×4 风格箱与风格 Top3 轮动入口。
 - `build_tracking.py`：正式跟踪快照入口。
+- `build_industry_research_dashboard.py`：行业景气度与行业轮动研究展示入口，当前发布 C45 研究候选。
+- `build_rotation_final_figures.py`：根据研究展示快照生成年度收益表和日度净值图。
 - `test_contract.py`：生产快照合同验证。
 
 正式输出写入：
@@ -22,10 +24,12 @@
 python model\industry_rotation\build_snapshot.py
 python model\industry_rotation\style_box_rotation.py
 python model\industry_rotation\build_tracking.py
+python model\industry_rotation\build_industry_research_dashboard.py
+python model\industry_rotation\build_rotation_final_figures.py
 python model\industry_rotation\test_contract.py
 ```
 
-行业侧固定为31个申万一级行业、每行业8个互异专属业务字段。月度和周度候选在预声明的Top10/Top5、等权/风险权重、持仓缓冲和现金预算结构内比较，并以同频31行业等权为基准。风格侧在每个季度末将全部合格A股唯一标记为“大/中/小盘 × 成长/均衡/价值/红利”12个互斥且穷尽的风格箱，下一交易日执行Top3等权只做多，并以12风格箱等权为基准。训练、验证、测试严格分离，测试集只报告或否决唯一挑战者，不参与候选排序。
+行业侧固定为31个申万一级行业、每行业8个互异专属业务字段。旧生产快照仍保留 C6 冠军；研究展示快照当前发布 C45，采用62%C39景气盈利主锚、30%技术趋势有效簇、8%基本面确认有效簇和5%拥挤风险扣分。月度和周度候选在预声明的Top10/Top5、等权/风险权重、持仓缓冲和现金预算结构内比较，并以同频31行业等权为基准。风格侧在每个季度末将全部合格A股唯一标记为“大/中/小盘 × 成长/均衡/价值/红利”12个互斥且穷尽的风格箱，下一交易日执行Top3等权只做多，并以12风格箱等权为基准。训练、验证、测试严格分离，测试集只报告或否决唯一挑战者，不参与候选排序。
 ## 回测复现与审计口径
 
 - 设置 `INDUSTRY_ROTATION_SOURCE_XLSX` 指向含 `weekly`、`monthly`、`quarterly` 工作表的行业景气历史缓存，再运行隔离构建。

@@ -1,6 +1,6 @@
 ---
 name: industry-rotation
-description: "查询和审计31个申万一级行业的高频景气、53因子六维行业轮动、月周配置、季度3×4风格箱、月频六维风格轮动及分样本回测治理；涉及行业排名、单行业驱动、六维分解、风格标签或行业配置时使用。"
+description: "查询和审计31个申万一级行业的高频景气、六维多因子行业轮动、月周配置、季度3×4风格箱、月频六维风格轮动及分样本回测治理；涉及行业排名、单行业驱动、六维分解、风格标签或行业配置时使用。"
 ---
 # 行业景气度
 
@@ -29,31 +29,30 @@ python ai-models/industry-rotation/scripts/query.py backtest
 ## 三套独立口径
 
 1. 高频景气：31个申万一级行业各自的专属业务指标，用于最新景气排名和驱动归因。
-2. 六维轮动：53个原子因子组成景气度、基本面、技术面、估值、资金面和拥挤度。前五维形成收益信号，拥挤度只作为非负风险扣分，不提供低拥挤收益奖励。
+2. 六维轮动：候选原子因子组成景气度、基本面、技术面、估值、资金面和拥挤度。当前研究展示先在训练和验证区间检验二级因子，再筛出24个高效因子；估值未通过门槛不进主打分，资金面保留在解释层，拥挤度只作为风险扣分。
 3. 季度风格箱：股票级大盘、中盘、小盘与成长、均衡、价值、红利形成12个互斥且穷尽的风格箱。
 
 三套口径不得互相冒充。六维模型先在维度内按独立信息簇合成，避免同类窗口重复放大，再按候选预设权重融合。资金面保留10项：总流量强度3项、大单结构残差3项、超大单结构残差2项、流入扩散度1项、流入持续度1项；大单和超大单必须逐日正交，不能与已包含它们的总流量重复加权。
 
 ## 当前治理身份
 
-- `C6_direct_month_smooth`是现有生产冠军。月周常规排名和生产绩效继续读取该冠军，除非正式快照中的 `selected_candidate` 发生经治理的变更。
-- C6的248项方向参数冻结自R32冠军版本。21日远期IC使用日频成熟标签进行诊断，不再用约24个月频样本重估生产方向。
-- 月频训练与验证当前选择 `C27_monthly_post_test_diagnostic_six_dimension_defensive_top10_buffered`，标签为质量趋势正交增强；周频选择 `C29_weekly_post_test_diagnostic_six_dimension_equal_top10_buffered`，标签为冠军锚定在线增强。
-- C27与C29均是在2022年后测试区间已被观察后形成的架构，状态固定为 `post-test diagnostic`。它们只能用于研究和未来样本跟踪，报告期未通过冠军挑战门，不能替换C6。
-- 候选排序和选模只使用训练集与验证集。测试集只报告或否决晋级，不参与调参、候选排序或事后筛选。不得宣称测试集表现提升，不得承诺夏普阈值。
+- `C6_direct_month_smooth`是旧 `rotation_snapshot.json` 的生产冠军。月周常规查询和生产绩效继续保留该冠军，除非正式快照中的 `selected_candidate` 发生经治理的变更。
+- 当前网页研究展示和最终两图读取 `industry_research_dashboard.json`，发布候选为 `C45_monthly_verified_quality_trend_crowding_top7_risk_weighted_buffered`。
+- C45 的主打分为 `62%C39景气盈利主锚 + 30%技术趋势有效簇 + 8%基本面确认有效簇 - 5%拥挤风险扣分`。月末信号，下一交易日执行，Top7风险加权并保留3名缓冲。
+- 候选排序和选模只使用训练集与验证集。2022年后的测试集只报告或否决晋级，不参与调参、候选排序或事后筛选。不得承诺夏普阈值。
 
-回答时以快照中的 `selected_candidate`、`research_selected_candidate`、`candidate_audit` 和 `promotion_gate` 为准。必须同时说明生产冠军、研究挑战者、数据截止和测试仅报告口径。
+回答时以快照中的 `selected_candidate`、`research_selected_candidate`、`published_candidate`、`candidate_audit` 和 `promotion_gate` 为准。必须同时说明生产冠军、研究展示候选、数据截止和测试仅报告口径。
 
-## 53因子结构
+## 因子结构
 
-- 景气度5项
-- 基本面12项
-- 技术面12项
-- 估值4项
-- 资金面10项
-- 拥挤度10项
+- 景气度
+- 基本面
+- 技术面
+- 估值
+- 资金面
+- 拥挤度
 
-完整因子名称和候选权重见 `references/module-map.md`。查询返回的拥挤度是风险热度，数值越高表示扣分压力越大；`anti_crowding`仅供图形方向统一，不构成第七维。
+完整因子名称、候选权重和筛选结果以 `industry_research_dashboard.json` 的 `rotation.factor_table` 与 `rotation.efficient_factors` 为准。查询返回的拥挤度是风险热度，数值越高表示扣分压力越大；`anti_crowding`仅供图形方向统一，不构成第七维。
 
 ## PIT与标签约束
 

@@ -1,8 +1,10 @@
-"""Build final presentation figures for industry and six-dimension style rotation.
+"""Build final daily performance figures for industry and style rotation.
 
-The script reads only audited JSON snapshots and writes web-ready PNG figures to
-board/quant_strategy_agent_vnext/static/rotation_figures plus a compact manifest
-under board/quant_strategy_agent_vnext/data.
+The script reads audited JSON snapshots and writes the same web-ready PNG files
+and manifest to both the canonical old board and the vNext board.  Figures use
+the CMB visual grammar requested by the user: KaiTi/Arial, red #C00000,
+yellow #FFC000, grey #BFBFBF, no chart title, no watermark, and right-axis
+relative strength for every daily NAV figure.
 """
 
 from __future__ import annotations
@@ -30,11 +32,10 @@ def _find_project_root(start: Path) -> Path:
 
 
 PROJECT_ROOT = _find_project_root(ROOT)
-BOARD_ROOT = PROJECT_ROOT / "board" / "quant_strategy_agent_vnext"
-DATA_DIR = BOARD_ROOT / "data"
-FIGURE_DIR = BOARD_ROOT / "static" / "rotation_figures"
-MANIFEST_PATH = DATA_DIR / "rotation_final_figures.json"
-STATIC_MANIFEST_PATH = FIGURE_DIR / "manifest.json"
+OLD_BOARD_ROOT = PROJECT_ROOT / "board" / "quant_strategy_agent"
+VNEXT_BOARD_ROOT = PROJECT_ROOT / "board" / "quant_strategy_agent_vnext"
+BOARD_ROOTS = (OLD_BOARD_ROOT, VNEXT_BOARD_ROOT)
+SOURCE_DATA_DIR = VNEXT_BOARD_ROOT / "data"
 CHART_START = "2016-01-01"
 SPLITS = {
     "训练集": ("2015-01-01", "2018-12-31"),
@@ -55,6 +56,10 @@ BENCHMARK_LABELS = {
     "size3": "大中小等权",
     "style4": "四风格等权",
 }
+BRAND_RED = "#C00000"
+BENCHMARK_YELLOW = "#FFC000"
+STRATEGY_GREY = "#BFBFBF"
+AXIS_GREY = "#D9D9D9"
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -70,13 +75,14 @@ def _finite(value: Any, digits: int = 6) -> float | None:
 
 
 def _set_font() -> None:
-    candidates = ["Microsoft YaHei", "SimHei", "KaiTi", "SimSun", "Arial Unicode MS"]
+    candidates = ["KaiTi", "STKaiti", "Kaiti SC", "SimKai", "FangSong", "SimSun", "Microsoft YaHei", "Arial Unicode MS"]
     available = {font.name for font in plt.matplotlib.font_manager.fontManager.ttflist}
-    for name in candidates:
-        if name in available:
-            plt.rcParams["font.sans-serif"] = [name]
-            break
+    selected = next((name for name in candidates if name in available), "Microsoft YaHei")
+    plt.rcParams["font.family"] = "sans-serif"
+    plt.rcParams["font.sans-serif"] = [selected, "Arial"]
     plt.rcParams["axes.unicode_minus"] = False
+    plt.rcParams["figure.facecolor"] = "white"
+    plt.rcParams["savefig.facecolor"] = "white"
 
 
 def _format_percent(value: Any) -> str:
@@ -99,13 +105,9 @@ def _normalise_nav(rows: list[dict[str, Any]]) -> pd.DataFrame:
         rename["excess"] = "excess_nav"
     frame = frame.rename(columns=rename)
     for column in ["strategy_nav", "benchmark_nav", "excess_nav"]:
-        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+        if column in frame.columns:
+            frame[column] = pd.to_numeric(frame[column], errors="coerce")
     return frame.dropna(subset=["date", "strategy_nav", "benchmark_nav"])
-
-
-def _daily_returns(nav: pd.DataFrame) -> pd.Series:
-    values = nav["strategy_nav"].astype(float)
-    return values.pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan).dropna()
 
 
 def _drawdown_from_nav(nav: pd.DataFrame) -> float:
@@ -177,25 +179,25 @@ def _rows_from_calendar(calendar: list[dict[str, Any]], nav: pd.DataFrame) -> li
     return rows
 
 
-def _plot_table(rows: list[dict[str, Any]], path: Path) -> None:
+def _plot_table(rows: list[dict[str, Any]], benchmark_label: str, path: Path) -> None:
     _set_font()
-    headers = ["年度", "策略收益", "基准收益", "超额收益", "最大回撤"]
-    data = [[row["年度"], *[_format_percent(row.get(key)) for key in headers[1:]]] for row in rows]
-    height = max(4.8, 0.42 * (len(data) + 1))
-    fig, ax = plt.subplots(figsize=(8.7, height), dpi=150)
+    headers = ["年度", "策略收益", benchmark_label, "超额收益", "最大回撤"]
+    data = [[row["年度"], _format_percent(row.get("策略收益")), _format_percent(row.get("基准收益")), _format_percent(row.get("超额收益")), _format_percent(row.get("最大回撤"))] for row in rows]
+    height = max(4.8, 0.44 * (len(data) + 1))
+    fig, ax = plt.subplots(figsize=(8.7, height), dpi=180)
     ax.axis("off")
     table = ax.table(cellText=data, colLabels=headers, cellLoc="center", loc="center")
     table.auto_set_font_size(False)
     table.set_fontsize(14)
-    table.scale(1.0, 1.52)
+    table.scale(1.0, 1.50)
     for (row, _column), cell in table.get_celld().items():
         cell.set_edgecolor("#000000")
         cell.set_linewidth(0.55)
-        cell.set_facecolor("#ffffff")
+        cell.set_facecolor("#FFFFFF")
         cell.get_text().set_color("#000000")
         if row == 0:
             cell.get_text().set_weight("bold")
-    fig.tight_layout(pad=0.25)
+    fig.tight_layout(pad=0.15)
     fig.savefig(path, bbox_inches="tight", facecolor="white")
     plt.close(fig)
 
@@ -220,37 +222,30 @@ def _plot_nav(nav: pd.DataFrame, strategy_label: str, benchmark_label: str, path
     local["相对强度"] = local["策略净值"] / local["基准净值"]
     left_limit, right_limit = _axis_limits(pd.concat([local["策略净值"], local["基准净值"]]), local["相对强度"])
 
-    fig, ax = plt.subplots(figsize=(8.8, 5.0), dpi=150)
+    fig, ax = plt.subplots(figsize=(7.2, 5.2), dpi=180)
     ax2 = ax.twinx()
-    ax.plot(local["date"], local["基准净值"], color="#ffc000", lw=2.6, label=benchmark_label)
-    ax.plot(local["date"], local["策略净值"], color="#bfbfbf", lw=2.6, label=strategy_label)
-    ax2.plot(local["date"], local["相对强度"], color="#c00000", lw=2.6, label="相对强度（右轴）")
+    ax.plot(local["date"], local["基准净值"], color=BENCHMARK_YELLOW, lw=2.6, label=benchmark_label)
+    ax.plot(local["date"], local["策略净值"], color=STRATEGY_GREY, lw=2.6, label=strategy_label)
+    ax2.plot(local["date"], local["相对强度"], color=BRAND_RED, lw=2.6, label="相对强度（右轴）")
     ax.set_ylim(*left_limit)
     ax2.set_ylim(*right_limit)
     ax.grid(False)
     ax2.grid(False)
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax2.set_ylabel("")
     for spine in ["top", "right"]:
         ax.spines[spine].set_visible(False)
     ax2.spines["top"].set_visible(False)
     ax2.spines["left"].set_visible(False)
-    ax.spines["bottom"].set_color("#d0d0d0")
-    ax.spines["left"].set_color("#d0d0d0")
-    ax2.spines["right"].set_color("#d0d0d0")
-    ax.tick_params(axis="x", labelrotation=90, colors="#000000", labelsize=13)
-    ax.tick_params(axis="y", colors="#000000", labelsize=13)
-    ax2.tick_params(axis="y", colors="#000000", labelsize=13)
+    ax.spines["bottom"].set_color(AXIS_GREY)
+    ax.spines["left"].set_color(AXIS_GREY)
+    ax2.spines["right"].set_color(AXIS_GREY)
+    ax.tick_params(axis="x", labelrotation=90, colors="#000000", labelsize=13, length=0)
+    ax.tick_params(axis="y", colors="#000000", labelsize=13, length=0)
+    ax2.tick_params(axis="y", colors="#000000", labelsize=13, length=0)
     ax.xaxis.set_major_locator(mdates.YearLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
-
-    start = local["date"].min()
-    end = local["date"].max()
-    label_y = 0.985
-    ax.text(start, label_y, "训练集", transform=ax.get_xaxis_transform(), color="#000000", fontsize=10, va="top", ha="left")
-    for label, day in [("验证集", "2019-01-01"), ("测试集", "2022-01-01")]:
-        boundary = pd.Timestamp(day)
-        if start < boundary < end:
-            ax.axvline(boundary, color="#808080", lw=0.8, ls="--", alpha=0.72)
-            ax.text(boundary, label_y, label, transform=ax.get_xaxis_transform(), color="#000000", fontsize=10, va="top", ha="left")
 
     lines, labels = ax.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
@@ -258,74 +253,108 @@ def _plot_nav(nav: pd.DataFrame, strategy_label: str, benchmark_label: str, path
         lines + lines2,
         labels + labels2,
         loc="upper center",
-        bbox_to_anchor=(0.5, -0.21),
+        bbox_to_anchor=(0.5, -0.18),
         ncol=3,
         frameon=False,
         fontsize=13,
+        handlelength=2.8,
+        columnspacing=1.8,
     )
-    fig.tight_layout(rect=[0.02, 0.05, 0.98, 0.98])
+    fig.tight_layout(rect=[0.02, 0.06, 0.98, 0.99])
     fig.savefig(path, bbox_inches="tight", facecolor="white")
     plt.close(fig)
 
 
-def _build_one(key: str, calendar: list[dict[str, Any]], nav_rows: list[dict[str, Any]]) -> dict[str, Any]:
+def _write_figure_set(key: str, rows: list[dict[str, Any]], nav: pd.DataFrame) -> None:
+    for board_root in BOARD_ROOTS:
+        figure_dir = board_root / "static" / "rotation_figures"
+        figure_dir.mkdir(parents=True, exist_ok=True)
+        _plot_table(rows, BENCHMARK_LABELS[key], figure_dir / f"{key}_annual_table.png")
+        _plot_nav(nav, STRATEGY_LABELS[key], BENCHMARK_LABELS[key], figure_dir / f"{key}_daily_nav.png")
+
+
+def _build_one(key: str, calendar: list[dict[str, Any]], nav_rows: list[dict[str, Any]], metrics: dict[str, Any] | None = None) -> dict[str, Any]:
     nav = _normalise_nav(nav_rows)
     rows = _rows_from_calendar(calendar, nav)
-    table_path = FIGURE_DIR / f"{key}_annual_table.png"
-    nav_path = FIGURE_DIR / f"{key}_daily_nav.png"
-    _plot_table(rows, table_path)
-    _plot_nav(nav, STRATEGY_LABELS[key], BENCHMARK_LABELS[key], nav_path)
+    _write_figure_set(key, rows, nav)
     return {
         "label": STRATEGY_LABELS[key],
-        "annual_table": f"/static/rotation_figures/{table_path.name}",
-        "daily_nav": f"/static/rotation_figures/{nav_path.name}",
-
+        "benchmark_label": BENCHMARK_LABELS[key],
+        "annual_table": f"/static/rotation_figures/{key}_annual_table.png",
+        "daily_nav": f"/static/rotation_figures/{key}_daily_nav.png",
         "calendar_year": rows,
+        "metrics": metrics or {},
+        "chart_frequency": "daily",
+        "relative_strength_axis": "right",
+        "style_contract": {
+            "chinese_font": "KaiTi",
+            "english_font": "Arial",
+            "red": BRAND_RED,
+            "yellow": BENCHMARK_YELLOW,
+            "grey": STRATEGY_GREY,
+        },
     }
 
 
 def build() -> dict[str, Any]:
-    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
-    rotation = _read_json(DATA_DIR / "rotation_snapshot.json")
-    style = _read_json(DATA_DIR / "style_six_dimension_monthly.json")
+    rotation = _read_json(SOURCE_DATA_DIR / "rotation_snapshot.json")
+    style = _read_json(SOURCE_DATA_DIR / "style_six_dimension_monthly.json")
     figures: dict[str, Any] = {}
     industry = rotation["industry"]["frequencies"]["monthly"]
+    dashboard_path = SOURCE_DATA_DIR / "industry_research_dashboard.json"
+    dashboard_rotation: dict[str, Any] = {}
+    if dashboard_path.exists():
+        try:
+            dashboard_rotation = (_read_json(dashboard_path).get("rotation") or {})
+        except Exception:
+            dashboard_rotation = {}
     industry_research = industry.get("research_result", {}) if isinstance(industry.get("research_result"), dict) else {}
-    if industry_research.get("nav"):
+    if dashboard_rotation.get("nav"):
+        industry_calendar = dashboard_rotation.get("calendar_year", [])
+        industry_nav = dashboard_rotation.get("nav", [])
+        industry_metrics = dashboard_rotation.get("metrics", {})
+        industry_candidate = dashboard_rotation.get("model_id") or industry.get("research_selected_candidate")
+    elif industry_research.get("nav"):
         industry_calendar = industry_research.get("calendar_year", [])
         industry_nav = industry_research.get("nav", [])
         industry_metrics = industry_research.get("metrics", {})
+        industry_candidate = industry_research.get("candidate") or industry.get("research_selected_candidate")
     else:
         industry_calendar = industry.get("return_loss_diagnostics", {}).get("calendar_year", [])
         industry_nav = industry.get("nav", [])
         industry_metrics = industry.get("metrics", {})
-    industry_row = _build_one(
+        industry_candidate = industry.get("selected_candidate")
+    figures["industry_monthly"] = _build_one(
         "industry_monthly",
         industry_calendar,
         industry_nav,
+        industry_metrics,
     )
-    industry_row["selected_candidate"] = industry.get("selected_candidate_label") or industry.get("selected_candidate")
-    industry_row["research_selected_candidate"] = industry.get("research_selected_candidate_label") or industry.get("research_selected_candidate")
-    industry_row["published_candidate"] = industry_research.get("candidate_label") or industry_research.get("candidate") or industry_row["selected_candidate"]
-    industry_row["metrics"] = industry_metrics
-    figures["industry_monthly"] = industry_row
+    figures["industry_monthly"]["selected_candidate"] = industry.get("selected_candidate")
+    figures["industry_monthly"]["research_selected_candidate"] = industry.get("research_selected_candidate")
+    figures["industry_monthly"]["published_candidate"] = industry_candidate
     for key in ["style12", "size3", "style4"]:
         strategy = style["strategies"][key]
-        row = _build_one(key, strategy.get("calendar_year", []), strategy.get("nav", []))
+        row = _build_one(key, strategy.get("calendar_year", []), strategy.get("nav", []), strategy.get("metrics", {}))
         row["selected_candidate"] = strategy.get("selected_candidate")
         row["research_selected_candidate"] = strategy.get("research_selected_candidate")
-        row["metrics"] = strategy.get("metrics", {})
+        row["report_veto"] = strategy.get("report_veto")
         figures[key] = row
     payload = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-
+        "source_data_dir": str(SOURCE_DATA_DIR),
         "splits": SPLITS,
         "figures": figures,
     }
     serialised = json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False)
-    MANIFEST_PATH.write_text(serialised, encoding="utf-8")
-    STATIC_MANIFEST_PATH.write_text(serialised, encoding="utf-8")
+    for board_root in BOARD_ROOTS:
+        data_path = board_root / "data" / "rotation_final_figures.json"
+        static_manifest = board_root / "static" / "rotation_figures" / "manifest.json"
+        data_path.parent.mkdir(parents=True, exist_ok=True)
+        static_manifest.parent.mkdir(parents=True, exist_ok=True)
+        data_path.write_text(serialised, encoding="utf-8")
+        static_manifest.write_text(serialised, encoding="utf-8")
     return payload
 
 

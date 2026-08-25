@@ -273,8 +273,27 @@ def _industry_dimension_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _industry_research_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "排名": row.get("rank"),
+        "行业": row.get("name") or row.get("industry"),
+        "代码": row.get("code"),
+        "综合得分": row.get("score"),
+        "入选": row.get("selected"),
+        "权重": row.get("weight"),
+        "信号日": row.get("signal_date"),
+        "得分日期": row.get("score_date"),
+    }
+
+
 def _industry_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
     payload, path = _snapshot("rotation_snapshot.json")
+    research_payload = None
+    research_path = None
+    try:
+        research_payload, research_path = _snapshot("industry_research_dashboard.json")
+    except QueryError:
+        research_payload, research_path = None, None
     limit = _limit(params)
     dimension_operations = {"dimensions", "six_dimension", "六维"}
     frequency_raw = str(
@@ -393,6 +412,67 @@ def _industry_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
             or {}
         )
         model = block.get("six_dimension") or {}
+        research_rotation = (research_payload or {}).get("rotation") or {}
+        if frequency == "monthly" and research_rotation.get("ranking"):
+            rows = sorted(
+                (row for row in (research_rotation.get("ranking") or []) if isinstance(row, dict)),
+                key=lambda row: (
+                    row.get("rank") is None,
+                    row.get("rank") if row.get("rank") is not None else 10_000,
+                ),
+            )
+            industry = str(_param(params, "industry", "行业", default="")).strip()
+            if industry:
+                row = next(
+                    (
+                        item
+                        for item in rows
+                        if item.get("name") == industry
+                        or item.get("industry") == industry
+                        or item.get("code") == industry
+                    ),
+                    None,
+                )
+                if row is None:
+                    raise QueryError(f"C45研究排名未找到行业：{industry}")
+                ranking = _industry_research_row(row)
+            else:
+                ranking = [_industry_research_row(row) for row in rows[:limit]]
+            result = {
+                "频率": frequency,
+                "数据截止": research_rotation.get("current_score_date") or (research_payload or {}).get("data_as_of"),
+                "模型版本": research_rotation.get("model_id"),
+                "生产冠军": block.get("selected_candidate"),
+                "研究展示候选": research_rotation.get("model_id"),
+                "研究角色": "训练验证筛选后的网页研究展示候选；测试集只报告",
+                "打分逻辑": research_rotation.get("score_model"),
+                "候选因子数": len(research_rotation.get("factor_table") or []),
+                "高效因子数": len(research_rotation.get("efficient_factors") or []),
+                "高效因子": [
+                    {
+                        "一级分类": row.get("dimension_label"),
+                        "因子": row.get("factor_label"),
+                        "筛选分": row.get("selection_score"),
+                        "角色": row.get("selection_role"),
+                    }
+                    for row in (research_rotation.get("efficient_factors") or [])[:limit]
+                ],
+                "排名" if not industry else "行业分解": ranking,
+                "绩效": {
+                    split: _compact_metrics(metrics)
+                    for split, metrics in (research_rotation.get("metrics") or {}).items()
+                },
+                "时点治理": {
+                    "选择样本": "训练集与验证集",
+                    "测试样本": "2022年后测试区间只报告，不参与候选排序或调参",
+                    "执行规则": "月末信号，下一交易日执行，成本后回测",
+                },
+            }
+            response_payload = {
+                "as_of": result["数据截止"],
+                "generated_at": (research_payload or {}).get("generated_at"),
+            }
+            return _response("industry-rotation", operation, response_payload, research_path or path, result)
         rows = model.get("research_ranking") or block.get("research_ranking") or []
         if not rows:
             raise QueryError(
@@ -493,6 +573,18 @@ def _industry_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
             }
             for name, block in blocks.items()
         }
+        research_rotation = (research_payload or {}).get("rotation") or {}
+        if research_rotation:
+            result["月频研究展示C45"] = {
+                "发布候选": research_rotation.get("model_id"),
+                "打分逻辑": research_rotation.get("score_model"),
+                "高效因子数": len(research_rotation.get("efficient_factors") or []),
+                "绩效": {
+                    split: _compact_metrics(metrics)
+                    for split, metrics in (research_rotation.get("metrics") or {}).items()
+                },
+                "测试使用": "只报告，不参与候选排序、选模或调参",
+            }
     else:
         raise QueryError(
             "行业景气度动作仅支持 ranking、drivers、dimensions、style、backtest"
