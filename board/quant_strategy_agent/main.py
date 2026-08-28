@@ -34,12 +34,12 @@ import optimizer_backend
 import technical_factor_backend
 
 
-APP_VERSION = "2026.08.28-all-modules-final-verification-v4"
+APP_VERSION = "2026.08.29-factor-lab-full-framework-v1"
 legacy.APP_VERSION = APP_VERSION
 rotation.APP_VERSION = APP_VERSION
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-factor_lab_backend.API_VERSION = "factor-lab-api/2.9"
+factor_lab_backend.API_VERSION = "factor-lab-api/3.0-full-framework"
 factor_lab_backend.ENGINE_PATH = (
     PROJECT_ROOT / "model" / "factor_laboratory" / "worker.py"
 )
@@ -47,7 +47,7 @@ for key, label in {
     "lstm": "LSTM",
     "gru": "GRU",
     "rl_transformer": "Transformer+LLM",
-    "strategy": "等权 / RankIC / OLS / Lasso / Ridge / MLP 打分回测",
+    "strategy": "等权 / RankIC / OLS / Lasso / Ridge / LSTM 打分回测",
     "joint_test": "联合检验",
 }.items():
     if key in factor_lab_backend.MODEL_PRESETS:

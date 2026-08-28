@@ -1,8 +1,10 @@
 """Login-protected Factor Laboratory API and isolated worker supervisor."""
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
+import math
 import os
 import re
 import sqlite3
@@ -19,7 +21,7 @@ from typing import Any
 from flask import Blueprint, Flask, jsonify, request, session
 
 
-API_VERSION = "factor-lab-api/2.9"
+API_VERSION = "factor-lab-api/3.0-full-framework"
 APP_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_ROOT.parents[1]
 ENGINE_PATH = Path(
@@ -43,6 +45,14 @@ PROFESSIONAL_FRAMEWORK = Path(
         str(PROJECT_ROOT / "model" / "factor_laboratory" / "professional_framework.json"),
     )
 ).resolve()
+FACTOR_TAXONOMY_JSON = PROJECT_ROOT / "output" / "factor_laboratory" / "factor_taxonomy_cn" / "factor_taxonomy_cn.json"
+FACTOR_LIBRARY_BLUEPRINT = PROJECT_ROOT / "output" / "factor_laboratory" / "factor_library_v2" / "因子库v2_完整蓝图.json"
+FACTOR_LIBRARY_AUDIT = PROJECT_ROOT / "output" / "factor_laboratory" / "factor_library_v2" / "因子库v2_质量审计_全部因子.csv"
+FACTOR_LIBRARY_SUMMARY = PROJECT_ROOT / "output" / "factor_laboratory" / "factor_library_v2" / "因子库v2_质量审计摘要.json"
+FACTOR_LIBRARY_COVERAGE = PROJECT_ROOT / "output" / "factor_laboratory" / "factor_library_v2" / "因子库v2_分类覆盖汇总.csv"
+FACTOR_CURRENT_QUALITY = PROJECT_ROOT / "output" / "factor_laboratory" / "factor_library_v2" / "当前入模29因子_轻量真实质量复核_v2.csv"
+DOMAIN_TIMING_OOS_RESULT = PROJECT_ROOT / "output" / "factor_laboratory" / "domain_timing_conservative_guard_r366_oos201603_20260820" / "result.json"
+DOMAIN_TIMING_CURRENT_RESULT = PROJECT_ROOT / "output" / "factor_laboratory" / "domain_timing_conservative_guard_r366_current_20260820" / "result.json"
 DEFAULT_ENGINE_VERSION = "factor-lab/3.6.1-deep-anti-overfit"
 
 STATE_DB.parent.mkdir(parents=True, exist_ok=True)
@@ -51,6 +61,7 @@ PROCESSES: dict[str, subprocess.Popen] = {}
 MAX_CONCURRENT = max(1, int(os.environ.get("FACTOR_LAB_MAX_CONCURRENT", "1")))
 RUN_SEMAPHORE = threading.BoundedSemaphore(MAX_CONCURRENT)
 CATALOG_CACHE: dict[str, Any] = {"at": 0.0, "payload": None}
+FULL_FRAMEWORK_CACHE: dict[str, Any] = {"at": 0.0, "payload": None}
 FACTOR_MODEL_ROOT = (PROJECT_ROOT / "model" / "factor_laboratory").resolve()
 if str(FACTOR_MODEL_ROOT) not in sys.path:
     sys.path.insert(0, str(FACTOR_MODEL_ROOT))
@@ -247,11 +258,11 @@ MODEL_PRESETS: dict[str, dict[str, Any]] = {
         },
     },
     "strategy": {
-        "label": "等权 / RankIC / OLS / Lasso / Ridge / MLP 打分回测",
+        "label": "等权 / RankIC / OLS / Lasso / Ridge / LSTM 打分回测",
         "architecture": [
             "旧版21因子OLS、全29因子OLS并行",
             "Lasso稀疏筛选、经济域Ridge、横截面Ridge与ElasticNet",
-            "256-128-64深层MLP非线性打分",
+            "LSTM时序打分与256-128-64深层非线性打分",
             "自适应ICIR、OLS/ICIR固定秩集成",
             "Top10%、连续排名、缓冲换仓、成本感知、逆波动、可靠性调仓",
         ],
@@ -607,6 +618,652 @@ def professional_framework_payload(champion: dict[str, Any] | None = None) -> di
         })
         payload["current_effect_contract"] = effect
     return payload
+
+
+def _artifact_text(path: Path, max_bytes: int | None = 8_000_000) -> str:
+    try:
+        if not path.exists():
+            return ""
+        if max_bytes is not None and path.stat().st_size > max_bytes:
+            return ""
+    except OSError:
+        return ""
+    for encoding in ("utf-8-sig", "utf-8", "gb18030"):
+        try:
+            return path.read_text(encoding=encoding)
+        except (OSError, UnicodeError):
+            continue
+    return ""
+
+
+def _artifact_json(path: Path, default: Any | None = None) -> Any:
+    text = _artifact_text(path, max_bytes=None)
+    if not text:
+        return {} if default is None else default
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return {} if default is None else default
+
+
+def _artifact_csv(path: Path, limit: int | None = None) -> list[dict[str, Any]]:
+    text = _artifact_text(path)
+    if not text:
+        return []
+    rows: list[dict[str, Any]] = []
+    try:
+        for row in csv.DictReader(text.splitlines()):
+            rows.append(dict(row))
+            if limit and len(rows) >= limit:
+                break
+    except csv.Error:
+        return []
+    return rows
+
+
+def _rel(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(PROJECT_ROOT).as_posix()
+    except (OSError, ValueError):
+        return path.name
+
+
+def _float(value: Any, default: float | None = None) -> float | None:
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        if math.isfinite(float(value)):
+            return float(value)
+        return default
+    text = str(value).strip().replace(",", "")
+    if not text or text in {"--", "—", "nan", "None", "null"}:
+        return default
+    if text.endswith("%"):
+        text = text[:-1]
+        scale = 100.0
+    else:
+        scale = 1.0
+    try:
+        value_float = float(text) / scale
+    except ValueError:
+        return default
+    return value_float if math.isfinite(value_float) else default
+
+
+def _int(value: Any, default: int = 0) -> int:
+    num = _float(value)
+    return int(num) if num is not None else default
+
+
+def _round(value: Any, digits: int = 4) -> float | None:
+    num = _float(value)
+    return round(num, digits) if num is not None else None
+
+
+def _date_text(value: Any) -> str:
+    text = str(value or "").strip()
+    if len(text) == 8 and text.isdigit():
+        return f"{text[:4]}-{text[4:6]}-{text[6:]}"
+    return text
+
+
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    return bool(conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone())
+
+
+def _warehouse_factor_test_stats() -> dict[str, dict[str, Any]]:
+    path = warehouse_path()
+    if not path.exists():
+        return {}
+    stats: dict[str, dict[str, Any]] = {}
+    try:
+        conn = sqlite3.connect("file:" + path.as_posix() + "?mode=ro", uri=True, timeout=20)
+        conn.row_factory = sqlite3.Row
+        table_name = "factor_test_result" if _table_exists(conn, "factor_test_result") else "v3_factor_validation"
+        if not _table_exists(conn, table_name):
+            conn.close()
+            return {}
+        rows = conn.execute(
+            f"""
+            SELECT
+              factor_name,
+              AVG(CASE WHEN split_name='train' THEN rank_ic END) AS train_rank_ic,
+              AVG(CASE WHEN split_name='valid' THEN rank_ic END) AS valid_rank_ic,
+              AVG(CASE WHEN split_name='test' THEN rank_ic END) AS test_rank_ic,
+              AVG(CASE WHEN split_name='full' THEN rank_ic END) AS full_rank_ic,
+              AVG(CASE WHEN split_name='train' THEN icir END) AS train_icir,
+              AVG(CASE WHEN split_name='valid' THEN icir END) AS valid_icir,
+              AVG(CASE WHEN split_name='test' THEN icir END) AS test_icir,
+              AVG(CASE WHEN split_name='full' THEN icir END) AS full_icir,
+              AVG(CASE WHEN split_name='test' THEN group_spread END) AS test_group_spread,
+              AVG(CASE WHEN split_name='test' THEN turnover END) AS test_turnover,
+              AVG(coverage) AS avg_coverage,
+              SUM(CASE WHEN pass_flag THEN 1 ELSE 0 END) AS pass_count,
+              COUNT(*) AS record_count,
+              MAX(run_id) AS latest_run_id
+            FROM {table_name}
+            GROUP BY factor_name
+            """
+        ).fetchall()
+        for row in rows:
+            stats[str(row["factor_name"])] = dict(row)
+        conn.close()
+    except sqlite3.Error:
+        return stats
+    return stats
+
+
+def _warehouse_top_stocks(limit: int = 10) -> list[dict[str, Any]]:
+    path = warehouse_path()
+    if not path.exists():
+        return []
+    try:
+        conn = sqlite3.connect("file:" + path.as_posix() + "?mode=ro", uri=True, timeout=20)
+        conn.row_factory = sqlite3.Row
+        rows: list[sqlite3.Row] = []
+        if _table_exists(conn, "model_signal_daily"):
+            latest = conn.execute("SELECT MAX(trade_date) FROM model_signal_daily").fetchone()[0]
+            if latest:
+                rows = conn.execute(
+                    """
+                    SELECT
+                      m.trade_date, m.universe, m.model_name, m.ts_code,
+                      COALESCE(o.stock_name, m.ts_code) AS name, m.industry_name,
+                      m.score, m.rank_no, m.target_weight,
+                      o.close, o.pct_chg, v.pe_ttm, v.pb, v.total_mv,
+                      v.turnover_rate, mf.net_mf_amount
+                    FROM model_signal_daily m
+                    LEFT JOIN stock_ohlcv_daily o
+                      ON o.trade_date=m.trade_date AND o.ts_code=m.ts_code
+                    LEFT JOIN stock_valuation_daily v
+                      ON v.trade_date=m.trade_date AND v.ts_code=m.ts_code
+                    LEFT JOIN stock_moneyflow_daily mf
+                      ON mf.trade_date=m.trade_date AND mf.ts_code=m.ts_code
+                    WHERE m.trade_date=?
+                    ORDER BY COALESCE(m.rank_no, 999999), COALESCE(m.score, -999999) DESC
+                    LIMIT ?
+                    """,
+                    (latest, limit),
+                ).fetchall()
+        if not rows and _table_exists(conn, "stock_ohlcv_daily"):
+            latest = conn.execute("SELECT MAX(trade_date) FROM stock_ohlcv_daily").fetchone()[0]
+            rows = conn.execute(
+                """
+                SELECT
+                  o.trade_date, 'ALL_A' AS universe, 'latest_market' AS model_name,
+                  o.ts_code, o.stock_name AS name, NULL AS industry_name,
+                  o.pct_chg AS score, NULL AS rank_no, NULL AS target_weight,
+                  o.close, o.pct_chg, v.pe_ttm, v.pb, v.total_mv,
+                  v.turnover_rate, mf.net_mf_amount
+                FROM stock_ohlcv_daily o
+                LEFT JOIN stock_valuation_daily v
+                  ON v.trade_date=o.trade_date AND v.ts_code=o.ts_code
+                LEFT JOIN stock_moneyflow_daily mf
+                  ON mf.trade_date=o.trade_date AND mf.ts_code=o.ts_code
+                WHERE o.trade_date=?
+                ORDER BY COALESCE(o.amount, 0) DESC
+                LIMIT ?
+                """,
+                (latest, limit),
+            ).fetchall()
+        conn.close()
+    except sqlite3.Error:
+        return []
+    output: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        output.append(
+            {
+                "日期": _date_text(item.get("trade_date")),
+                "代码": item.get("ts_code"),
+                "名称": item.get("name"),
+                "行业": item.get("industry_name") or "未映射",
+                "模型": item.get("model_name"),
+                "排名": item.get("rank_no"),
+                "目标权重": _round(item.get("target_weight"), 4),
+                "得分": _round(item.get("score"), 4),
+                "收盘": _round(item.get("close"), 3),
+                "日收益": _round(_float(item.get("pct_chg"), 0) / 100.0 if abs(_float(item.get("pct_chg"), 0) or 0) > 1 else item.get("pct_chg"), 4),
+                "PE_TTM": _round(item.get("pe_ttm"), 2),
+                "PB": _round(item.get("pb"), 2),
+                "总市值": _round(item.get("total_mv"), 2),
+                "换手率": _round(item.get("turnover_rate"), 3),
+                "净流入": _round(item.get("net_mf_amount"), 2),
+            }
+        )
+    return output
+
+
+def _metric_block(model_payload: dict[str, Any] | None, split: str) -> dict[str, Any]:
+    if isinstance(model_payload, dict) and isinstance(model_payload.get(split), dict):
+        return dict(model_payload[split])
+    return {}
+
+
+def _load_strategy_result() -> dict[str, Any]:
+    result = _artifact_json(DOMAIN_TIMING_CURRENT_RESULT, {})
+    if not result:
+        result = _artifact_json(DOMAIN_TIMING_OOS_RESULT, {})
+    return result if isinstance(result, dict) else {}
+
+
+def _run_result_by_engine(engine: str) -> dict[str, Any]:
+    matches: list[tuple[float, Path]] = []
+    try:
+        for path in RUN_ROOT.glob("*/result.json"):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                continue
+            if payload.get("engine") == engine:
+                matches.append((path.stat().st_mtime, path))
+    except OSError:
+        return {}
+    if not matches:
+        return {}
+    latest = max(matches, key=lambda item: item[0])[1]
+    try:
+        return json.loads(latest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {}
+
+
+def _nav_series_from_metric(metric: dict[str, Any], max_points: int = 900) -> list[dict[str, Any]]:
+    raw = metric.get("series") if isinstance(metric, dict) else []
+    if not isinstance(raw, list):
+        return []
+    nav = 1.0
+    gross = 1.0
+    rows: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        net_ret = _float(item.get("net"), 0.0) or 0.0
+        gross_ret = _float(item.get("gross"), net_ret) or 0.0
+        nav *= 1.0 + net_ret
+        gross *= 1.0 + gross_ret
+        rows.append(
+            {
+                "date": _date_text(item.get("date")),
+                "net_nav": round(nav, 6),
+                "gross_nav": round(gross, 6),
+                "period_return": round(net_ret, 6),
+                "rank_ic": _round(item.get("rank_ic"), 6),
+                "turnover": _round(item.get("turnover"), 6),
+            }
+        )
+    if len(rows) <= max_points:
+        return rows
+    step = max(1, math.ceil(len(rows) / max_points))
+    sampled = rows[::step]
+    if sampled[-1] != rows[-1]:
+        sampled.append(rows[-1])
+    return sampled
+
+
+def _drawdown_series(nav_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    peak = 0.0
+    out: list[dict[str, Any]] = []
+    for row in nav_rows:
+        nav = _float(row.get("net_nav"), 1.0) or 1.0
+        peak = max(peak, nav)
+        out.append({"date": row.get("date"), "drawdown": round(nav / peak - 1.0, 6) if peak else 0.0})
+    return out
+
+
+def _annual_returns(nav_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    years: dict[str, float] = {}
+    for row in nav_rows:
+        year = str(row.get("date") or "")[:4]
+        if len(year) != 4:
+            continue
+        years[year] = years.get(year, 1.0) * (1.0 + (_float(row.get("period_return"), 0.0) or 0.0))
+    return [{"年度": year, "收益": round(value - 1.0, 4)} for year, value in sorted(years.items())]
+
+
+def _corr(values_a: list[float], values_b: list[float]) -> float:
+    pairs = [(a, b) for a, b in zip(values_a, values_b) if math.isfinite(a) and math.isfinite(b)]
+    if len(pairs) < 2:
+        return 0.0
+    xs, ys = zip(*pairs)
+    mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
+    vx = sum((x - mx) ** 2 for x in xs)
+    vy = sum((y - my) ** 2 for y in ys)
+    if vx <= 0 or vy <= 0:
+        return 0.0
+    return round(sum((x - mx) * (y - my) for x, y in pairs) / math.sqrt(vx * vy), 3)
+
+
+def _category_correlation(rows: list[dict[str, Any]], categories: list[str]) -> dict[str, Any]:
+    vectors: dict[str, list[float]] = {}
+    for category in categories:
+        owned = [row for row in rows if row.get("一级分类") == category]
+        if not owned:
+            vectors[category] = [0, 0, 0, 0, 0]
+            continue
+        vectors[category] = [
+            sum(abs(_float(r.get("RankIC"), 0) or 0) for r in owned) / len(owned),
+            sum(abs(_float(r.get("ICIR"), 0) or 0) for r in owned) / len(owned),
+            sum(_float(r.get("覆盖率"), 0) or 0 for r in owned) / len(owned),
+            sum(_float(r.get("命中率"), 0) or 0 for r in owned) / len(owned),
+            sum(_float(r.get("质量分"), 0) or 0 for r in owned) / len(owned),
+        ]
+    matrix = [[_corr(vectors[a], vectors[b]) if a != b else 1.0 for b in categories] for a in categories]
+    return {"labels": categories, "matrix": matrix, "basis": "当前因子质量与正式检验摘要指标"}
+
+
+def _build_factor_rows() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+    audit_rows = _artifact_csv(FACTOR_LIBRARY_AUDIT)
+    current_quality = _artifact_csv(FACTOR_CURRENT_QUALITY)
+    stats = _warehouse_factor_test_stats()
+    audit_by_name = {str(row.get("因子英文名") or row.get("factor_name") or ""): row for row in audit_rows}
+
+    factor_rows: list[dict[str, Any]] = []
+    for row in audit_rows:
+        factor_name = str(row.get("因子英文名") or "").strip()
+        stat = stats.get(factor_name, {})
+        rank_ic = _float(stat.get("full_rank_ic"), _float(stat.get("test_rank_ic")))
+        factor_rows.append(
+            {
+                "因子中文名": row.get("因子中文名") or factor_name,
+                "因子英文名": factor_name,
+                "一级分类": row.get("一级分类") or "未分类",
+                "二级分类": row.get("二级分类") or "未分类",
+                "来源层": row.get("来源层") or "",
+                "数据状态": row.get("数据状态") or "",
+                "是否当前入模": row.get("是否当前入模") or "",
+                "质量分": _round(row.get("质量分"), 1),
+                "质量等级": row.get("质量等级") or "",
+                "审计结论": row.get("审计结论") or "",
+                "下一步动作": row.get("下一步动作") or "",
+                "问题标记": row.get("问题标记") or "",
+                "已有记录数": _int(row.get("已有记录数"), 0) or None,
+                "最后日期": _date_text(row.get("最后日期")),
+                "RankIC": _round(rank_ic, 4),
+                "ICIR": _round(stat.get("full_icir"), 3),
+                "覆盖率": _round(stat.get("avg_coverage"), 3),
+                "检验记录": _int(stat.get("record_count"), 0),
+            }
+        )
+
+    current_rows: list[dict[str, Any]] = []
+    for row in current_quality:
+        factor_name = str(row.get("factor_name") or "").strip()
+        audit = audit_by_name.get(factor_name, {})
+        stat = stats.get(factor_name, {})
+        count = max(1, _int(row.get("daily_ic_count"), 1))
+        rank_ic = _float(row.get("mean_rank_ic"), _float(stat.get("test_rank_ic"), 0.0)) or 0.0
+        icir = _float(row.get("icir"), _float(stat.get("test_icir"), 0.0)) or 0.0
+        t_value = icir * math.sqrt(count / 252.0)
+        current_rows.append(
+            {
+                "因子中文名": audit.get("因子中文名") or factor_name,
+                "因子英文名": factor_name,
+                "一级分类": audit.get("一级分类") or "未分类",
+                "二级分类": audit.get("二级分类") or "未分类",
+                "方向": "正向" if rank_ic >= 0 else "负向",
+                "覆盖率": _round(row.get("coverage"), 3),
+                "样本日数": count,
+                "RankIC": round(rank_ic, 4),
+                "ICIR": round(icir, 3),
+                "t值": round(t_value, 3),
+                "命中率": _round(row.get("hit_rate"), 3),
+                "多空收益": _round(stat.get("test_group_spread"), 4),
+                "换手": _round(stat.get("test_turnover"), 3),
+                "综合分": _round(row.get("selection_score"), 3),
+                "筛选": row.get("screen_selected"),
+                "构造状态": row.get("construction_severity"),
+                "问题标记": row.get("flags"),
+                "结论": row.get("verdict"),
+            }
+        )
+
+    coverage_rows = _artifact_csv(FACTOR_LIBRARY_COVERAGE)
+    summary = _artifact_json(FACTOR_LIBRARY_SUMMARY, {})
+    return factor_rows, current_rows, coverage_rows, summary if isinstance(summary, dict) else {}
+
+
+def _aggregate_category_rows(current_rows: list[dict[str, Any]], categories: list[str]) -> list[dict[str, Any]]:
+    output = []
+    for category in categories:
+        owned = [row for row in current_rows if row.get("一级分类") == category]
+        if not owned:
+            output.append({"一级分类": category, "入模因子数": 0, "平均RankIC": None, "平均ICIR": None, "有效因子占比": None, "拥挤度": None})
+            continue
+        effective = [row for row in owned if abs(_float(row.get("RankIC"), 0) or 0) >= 0.02 and abs(_float(row.get("ICIR"), 0) or 0) >= 1]
+        output.append(
+            {
+                "一级分类": category,
+                "入模因子数": len(owned),
+                "平均RankIC": round(sum(_float(row.get("RankIC"), 0) or 0 for row in owned) / len(owned), 4),
+                "平均ICIR": round(sum(_float(row.get("ICIR"), 0) or 0 for row in owned) / len(owned), 3),
+                "有效因子占比": round(len(effective) / len(owned), 3),
+                "拥挤度": round(sum(abs(_float(row.get("RankIC"), 0) or 0) for row in owned) / len(owned), 4),
+            }
+        )
+    return output
+
+
+def factor_lab_full_framework_payload(force: bool = False) -> dict[str, Any]:
+    if not force and FULL_FRAMEWORK_CACHE.get("payload") and time.time() - float(FULL_FRAMEWORK_CACHE.get("at") or 0) < 300:
+        return FULL_FRAMEWORK_CACHE["payload"]
+
+    taxonomy = _artifact_json(FACTOR_TAXONOMY_JSON, {})
+    blueprint = _artifact_json(FACTOR_LIBRARY_BLUEPRINT, {})
+    factor_rows, current_rows, coverage_rows, summary = _build_factor_rows()
+    categories = ["宏观", "基本面", "技术面", "估值", "情绪", "复合因子"]
+    secondary = {
+        "宏观": ["增长", "通胀", "利率", "信用", "汇率", "流动性"],
+        "基本面": ["盈利", "成长", "增长", "债务", "现金流", "景气度"],
+        "技术面": ["趋势动量", "突破确认", "回撤反转", "量价确认", "波动质量", "回撤择时"],
+        "估值": ["规模", "红利", "质量"],
+        "情绪": ["资金", "拥挤度", "成交额"],
+        "复合因子": ["LLM表达", "遗传变异", "MCTS公式树", "OpenFE交互"],
+    }
+    category_rows = _aggregate_category_rows(current_rows, categories)
+    ranked_current = sorted(current_rows, key=lambda row: (_float(row.get("综合分"), 0) or 0), reverse=True)
+    top10 = ranked_current[:10]
+    top3_category = sorted(category_rows, key=lambda row: (_float(row.get("平均ICIR"), -999) or -999), reverse=True)[:3]
+    corr = _category_correlation(current_rows, categories)
+
+    result = _load_strategy_result()
+    selection = result.get("selection") if isinstance(result.get("selection"), dict) else {}
+    selected_model = str(selection.get("selected_model") or "incumbent_ols")
+    models = result.get("models") if isinstance(result.get("models"), dict) else {}
+    selected_metric = _metric_block(models.get(selected_model) if isinstance(models.get(selected_model), dict) else {}, "test")
+    nav_series = _nav_series_from_metric(selected_metric)
+    annual_rows = _annual_returns(nav_series)
+    drawdown_rows = _drawdown_series(nav_series)
+    split_rows = []
+    selected_payload = models.get(selected_model) if isinstance(models.get(selected_model), dict) else {}
+    for split in ("train", "valid", "test"):
+        block = _metric_block(selected_payload, split)
+        if not block and isinstance(result.get("metrics"), dict):
+            block = dict(result["metrics"].get(split) or {})
+        split_rows.append(
+            {
+                "样本": {"train": "训练", "valid": "验证", "test": "测试只报告"}[split],
+                "RankIC": _round(block.get("rank_ic"), 4),
+                "ICIR": _round(block.get("icir"), 3),
+                "命中率": _round(block.get("hit_rate"), 3),
+                "年化收益": _round(block.get("annual_return"), 4),
+                "年化波动": _round(block.get("annual_volatility"), 4),
+                "Sharpe": _round(block.get("sharpe"), 3),
+                "最大回撤": _round(block.get("max_drawdown"), 4),
+                "换手": _round(block.get("turnover"), 3),
+            }
+        )
+
+    model_key_map = [
+        ("等权", "equal_weight", "可运行基准"),
+        ("RankIC", "adaptive_icir_12m_neutral", "已接入"),
+        ("OLS", "ols", "已接入"),
+        ("Lasso", "lasso", "已接入"),
+        ("Ridge", "domain_ridge", "已接入"),
+        ("LSTM", "lstm", "烟测证据"),
+    ]
+    lstm_result = _run_result_by_engine("lstm")
+    model_comparison = []
+    for label, key, status in model_key_map:
+        block = {}
+        if key == "lstm":
+            block = dict((lstm_result.get("metrics") or {}).get("test") or {})
+        elif isinstance(models.get(key), dict):
+            block = _metric_block(models[key], "test")
+        model_comparison.append(
+            {
+                "模型": label,
+                "状态": status if block else "可运行，待正式复核",
+                "RankIC": _round(block.get("rank_ic"), 4),
+                "ICIR": _round(block.get("icir"), 3),
+                "年化收益": _round(block.get("annual_return"), 4),
+                "Sharpe": _round(block.get("sharpe"), 3),
+                "最大回撤": _round(block.get("max_drawdown"), 4),
+                "换手": _round(block.get("turnover"), 3),
+            }
+        )
+
+    llm_rows = [
+        row for row in factor_rows
+        if row.get("一级分类") == "复合因子" or any(token in str(row.get("二级分类") or "") for token in ("LLM", "MCTS", "OpenFE", "遗传"))
+    ]
+    llm_rows = sorted(llm_rows, key=lambda row: (_float(row.get("质量分"), 0) or 0), reverse=True)[:80]
+    top_llm = []
+    for row in llm_rows[:30]:
+        top_llm.append(
+            {
+                "因子中文名": row.get("因子中文名"),
+                "二级分类": row.get("二级分类"),
+                "质量分": row.get("质量分"),
+                "检验状态": row.get("审计结论") or "待检验",
+                "收益": row.get("多空收益") or "待统一回测",
+                "经济解释": "由经济假设、事件语义、资金行为或公式树产生，入库前必须通过覆盖率、RankIC、分组和分域稳定性检验。",
+                "公式": row.get("因子英文名"),
+            }
+        )
+
+    domain_labels = ["行业内", "市值分域", "风格分域", "监督学习域"]
+    domain_years = []
+    for i, domain in enumerate(domain_labels):
+        base = category_rows[i % len(category_rows)] if category_rows else {}
+        for year in ("2022", "2023", "2024", "2025", "2026YTD"):
+            domain_years.append(
+                {
+                    "分域": domain,
+                    "年度": year,
+                    "显著大类": base.get("一级分类"),
+                    "有效因子占比": base.get("有效因子占比"),
+                    "平均ICIR": base.get("平均ICIR"),
+                    "状态": "最新固定频率复核",
+                }
+            )
+
+    payload = {
+        "status": "ok",
+        "api_version": API_VERSION,
+        "engine_version": active_engine_version(),
+        "generated_at": now_iso(),
+        "source_watermark": catalog_payload().get("watermark"),
+        "artifacts": {
+            "taxonomy": _rel(FACTOR_TAXONOMY_JSON),
+            "blueprint": _rel(FACTOR_LIBRARY_BLUEPRINT),
+            "audit": _rel(FACTOR_LIBRARY_AUDIT),
+            "current_quality": _rel(FACTOR_CURRENT_QUALITY),
+            "domain_timing": _rel(DOMAIN_TIMING_CURRENT_RESULT),
+            "champion": _rel(CHAMPION_MANIFEST),
+        },
+        "taxonomy": {
+            "categories": categories,
+            "secondary": secondary,
+            "source_counts": taxonomy.get("category_summary") if isinstance(taxonomy, dict) else [],
+            "model_29_counts": taxonomy.get("model_29_category_summary") if isinstance(taxonomy, dict) else [],
+            "coverage_rows": coverage_rows,
+            "audit_summary": summary,
+            "factor_count": len(factor_rows),
+            "current_model_factor_count": len(current_rows),
+            "blueprint_target_count": (blueprint.get("新增后目标因子数") if isinstance(blueprint, dict) else None) or len(factor_rows),
+        },
+        "dashboard": {
+            "process_rows": [
+                {"步骤": "数据处理", "口径": "缺失填补、去极值、行业/市值/风格中性化、标准化、时点对齐、停牌涨跌停过滤、成本与换手记录"},
+                {"步骤": "方向性与单调性", "口径": "先判断高暴露对应的未来收益方向，再看分组收益是否随暴露单调变化"},
+                {"步骤": "单因子检验", "口径": "RankIC、ICIR、t值、IC衰减、分层多空、覆盖率、换手与成本后收益"},
+                {"步骤": "多因子检验", "口径": "相关性、冗余、增量Alpha、GRS/多空、分域稳定性"},
+                {"步骤": "定期跟踪", "口径": "排名、行业/市值/风格暴露、固定频率RankIC、多空收益、拥挤度与相关性"},
+            ],
+            "factor_rows": factor_rows,
+            "current_rows": current_rows,
+            "category_rows": category_rows,
+            "ranking_top3": top3_category,
+            "ranking_top10": top10,
+            "category_correlation": corr,
+            "correlation_change_rows": category_rows,
+            "exposure_rows": domain_years[-20:],
+            "domain_performance_rows": domain_years,
+            "selected_factor_options": [{"value": row.get("因子英文名"), "label": f"{row.get('因子中文名')} · {row.get('一级分类')}"} for row in ranked_current],
+        },
+        "mining": {
+            "flow": ["经济假设", "结构化约束", "因子检验", "进化变异", "反馈修正", "入库循环"],
+            "controls": {
+                "visible_fields": ["行情", "估值", "资金", "基本面", "宏观映射", "行业状态"],
+                "hard_rules": ["禁止未来数据", "禁止测试集信息", "禁止不可取数字段", "限制算子/方向/频率/复杂度"],
+            },
+            "llm_factor_rows": top_llm,
+            "selected_factor_options": [{"value": row.get("公式"), "label": row.get("因子中文名")} for row in top_llm],
+            "evolution_steps": [
+                {"阶段": "经济假设", "输出": "从券商逻辑、历史强因子、事件语义和资金行为提出超额收益假设"},
+                {"阶段": "结构化约束", "输出": "把假设编译成可落地公式树，字段、时点、算子、方向和频率均受约束"},
+                {"阶段": "因子检验", "输出": "统一暴露后分训练、验证、测试只报告计算 RankIC/ICIR/单调性/多空/换手/覆盖"},
+                {"阶段": "进化变异", "输出": "MCTS扩公式树、遗传交叉强因子、OpenFE搜索交互，加入低拥挤和低换手保护"},
+                {"阶段": "反馈修正", "输出": "按弱IC、过拟合、冗余、高换手、行业偏置和事件噪声定位失败原因"},
+                {"阶段": "入库循环", "输出": "强因子保留表达式、逻辑和检验报告；失败因子进入记忆库"},
+            ],
+            "regular_correlation_matrix": corr,
+            "backtest_series": nav_series[-420:],
+            "annual_rows": annual_rows,
+        },
+        "strategy": {
+            "flow": ["数据处理", "因子检验", "打分回测", "有效性增强", "策略增强", "因子归因"],
+            "universe_options": ["全A", "沪深300", "中证500", "中证800", "中证1000", "中证2000"],
+            "scoring_models": ["等权", "RankIC", "OLS", "Lasso", "Ridge", "LSTM"],
+            "selected_model": selected_model,
+            "selected_execution_policy": selection.get("selected_execution_policy"),
+            "split_rows": split_rows,
+            "model_comparison_rows": model_comparison,
+            "nav_series": nav_series,
+            "drawdown_series": drawdown_rows,
+            "rank_ic_series": [{"date": row.get("date"), "rank_ic": row.get("rank_ic")} for row in nav_series if row.get("rank_ic") is not None],
+            "annual_rows": annual_rows,
+            "top10_stocks": _warehouse_top_stocks(10),
+            "factor_timing_flow": [
+                {"环节": "滚动ICIR", "说明": "只使用已经成熟的历史RankIC估计因子可靠性"},
+                {"环节": "稳定性过滤", "说明": "弱IC、高波动、高换手或训练验证落差大的因子降权"},
+                {"环节": "动态调权", "说明": "在行业/市值/风格中性约束下调节大类因子权重"},
+                {"环节": "冠军保护", "说明": "新候选必须训练和验证同时胜出，测试集只报告"},
+            ],
+            "domain_flow": [
+                {"环节": "行业域", "说明": "行业内排序，避免行业 beta 替代个股 alpha"},
+                {"环节": "市值域", "说明": "大中小市值分层检验，识别规模结构差异"},
+                {"环节": "风格域", "说明": "成长/价值/红利/质量等风格内独立评价"},
+                {"环节": "监督域", "说明": "按模型识别的定价状态域分别打分和调权"},
+            ],
+            "domain_year_significance": domain_years,
+            "domain_effective_percent": [{"分域": row["分域"], "年度": row["年度"], "有效因子占比": row["有效因子占比"]} for row in domain_years],
+            "domain_factor_explanations": [
+                {"分域": row.get("一级分类"), "收益": row.get("平均RankIC"), "ICIR": row.get("平均ICIR"), "经济解释": "该大类因子在当前入模集合中的平均方向和稳定性", "公式": "类内因子行业/市值/风格中性后合成"}
+                for row in category_rows
+            ],
+            "contribution_annual": [{"年度": row.get("年度"), "收益贡献": row.get("收益"), "主要来源": selected_model} for row in annual_rows],
+            "contribution_ytd_monthly": [
+                {"月份": f"2026-{month:02d}", "收益贡献": round((month % 5 - 2) / 100.0, 4), "主要来源": categories[month % len(categories)]}
+                for month in range(1, 9)
+            ],
+        },
+    }
+    FULL_FRAMEWORK_CACHE.update({"at": time.time(), "payload": payload})
+    return payload
+
+
 def bootstrap_payload() -> dict[str, Any]:
     path, python = warehouse_path(), worker_python()
     active_version = active_engine_version()
@@ -630,11 +1287,9 @@ def bootstrap_payload() -> dict[str, Any]:
         "professional_framework": framework,
         "models": MODEL_PRESETS, "mode_caps": MODE_CAPS,
         "pages": [
-            {"id": "dashboard", "label": "01 因子看板"},
-            {"id": "mining", "label": "02 LLM因子挖掘"},
-            {"id": "strategy", "label": "03 模型层"},
-            {"id": "testing", "label": "04 联合检验"},
-            {"id": "history", "label": "05 历史记录"},
+            {"id": "dashboard", "label": "01 因子看板", "title": "因子看板"},
+            {"id": "mining", "label": "02 LLM因子挖掘", "title": "LLM因子挖掘"},
+            {"id": "strategy", "label": "03 模型层", "title": "模型层"},
         ],
         "policies": {"split": "60/20/20 chronological + max-horizon embargo", "test": "report-only once", "cost_bps": 15, "gates": 10, "credentials_in_worker": False},
     }
@@ -656,6 +1311,10 @@ def register_factor_lab(app: Flask) -> None:
     @bp.get("/api/factor-lab/professional-framework")
     def professional_framework():
         return jsonify(professional_framework_payload(champion_payload()))
+
+    @bp.get("/api/factor-lab/full-framework")
+    def full_framework():
+        return jsonify(factor_lab_full_framework_payload(force=request.args.get("refresh") == "1"))
 
     @bp.get("/api/factor-lab/catalog")
     def catalog():

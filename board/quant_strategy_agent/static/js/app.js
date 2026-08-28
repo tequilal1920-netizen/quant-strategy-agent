@@ -4084,6 +4084,24 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
   });
   delete LEGACY_ROUTE_ALIAS['portfolio:timing'];
   Object.assign(LEGACY_ROUTE_ALIAS,{'portfolio:strategy':['portfolio:index','index','index'],'portfolio:home':['portfolio:index','index','index'],'portfolio:pool':['portfolio:index','index','index'],'portfolio:risk':['portfolio:index','index','index'],'portfolio:backtest':['portfolio:index','index','index'],'index:home':['portfolio:index','index','index'],'index:universe':['portfolio:index','index','index'],'index:alpha':['portfolio:index','index','index'],'index:smartbeta':['portfolio:index','index','index'],'index:risk':['portfolio:index','index','index'],'index:tracking':['portfolio:index','index','index']});
+
+  /* 2026-08-29 factor laboratory final framework override */
+  Object.assign(VIEW_BREADCRUMBS,{factorlab:{title:'因子实验室',views:{dashboard:'因子看板',mining:'LLM因子挖掘',strategy:'模型层'}}});
+  Object.assign(WORKSPACE_CONFIG,{
+    'factorlab:dashboard':{group:'因子实验室',title:'因子看板',subtitle:'因子框架、因子检验与定期跟踪',sections:[{id:'dashboard',label:'因子看板',kind:'factorlab',page:'dashboard'}]},
+    'factorlab:mining':{group:'因子实验室',title:'LLM因子挖掘',subtitle:'经济假设、结构化约束、检验进化与入库闭环',sections:[{id:'mining',label:'LLM因子挖掘',kind:'factorlab',page:'mining'}]},
+    'factorlab:strategy':{group:'因子实验室',title:'模型层',subtitle:'数据处理、因子检验、打分回测、有效性增强与归因',sections:[{id:'strategy',label:'模型层',kind:'factorlab',page:'strategy'}]}
+  });
+  Object.assign(LEGACY_ROUTE_ALIAS,{
+    'factorlab:home':['factorlab:dashboard','dashboard'],
+    'factorlab:testing':['factorlab:dashboard','dashboard'],
+    'factorlab:history':['factorlab:dashboard','dashboard'],
+    'factor:home':['factorlab:mining','mining'],
+    'factor:expression':['factorlab:mining','mining'],
+    'factor:report':['factorlab:mining','mining'],
+    'factor:score':['factorlab:mining','mining'],
+    'factor:memory':['factorlab:mining','mining']
+  });
   function optimizerPatchPortfolioNav(){
     const items=Array.from(document.querySelectorAll('.portfolio-optimization-nav .nav-item'));
     const defs=[['portfolio:solve','优化求解器'],['portfolio:timing','宽基择时'],['portfolio:index','指数增强']];

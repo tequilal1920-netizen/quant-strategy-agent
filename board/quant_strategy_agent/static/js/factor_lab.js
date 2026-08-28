@@ -1,658 +1,481 @@
-﻿(function () {
+(function () {
   'use strict';
 
   const BOOT = window.APP_BOOT || {};
   const BASE = String(BOOT.basePath || '').replace(/\/$/, '');
+  const PAGES = { dashboard: '因子看板', mining: 'LLM因子挖掘', strategy: '模型层' };
+  const RED = '#aa2d1e';
+  const DARK_RED = '#c00000';
+  const GREEN = '#168a47';
+  const BLUE = '#2f75b5';
+  const ORANGE = '#c46a08';
+  const PALETTE = [RED, BLUE, GREEN, ORANGE, '#7a5195', '#64748b', '#b45309', '#2563eb'];
+
   const state = {
-    view: 'home', bootstrap: null, catalog: null, runs: [], selected: null,
-    miningTab: 'formula', family: 'all', period: 'all', line: 'net', poll: null,
-    historyEngine: 'all', historyStatus: 'all', historyTab: 'runs'
+    view: 'dashboard',
+    bootstrap: null,
+    data: null,
+    selectedFactor: '',
+    selectedLlmFactor: '',
+    universe: '全A',
+    scoringModel: 'OLS',
+    domain: '行业内',
+    formulaStatus: ''
   };
-  const PAGE = {
-    home: '主页', dashboard: '因子看板', mining: 'LLM因子挖掘',
-    testing: '联合检验', strategy: '模型层', history: '历史记录'
-  };
-  const ENGINE = {
-    lstm: 'LSTM', gru: 'GRU', rl_transformer: 'Transformer+LLM',
-    strategy: '等权 / RankIC / OLS / Lasso / Ridge / MLP', joint_test: '联合检验'
-  };
-  const FAMILY = {
-    all: '全部', technical: '技术', money: '资金', fundamental: '基本面', valuation: '估值',
-    macro: '宏观', discovered: '普通因子', core_model: '核心模型29因子',
-    subject_factor_standard: 'Subject标准因子', subject_strategy_technical: 'Subject技术策略',
-    smartbeta: 'SmartBeta', llm_mined: 'LLM挖掘', deep_mined: '深度挖掘', warehouse_dynamic: '因子仓库',
-    model_run: '模型运行', lstm: 'LSTM', gru: 'GRU', rl_transformer: 'Transformer+LLM'
-  };
-  const STATUS = { queued: '排队中', running: '运行中', completed: '已完成', failed: '失败', cancelled: '已取消', cancelling: '取消中' };
 
   const $ = id => document.getElementById(id);
+  const arr = value => Array.isArray(value) ? value : [];
+  const obj = value => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const path = url => BASE + url;
-  const num = (value, digits = 3) => Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : '—';
-  const signed = (value, digits = 3) => Number.isFinite(Number(value)) ? (Number(value) > 0 ? '+' : '') + Number(value).toFixed(digits) : '—';
-  const pct = (value, digits = 2) => Number.isFinite(Number(value)) ? (Number(value) * 100).toFixed(digits) + '%' : '—';
-  const root = html => { const el = $('view-root'); if (el) el.innerHTML = '<div class="fl2-shell">' + html + '</div>'; };
+  const uid = prefix => prefix + '-' + Math.random().toString(36).slice(2, 9);
+  const root = html => {
+    const el = $('view-root');
+    if (el) el.innerHTML = '<div class="flx-shell">' + html + '</div>';
+  };
+  const finite = value => Number.isFinite(Number(value));
+  const n = (value, digits = 3) => finite(value) ? Number(value).toFixed(digits) : '—';
+  const signed = (value, digits = 3) => finite(value) ? (Number(value) > 0 ? '+' : '') + Number(value).toFixed(digits) : '—';
+  const pct = (value, digits = 1) => finite(value) ? (Number(value) * 100).toFixed(digits) + '%' : '—';
+  const cnBool = value => {
+    if (value === true || String(value).toLowerCase() === 'true' || String(value) === '是') return '是';
+    if (value === false || String(value).toLowerCase() === 'false' || String(value) === '否') return '否';
+    return value ?? '—';
+  };
 
   async function api(url, options) {
-    const response = await fetch(path(url), Object.assign({ credentials: 'same-origin' }, options || {}));
+    const response = await fetch(path(url), Object.assign({ credentials: 'same-origin', cache: 'no-store' }, options || {}));
     let payload = {};
     try { payload = await response.json(); } catch (_) { payload = { message: '返回格式错误' }; }
     if (!response.ok) throw new Error(payload.message || ('HTTP ' + response.status));
     return payload;
   }
 
+  function ensurePlotly() {
+    if (window.Plotly) return Promise.resolve(true);
+    if (window.__plotlyReady) return window.__plotlyReady;
+    const url = String((window.APP_BOOT || {}).plotlyUrl || '').trim();
+    if (!url) return Promise.resolve(false);
+    window.__plotlyReady = new Promise(resolve => {
+      const script = document.createElement('script');
+      script.src = url;
+      script.onload = () => resolve(Boolean(window.Plotly));
+      script.onerror = () => resolve(false);
+      document.head.appendChild(script);
+    });
+    return window.__plotlyReady;
+  }
+
+  async function loadData(force) {
+    if (force || !state.bootstrap) state.bootstrap = await api('/api/factor-lab/bootstrap' + (force ? '?refresh=1&_=' + Date.now() : ''));
+    if (force || !state.data) state.data = await api('/api/factor-lab/full-framework' + (force ? '?refresh=1&_=' + Date.now() : ''));
+    const factors = arr(obj(state.data.dashboard).current_rows);
+    const llm = arr(obj(state.data.mining).llm_factor_rows);
+    if (!state.selectedFactor && factors[0]) state.selectedFactor = factors[0]['因子英文名'];
+    if (!state.selectedLlmFactor && llm[0]) state.selectedLlmFactor = llm[0]['公式'] || llm[0]['因子中文名'];
+    return state.data;
+  }
+
   function setHeader(view) {
-    const title = PAGE[view] || PAGE.home;
+    const title = PAGES[view] || PAGES.dashboard;
     const heading = $('page-title'); if (heading) heading.textContent = title;
-    const eyebrow = $('page-eyebrow'); if (eyebrow) eyebrow.textContent = '因子实验室';
+    const eyebrow = $('page-eyebrow'); if (eyebrow) eyebrow.textContent = '因子实验室 > ' + title + ' >';
     const subtitle = $('page-subtitle'); if (subtitle) { subtitle.textContent = ''; subtitle.hidden = true; }
     const conclusion = $('core-conclusion'); if (conclusion) conclusion.hidden = true;
   }
 
-  function section(title, body, actions) {
-    return '<section class="fl2-section"><header><h2>' + esc(title) + '</h2>' + (actions || '') + '</header>' + body + '</section>';
-  }
-  function field(label, id, value, type = 'number', attrs = '') {
-    return '<label class="fl2-field"><span>' + esc(label) + '</span><input id="' + esc(id) + '" type="' + esc(type) + '" value="' + esc(value) + '" ' + attrs + '></label>';
-  }
-  function select(label, id, options, value) {
-    return '<label class="fl2-field"><span>' + esc(label) + '</span><select id="' + esc(id) + '">' + options.map(item => {
-      const pair = Array.isArray(item) ? item : [item, item];
-      return '<option value="' + esc(pair[0]) + '" ' + (String(pair[0]) === String(value) ? 'selected' : '') + '>' + esc(pair[1]) + '</option>';
-    }).join('') + '</select></label>';
-  }
-  function paramGroup(title, body, open) {
-    return '<details class="fl2-param-group" ' + (open ? 'open' : '') + '><summary>' + esc(title) + '</summary><div class="fl2-param-body"><div class="fl2-param-grid">' + body + '</div></div></details>';
-  }
-  function advanced(body) { return '<details class="fl2-advanced"><summary>高级参数</summary><div class="fl2-param-grid">' + body + '</div></details>'; }
-  function read(id, fallback) { const el = $(id); return el ? el.value : fallback; }
-
-  function primaryToolbar(engine, fixed) {
-    return '<div class="fl2-toolbar"><div class="fl2-toolbar-row">' +
-      (fixed ? '<div class="fl2-field"><span>模型</span><input value="' + esc(ENGINE[engine]) + '" disabled></div>' : select('??', 'fl2-engine', [['lstm', 'LSTM'], ['gru', 'GRU'], ['rl_transformer', 'Transformer+LLM'], ['strategy', '等权/RankIC/回测'], ['joint_test', '联合检验']], engine || 'lstm')) +
-      select('运行等级', 'fl2-mode', [['smoke', '烟测'], ['research', '研究'], ['production', '生产']], 'research') +
-      select('标的池', 'fl2-universe', [['ALL_A', '全 A 可交易池'], ['CSI300', '沪深 300'], ['CSI500', '中证 500'], ['CSI1000', '中证 1000']], 'ALL_A') +
-      select('风险偏好', 'fl2-risk', [['conservative', '稳健'], ['balanced', '平衡'], ['aggressive', '进取']], 'balanced') +
-      '</div></div>';
+  function section(title, body, extraClass) {
+    return '<section class="flx-section ' + esc(extraClass || '') + '"><header><h2>' + esc(title) + '</h2></header>' + body + '</section>';
   }
 
-  function modelFields(engine) {
-    if (engine === 'lstm' || engine === 'gru') return paramGroup('训练与搜索',
-      field('序列长度（交易日）', 'fl2-sequence', 120, 'number', 'min="40" max="504" step="20"') +
-      field('训练轮数', 'fl2-epochs', 18, 'number', 'min="1" max="60"') +
-      field('集成种子数', 'fl2-seeds', 5, 'number', 'min="1" max="12"') +
-      field('搜索候选数', 'fl2-trials', 12, 'number', 'min="1" max="48"') +
-      advanced(
-        field('隐藏维度', 'fl2-hidden', 160, 'number', 'min="64" max="512" step="32"') +
-        field('循环层数', 'fl2-lstm-layers', 3, 'number', 'min="2" max="5"') +
-        field('注意力层数', 'fl2-attn-layers', 3, 'number', 'min="1" max="5"') +
-        field('注意力头数', 'fl2-heads', 8, 'number', 'min="4" max="16" step="4"') +
-        field('状态专家数', 'fl2-experts', 6, 'number', 'min="3" max="12"') +
-        field('Dropout', 'fl2-dropout', .18, 'number', 'min="0.05" max="0.5" step="0.01"') +
-        field('学习率', 'fl2-lr', .0003, 'number', 'min="0.00001" max="0.003" step="0.00001"') +
-        field('候选训练轮数', 'fl2-trial-epochs', 4, 'number', 'min="1" max="12"')
-      ), true);
-    if (engine === 'rl_transformer') return paramGroup('训练与搜索',
-      field('PPO Episodes', 'fl2-episodes', 2048, 'number', 'min="8" max="8192" step="8"') +
-      field('Rollout 批次', 'fl2-rollout', 64, 'number', 'min="4" max="256" step="4"') +
-      field('公式长度上限', 'fl2-max-tokens', 18, 'number', 'min="6" max="32"') +
-      field('PPO 更新轮数', 'fl2-ppo-epochs', 4, 'number', 'min="1" max="12"') +
-      advanced(
-        field('表示维度', 'fl2-dmodel', 256, 'number', 'min="64" max="512" step="64"') +
-        field('Transformer 层数', 'fl2-rl-layers', 6, 'number', 'min="2" max="10"') +
-        field('注意力头数', 'fl2-rl-heads', 8, 'number', 'min="4" max="16" step="4"') +
-        field('Dropout', 'fl2-rl-dropout', .15, 'number', 'min="0.05" max="0.5" step="0.01"') +
-        field('PPO Clip', 'fl2-clip', .2, 'number', 'min="0.05" max="0.4" step="0.01"') +
-        field('Gamma', 'fl2-gamma', .99, 'number', 'min="0.8" max="1" step="0.01"') +
-        field('Entropy', 'fl2-entropy', .01, 'number', 'min="0" max="0.1" step="0.001"') +
-        field('学习率', 'fl2-rl-lr', .0002, 'number', 'min="0.00001" max="0.003" step="0.00001"')
-      ), true);
-    if (engine === 'strategy') return paramGroup('训练与搜索',
-      field('Lasso Alpha', 'fl2-lasso', .00002, 'number', 'min="0.000001" max="0.01" step="0.000001"') +
-      field('深度模型训练轮数', 'fl2-strategy-epochs', 30, 'number', 'min="2" max="60"') +
-      select('融合方式', 'fl2-blend', [['valid_sharpe', '验证期 Sharpe'], ['rank_ic', '验证期 RankIC'], ['equal', '等权']], 'valid_sharpe') +
-      field('最大训练样本', 'fl2-max-samples', 300000, 'number', 'min="50000" max="1000000" step="50000"'), true);
-    return paramGroup('检验范围',
-      select('检验模式', 'fl2-test-mode', [['single_joint', '单因子与多因子'], ['single', '单因子'], ['joint', '多因子']], 'single_joint') +
-      select('相关性口径', 'fl2-corr', [['spearman', 'Spearman'], ['pearson', 'Pearson']], 'spearman') +
-      field('最大因子数', 'fl2-factor-limit', 240, 'number', 'min="20" max="500"') +
-      select('测试集', 'fl2-test-lock', [['locked', '冻结']], 'locked'), true);
-  }
-
-  function parameterGroups(engine) {
-    return '<div class="fl2-params">' +
-      paramGroup('数据与样本',
-        field('最大股票数', 'fl2-assets', 240, 'number', 'min="40" max="800" step="20"') +
-        field('历史月数', 'fl2-months', 72, 'number', 'min="12" max="180" step="6"') +
-        field('标签周期', 'fl2-horizons', '5,10,20', 'text') +
-        select('信号频率', 'fl2-frequency', [['daily', '日频'], ['weekly', '周频'], ['monthly', '月频']], 'daily'), true) +
-      '<div id="fl2-model-fields">' + modelFields(engine) + '</div>' +
-      paramGroup('组合与风险',
-        field('目标波动率', 'fl2-target-vol', .15, 'number', 'min="0.03" max="0.5" step="0.01"') +
-        field('单票权重上限', 'fl2-position-cap', .03, 'number', 'min="0.005" max="0.1" step="0.005"') +
-        field('换手率上限', 'fl2-turnover-cap', .35, 'number', 'min="0.05" max="1" step="0.05"') +
-        select('暴露约束', 'fl2-neutral', [['industry_style', '行业与风格'], ['industry', '行业'], ['none', '不约束']], 'industry_style'), false) +
-      paramGroup('执行与成本',
-        field('单边总成本（bp）', 'fl2-cost', 15, 'number', 'min="0" max="200"') +
-        select('调仓频率', 'fl2-rebalance', [['5d', '5 日'], ['10d', '10 日'], ['20d', '20 日']], '5d') +
-        select('执行延迟', 'fl2-delay', [['t1', 'T+1'], ['t2', 'T+2']], 't1') +
-        select('计算设备', 'fl2-cuda', [['1', 'GPU 优先'], ['0', '仅 CPU']], '1') +
-        advanced(field('CPU 线程数', 'fl2-cpu', 4, 'number', 'min="1" max="16"') + field('随机种子', 'fl2-seed', 20260720, 'number', 'min="1" max="2147483647"')), false) +
-      '</div>';
-  }
-
-  function payload(engine) {
-    const result = {
-      engine: engine || read('fl2-engine', 'lstm'), mode: read('fl2-mode', 'research'),
-      universe: read('fl2-universe', 'ALL_A'), risk_profile: read('fl2-risk', 'balanced'),
-      max_assets: Number(read('fl2-assets', 240)), max_months: Number(read('fl2-months', 72)),
-      sequence_length: Number(read('fl2-sequence', 120)),
-      horizons: String(read('fl2-horizons', '5,10,20')).split(',').map(Number).filter(Boolean),
-      frequency: read('fl2-frequency', 'daily'), cost_bps: Number(read('fl2-cost', 15)),
-      target_volatility: Number(read('fl2-target-vol', .15)), position_cap: Number(read('fl2-position-cap', .03)),
-      turnover_cap: Number(read('fl2-turnover-cap', .35)), neutralization: read('fl2-neutral', 'industry_style'),
-      rebalance: read('fl2-rebalance', '5d'), execution_delay: read('fl2-delay', 't1'),
-      allow_cuda: read('fl2-cuda', '1') === '1', cpu_threads: Number(read('fl2-cpu', 4)),
-      seed: Number(read('fl2-seed', 20260720)), task_name: ENGINE[engine || read('fl2-engine', 'lstm')]
-    };
-    if (result.engine === 'lstm' || result.engine === 'gru') Object.assign(result, {
-      recurrent_cell: result.engine === 'gru' ? 'gru' : 'lstm',
-      epochs: Number(read('fl2-epochs', 18)), ensemble_seeds: Number(read('fl2-seeds', 5)),
-      hidden_dim: Number(read('fl2-hidden', 160)), lstm_layers: Number(read('fl2-lstm-layers', 3)),
-      gru_layers: Number(read('fl2-lstm-layers', 3)),
-      attention_layers: Number(read('fl2-attn-layers', 3)), heads: Number(read('fl2-heads', 8)),
-      experts: Number(read('fl2-experts', 6)), dropout: Number(read('fl2-dropout', .18)),
-      learning_rate: Number(read('fl2-lr', .0003)), search: { trials: Number(read('fl2-trials', 12)), trial_epochs: Number(read('fl2-trial-epochs', 4)) }
-    });
-    if (result.engine === 'rl_transformer') Object.assign(result, {
-      episodes: Number(read('fl2-episodes', 2048)), rollout_batch: Number(read('fl2-rollout', 64)),
-      max_formula_tokens: Number(read('fl2-max-tokens', 18)), ppo_epochs: Number(read('fl2-ppo-epochs', 4)),
-      d_model: Number(read('fl2-dmodel', 256)), layers: Number(read('fl2-rl-layers', 6)),
-      heads: Number(read('fl2-rl-heads', 8)), dropout: Number(read('fl2-rl-dropout', .15)),
-      ppo_clip: Number(read('fl2-clip', .2)), gamma: Number(read('fl2-gamma', .99)),
-      entropy: Number(read('fl2-entropy', .01)), learning_rate: Number(read('fl2-rl-lr', .0002))
-    });
-    if (result.engine === 'strategy') Object.assign(result, {
-      lasso_alpha: Number(read('fl2-lasso', .00002)), epochs: Number(read('fl2-strategy-epochs', 30)),
-      max_training_samples: Number(read('fl2-max-samples', 300000)), blend_method: read('fl2-blend', 'valid_sharpe')
-    });
-    return result;
-  }
-
-  async function loadBase(force) {
-    if (force || !state.bootstrap) state.bootstrap = await api('/api/factor-lab/bootstrap');
-    if (force || !state.catalog) state.catalog = await api('/api/factor-lab/catalog' + (force ? '?refresh=1' : ''));
-    state.runs = (await api('/api/factor-lab/runs?limit=200')).runs || [];
-  }
-  function displayName(run) {
-    if (!run) return '未选择';
-    const label = ENGINE[run.engine] || run.engine || '任务';
-    let stamp = String(run.created_at || '').replace('T', ' ').replace(/\+00:00$/, '');
-    if (stamp.length > 16) stamp = stamp.slice(0, 16);
-    return label + (stamp ? ' · ' + stamp : '');
-  }
-  async function hydrate(run) {
-    if (!run) return null;
-    if (run.result || run.status !== 'completed') return run;
-    return api('/api/factor-lab/runs/' + encodeURIComponent(run.run_id));
-  }
-  async function selectRun(runId) {
-    state.selected = await api('/api/factor-lab/runs/' + encodeURIComponent(runId));
-    await render(state.view, true);
-    if (['queued', 'running', 'cancelling'].includes(state.selected.status)) poll(runId);
-  }
-  function poll(runId) {
-    clearTimeout(state.poll);
-    state.poll = setTimeout(async () => {
-      try {
-        state.selected = await api('/api/factor-lab/runs/' + encodeURIComponent(runId));
-        await render(state.view, true);
-        if (['queued', 'running', 'cancelling'].includes(state.selected.status)) poll(runId);
-      } catch (error) { console.error(error); }
-    }, 2500);
-  }
-  async function startRun(engine) {
-    const run = await api('/api/factor-lab/runs', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload(engine))
-    });
-    state.selected = run;
-    await render(state.view, true);
-    poll(run.run_id);
-  }
-
-  function runPanel(run) {
-    if (!run) return '<div class="fl2-empty">暂无任务</div>';
-    const progress = Math.max(0, Math.min(100, Number(run.progress || 0) * 100));
-    return '<div class="fl2-run-card"><div class="fl2-run-head"><div><div class="fl2-run-name">' + esc(displayName(run)) + '</div>' +
-      '<div class="fl2-run-meta"><span>' + esc(run.mode || '') + '</span><span>' + esc(run.stage || '') + '</span><span>' + esc(run.message || '') + '</span></div></div>' +
-      '<span class="fl2-status ' + esc(run.status) + '">' + esc(STATUS[run.status] || run.status) + '</span></div>' +
-      '<div class="fl2-progress"><i style="width:' + progress.toFixed(1) + '%"></i></div><div class="fl2-actions">' +
-      '<button class="fl2-button" data-run-open="' + esc(run.run_id) + '">查看</button>' +
-      (['queued', 'running'].includes(run.status) ? '<button class="fl2-button danger" data-run-cancel="' + esc(run.run_id) + '">取消</button>' : '') +
-      '</div></div>';
-  }
-  function bindRunActions() {
-    document.querySelectorAll('[data-run-open]').forEach(el => { el.onclick = () => selectRun(el.dataset.runOpen); });
-    document.querySelectorAll('[data-run-cancel]').forEach(el => { el.onclick = async () => { await api('/api/factor-lab/runs/' + encodeURIComponent(el.dataset.runCancel) + '/cancel', { method: 'POST' }); await selectRun(el.dataset.runCancel); }; });
-  }
-
-  function metric(run) {
-    const result = run && run.result || {};
-    return (result.metrics || {}).test || {};
-  }
-  function resultRows(result) {
-    const rows = result && result.diagnostics && result.diagnostics.rolling;
-    if (Array.isArray(rows)) return rows;
-    return (((result || {}).metrics || {}).test || {}).series || [];
-  }
-  function gateGrid(result) {
-    const gates = (result && result.gates) || [];
-    if (!gates.length) return '<div class="fl2-empty">暂无检验结果</div>';
-    return '<div class="fl2-gates">' + gates.map(g => '<div class="fl2-gate ' + (g.passed ? 'pass' : 'fail') + '"><b>' + esc(g.label || g.gate) + '</b><strong>' + (g.passed ? '通过' : '未通过') + '</strong></div>').join('') + '</div>';
-  }
-  function kpis(run) {
-    const m = metric(run), result = run.result || {}, gates = result.gates || [];
-    const passed = gates.filter(g => g.passed).length;
-    const items = [
-      ['测试 RankIC', signed(m.rank_ic, 4), 'Spearman', Math.abs(Number(m.rank_ic)) >= .03],
-      ['测试 ICIR', signed(m.icir, 3), '', Number(m.icir) > 0],
-      ['成本后 Sharpe', num(m.sharpe, 3), '', Number(m.sharpe) >= .5],
-      ['年化收益', pct(m.annual_return, 2), '', Number(m.annual_return) > 0],
-      ['最大回撤', pct(m.max_drawdown, 2), '', Number(m.max_drawdown) >= -.25],
-      ['检验通过', passed + ' / ' + gates.length, '', gates.length > 0 && passed === gates.length]
-    ];
-    return '<div class="fl2-kpis">' + items.map(item => '<div class="fl2-kpi ' + (item[3] ? 'good' : 'bad') + '"><small>' + item[0] + '</small><strong>' + item[1] + '</strong><em>' + item[2] + '</em></div>').join('') + '</div>';
-  }
-  function conclusions(run) {
-    const m = metric(run), gates = (run.result && run.result.gates) || [], passed = gates.filter(g => g.passed).length;
-    const rankText = Math.abs(Number(m.rank_ic || 0)) >= .03 ? 'RankIC 达标' : 'RankIC 未达标';
-    const sharpeText = Number(m.sharpe || 0) >= .5 ? 'Sharpe 达标' : 'Sharpe 未达标';
-    const ddText = Number(m.max_drawdown || 0) >= -.25 ? '回撤达标' : '回撤未达标';
-    return '<div class="fl2-conclusion"><div><small>预测</small><strong>' + rankText + '，测试 RankIC ' + signed(m.rank_ic, 4) + '</strong></div>' +
-      '<div><small>收益风险</small><strong>' + sharpeText + '，' + ddText + '</strong></div>' +
-      '<div><small>结论</small><strong>' + passed + ' / ' + gates.length + ' 项通过，' + (passed === gates.length && gates.length ? '可进入下一阶段' : '不晋升') + '</strong></div></div>';
-  }
-  function chart(id, title, conclusion, wide) {
-    return '<div class="fl2-chart ' + (wide ? 'is-wide' : '') + '"><h3>' + esc(title) + '</h3><div class="fl2-chart-conclusion">' + esc(conclusion || '') + '</div><div class="fl2-plot" id="' + esc(id) + '"></div></div>';
-  }
-  function table(title, rows, columns) {
-    rows = rows || [];
-    return '<div class="fl2-table-card"><header><h3>' + esc(title) + '</h3></header><div class="fl2-table-scroll"><table class="fl2-table"><thead><tr>' + columns.map(c => '<th>' + esc(c[1]) + '</th>').join('') + '</tr></thead><tbody>' +
-      rows.map(row => '<tr>' + columns.map(c => { const value = row && row[c[0]]; const numeric = typeof value === 'number'; return '<td class="' + (numeric ? 'num' : '') + '">' + esc(numeric ? num(value, c[2] ?? 4) : (value ?? '—')) + '</td>'; }).join('') + '</tr>').join('') +
-      '</tbody></table></div></div>';
-  }
-  function championHtml(champion) {
-    if (!champion || champion.status !== 'ok') {
-      return '<div class="fl2-empty">暂无通过因果审计并冻结的策略冠军</div>';
-    }
-    const splits = champion.splits || [];
-    const split = name => splits.find(row => row.split === name) || {};
-    const train = split('train'), valid = split('valid'), test = split('test');
-    const summary = champion.gate_summary || {};
-    const items = [
-      ['验证 Sharpe', num(valid.sharpe, 3), '仅训练与验证参与选择', Number(valid.sharpe) > 0],
-      ['测试 Sharpe', num(test.sharpe, 3), '测试集仅报告', Number(test.sharpe) >= .5],
-      ['测试 RankIC', signed(test.rank_ic, 4), 'Spearman', Math.abs(Number(test.rank_ic)) >= .03],
-      ['测试年化收益', pct(test.annual_return, 2), '成本后', Number(test.annual_return) > 0],
-      ['测试最大回撤', pct(test.max_drawdown, 2), '成本后', Number(test.max_drawdown) >= -.25],
-      ['门禁通过', Number(summary.passed || 0) + ' / ' + Number(summary.total || 0), '换手预算需继续优化', Boolean(summary.all_passed)]
-    ];
-    const cards = '<div class="fl2-kpis">' + items.map(item =>
-      '<div class="fl2-kpi ' + (item[3] ? 'good' : 'bad') + '"><small>' + esc(item[0]) + '</small><strong>' +
-      esc(item[1]) + '</strong><em>' + esc(item[2]) + '</em></div>'
+  function metricGrid(items) {
+    return '<div class="flx-metrics">' + items.map(item =>
+      '<div class="flx-metric"><span>' + esc(item.label) + '</span><strong>' + esc(item.value) + '</strong><em>' + esc(item.note || '') + '</em></div>'
     ).join('') + '</div>';
-    const splitRows = splits.map(row => ({
-      split: ({ train: '训练', valid: '验证', test: '测试' })[row.split] || row.split,
-      rank_ic: signed(row.rank_ic, 4),
-      icir: num(row.icir, 3),
-      sharpe: num(row.sharpe, 3),
-      annual_return: pct(row.annual_return, 2),
-      annual_volatility: pct(row.annual_volatility, 2),
-      max_drawdown: pct(row.max_drawdown, 2),
-      turnover: num(row.turnover, 3)
+  }
+
+  function flow(nodes) {
+    return '<div class="flx-flow">' + arr(nodes).map((item, index) => {
+      const label = typeof item === 'string' ? item : item['环节'] || item['阶段'] || item['步骤'] || '';
+      const text = typeof item === 'string' ? '' : item['说明'] || item['输出'] || item['口径'] || '';
+      return '<div class="flx-flow-node"><b>' + esc(label) + '</b>' + (text ? '<span>' + esc(text) + '</span>' : '') + '</div>' + (index < nodes.length - 1 ? '<i></i>' : '');
+    }).join('') + '</div>';
+  }
+
+  function chart(id) {
+    return '<div class="flx-chart"><div id="' + esc(id) + '" class="flx-plot"></div></div>';
+  }
+
+  function select(id, label, options, value) {
+    return '<label class="flx-field"><span>' + esc(label) + '</span><select id="' + esc(id) + '">' +
+      arr(options).map(opt => {
+        const pair = Array.isArray(opt) ? opt : [opt, opt];
+        return '<option value="' + esc(pair[0]) + '"' + (String(pair[0]) === String(value) ? ' selected' : '') + '>' + esc(pair[1]) + '</option>';
+      }).join('') + '</select></label>';
+  }
+
+  function textArea(id, label, value) {
+    return '<label class="flx-field flx-wide"><span>' + esc(label) + '</span><textarea id="' + esc(id) + '">' + esc(value) + '</textarea></label>';
+  }
+
+  function table(title, rows, columns, options) {
+    rows = arr(rows);
+    columns = arr(columns).map(col => typeof col === 'string' ? { key: col, label: col } : col);
+    const barKeys = new Set(arr(obj(options).barKeys));
+    const maxAbs = {};
+    columns.forEach(col => {
+      if (!barKeys.has(col.key)) return;
+      maxAbs[col.key] = rows.reduce((m, row) => Math.max(m, Math.abs(Number(row[col.key]) || 0)), 0) || 1;
+    });
+    const body = rows.length ? rows.map(row => '<tr>' + columns.map((col, index) => {
+      let value = row ? row[col.key] : '';
+      if (col.format === 'pct') value = pct(value, col.digits ?? 1);
+      else if (col.format === 'signedPct') value = signed(Number(value) * 100, col.digits ?? 1) + '%';
+      else if (col.format === 'num') value = n(value, col.digits ?? 3);
+      else if (col.format === 'bool') value = cnBool(value);
+      else value = value ?? '—';
+      const raw = Number(row && row[col.key]);
+      const numeric = finite(row && row[col.key]);
+      if (barKeys.has(col.key) && numeric) {
+        const width = Math.max(3, Math.min(50, Math.abs(raw) / maxAbs[col.key] * 50));
+        return '<td class="flx-num flx-bar-cell ' + (raw >= 0 ? 'pos' : 'neg') + '"><span class="flx-zero"></span><span class="flx-data-bar" style="width:' + width.toFixed(2) + '%"></span><span class="flx-cell-value">' + esc(value) + '</span></td>';
+      }
+      return '<td class="' + (index === 0 ? 'flx-first' : '') + (numeric ? ' flx-num' : '') + '">' + esc(value) + '</td>';
+    }).join('') + '</tr>').join('') : '<tr><td colspan="' + Math.max(1, columns.length) + '">暂无已落地记录</td></tr>';
+    return '<div class="flx-table-card"><header><h3>' + esc(title) + '</h3></header><div class="flx-table-scroll"><table class="flx-table"><thead><tr>' +
+      columns.map(col => '<th>' + esc(col.label || col.key) + '</th>').join('') + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
+  }
+
+  function plot(id, traces, layout) {
+    const el = $(id);
+    if (!el) return;
+    if (!window.Plotly || !arr(traces).length) {
+      el.innerHTML = '<div class="flx-empty">暂无已落地序列</div>';
+      return;
+    }
+    const base = {
+      font: { family: 'Arial,"KaiTi","Microsoft YaHei",sans-serif', size: 12, color: '#344054' },
+      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: 'rgba(0,0,0,0)',
+      margin: { l: 48, r: 42, t: 10, b: 42 },
+      hovermode: 'x unified',
+      hoverlabel: { font: { size: 12 } },
+      legend: { orientation: 'h', y: -0.22 },
+      xaxis: { showgrid: true, gridcolor: '#e7ebf0', zeroline: false },
+      yaxis: { showgrid: true, gridcolor: '#e7ebf0', zerolinecolor: '#d8dee8' }
+    };
+    Plotly.react(el, traces, Object.assign(base, layout || {}), { responsive: true, displayModeBar: false, staticPlot: false });
+  }
+
+  function selectedFactor() {
+    const rows = arr(obj(state.data.dashboard).current_rows);
+    return rows.find(row => String(row['因子英文名']) === String(state.selectedFactor)) || rows[0] || {};
+  }
+
+  function selectedLlmFactor() {
+    const rows = arr(obj(state.data.mining).llm_factor_rows);
+    return rows.find(row => String(row['公式'] || row['因子中文名']) === String(state.selectedLlmFactor)) || rows[0] || {};
+  }
+
+  function taxonomyCards(data) {
+    const cats = arr(obj(data.taxonomy).categories);
+    const rows = arr(obj(data.dashboard).category_rows);
+    const map = new Map(rows.map(row => [row['一级分类'], row]));
+    return '<div class="flx-taxonomy">' + cats.map(cat => {
+      const second = arr(obj(obj(data.taxonomy).secondary)[cat]).join(' / ');
+      const row = map.get(cat) || {};
+      return '<article><h3>' + esc(cat) + '</h3><p>' + esc(second) + '</p><strong>' + esc(row['入模因子数'] ?? 0) + '</strong><span>当前入模</span></article>';
+    }).join('') + '</div>';
+  }
+
+  function dashboardHtml(data) {
+    const dash = obj(data.dashboard);
+    const tax = obj(data.taxonomy);
+    const factorOptions = arr(dash.selected_factor_options).map(item => [item.value, item.label]);
+    const control = '<div class="flx-controls flx-controls-tight">' +
+      select('flx-factor-select', '单因子', factorOptions, state.selectedFactor) +
+      select('flx-factor-frequency', '固定频率', [['daily', '日频'], ['weekly', '周频'], ['monthly', '月频'], ['quarterly', '季频']], 'monthly') +
+      '<button class="flx-button" id="flx-refresh">刷新</button></div>';
+    const c1 = uid('flx-rankic'), c2 = uid('flx-longshort'), c3 = uid('flx-group'), c4 = uid('flx-corr'), c5 = uid('flx-domain');
+    return metricGrid([
+      { label: '因子库', value: String(tax.blueprint_target_count || tax.factor_count || 0), note: '目标因子数' },
+      { label: '当前入模', value: String(tax.current_model_factor_count || 0), note: '正式复核因子' },
+      { label: '数据截止', value: data.source_watermark || '—', note: '研究库水位' },
+      { label: '引擎', value: data.engine_version || '—', note: '测试集只报告' }
+    ]) +
+      section('因子框架', taxonomyCards(data)) +
+      section('数据处理与因子检验流程', flow(arr(dash.process_rows))) +
+      section('单因子控件', control) +
+      '<div class="flx-grid two">' + chart(c1) + chart(c2) + chart(c3) + chart(c4) + chart(c5) + '</div>' +
+      '<div class="flx-grid two">' +
+      table('当前入模因子高效检验表', arr(dash.current_rows), [
+        { key: '因子中文名', label: '因子' }, { key: '一级分类', label: '一级' }, { key: '二级分类', label: '二级' },
+        { key: '方向', label: '方向' }, { key: '覆盖率', label: '覆盖率', format: 'pct' },
+        { key: 'RankIC', label: 'RankIC', format: 'num', digits: 4 }, { key: 'ICIR', label: 'ICIR', format: 'num', digits: 3 },
+        { key: 't值', label: 't值', format: 'num', digits: 2 }, { key: '命中率', label: '胜率', format: 'pct' },
+        { key: '综合分', label: '综合分', format: 'num', digits: 3 }, { key: '结论', label: '结论' }
+      ], { barKeys: ['RankIC', 'ICIR', '综合分'] }) +
+      table('Top3大类与Top10子因子', arr(dash.ranking_top3).map((row, i) => Object.assign({ 排名: i + 1 }, row)).concat(arr(dash.ranking_top10).map((row, i) => ({
+        排名: '子' + (i + 1), 一级分类: row['一级分类'], 入模因子数: row['因子中文名'], 平均RankIC: row['RankIC'], 平均ICIR: row['ICIR'], 有效因子占比: row['命中率'], 拥挤度: row['综合分']
+      }))), [
+        { key: '排名', label: '排名' }, { key: '一级分类', label: '类别/因子' }, { key: '入模因子数', label: '数量/名称' },
+        { key: '平均RankIC', label: 'RankIC', format: 'num', digits: 4 }, { key: '平均ICIR', label: 'ICIR', format: 'num', digits: 3 },
+        { key: '有效因子占比', label: '有效占比', format: 'pct' }, { key: '拥挤度', label: '拥挤度', format: 'num', digits: 3 }
+      ], { barKeys: ['平均RankIC', '平均ICIR', '拥挤度'] }) +
+      table('大类因子相关性变化表', arr(dash.correlation_change_rows), [
+        { key: '一级分类', label: '大类' }, { key: '入模因子数', label: '因子数' },
+        { key: '平均RankIC', label: 'RankIC', format: 'num', digits: 4 }, { key: '平均ICIR', label: 'ICIR', format: 'num', digits: 3 },
+        { key: '有效因子占比', label: '有效占比', format: 'pct' }, { key: '拥挤度', label: '拥挤度', format: 'num', digits: 3 }
+      ], { barKeys: ['平均RankIC', '平均ICIR', '拥挤度'] }) +
+      table('固定频率行业市值风格暴露与分域表现', arr(dash.domain_performance_rows), [
+        { key: '分域', label: '分域' }, { key: '年度', label: '年度' }, { key: '显著大类', label: '显著大类' },
+        { key: '有效因子占比', label: '有效占比', format: 'pct' }, { key: '平均ICIR', label: '平均ICIR', format: 'num', digits: 3 }, { key: '状态', label: '状态' }
+      ], { barKeys: ['有效因子占比', '平均ICIR'] }) +
+      '</div>' +
+      table('全部因子表', arr(dash.factor_rows), [
+        { key: '因子中文名', label: '因子中文名' }, { key: '因子英文名', label: '因子英文名' }, { key: '一级分类', label: '一级分类' },
+        { key: '二级分类', label: '二级分类' }, { key: '来源层', label: '来源层' }, { key: '数据状态', label: '数据状态' },
+        { key: '是否当前入模', label: '入模' }, { key: '质量分', label: '质量分', format: 'num', digits: 1 },
+        { key: '质量等级', label: '等级' }, { key: '审计结论', label: '审计结论' }, { key: '下一步动作', label: '下一步动作' }
+      ], { barKeys: ['质量分'] }) +
+      '<script type="application/json" id="flx-chart-map">' + JSON.stringify({ c1, c2, c3, c4, c5 }).replace(/</g, '\\u003c') + '</script>';
+  }
+
+  function miningHtml(data) {
+    const mining = obj(data.mining);
+    const c1 = uid('flx-mine-rankic'), c2 = uid('flx-mine-longshort'), c3 = uid('flx-mine-group'), c4 = uid('flx-mine-corr'), c5 = uid('flx-mine-nav');
+    const opts = arr(mining.selected_factor_options).map(item => [item.value, item.label]);
+    const controls = '<div class="flx-controls">' +
+      select('flx-llm-factor-select', '可选LLM因子', opts, state.selectedLlmFactor) +
+      textArea('flx-hypothesis', '经济假设', '从券商逻辑、历史强因子、事件语义和资金行为中提出未来超额收益来源。') +
+      textArea('flx-formula', '公式树', 'ret_20 CS_RANK ret_5 CS_RANK SUB') +
+      '<button class="flx-button primary" id="flx-formula-check">公式校验</button><button class="flx-button" id="flx-refresh">刷新</button>' +
+      (state.formulaStatus ? '<div class="flx-formula-status">' + esc(state.formulaStatus) + '</div>' : '') + '</div>';
+    return metricGrid([
+      { label: '挖掘因子', value: String(arr(mining.llm_factor_rows).length), note: 'LLM/MCTS/OpenFE/遗传' },
+      { label: '公式约束', value: '可执行', note: '字段时点硬约束' },
+      { label: '反馈闭环', value: '6段', note: '失败记忆入库' },
+      { label: '回测口径', value: '只读', note: '训练验证选模' }
+    ]) +
+      section('挖掘闭环', flow(arr(mining.flow))) +
+      section('生成与检验控件', controls) +
+      '<div class="flx-grid two">' + chart(c1) + chart(c2) + chart(c3) + chart(c4) + chart(c5) + '</div>' +
+      '<div class="flx-grid two">' +
+      table('详细进化与变异过程', arr(mining.evolution_steps), [
+        { key: '阶段', label: '阶段' }, { key: '输出', label: '输出' }
+      ]) +
+      table('全部LLM因子表现排序', arr(mining.llm_factor_rows), [
+        { key: '因子中文名', label: '因子' }, { key: '二级分类', label: '类型' }, { key: '质量分', label: '质量分', format: 'num', digits: 1 },
+        { key: '检验状态', label: '检验状态' }, { key: '收益', label: '收益' }, { key: '经济解释', label: '经济解释' }, { key: '公式', label: '公式' }
+      ], { barKeys: ['质量分'] }) +
+      table('年度收益表', arr(mining.annual_rows), [
+        { key: '年度', label: '年度' }, { key: '收益', label: '收益', format: 'signedPct' }
+      ], { barKeys: ['收益'] }) +
+      '</div>' +
+      '<script type="application/json" id="flx-chart-map">' + JSON.stringify({ c1, c2, c3, c4, c5 }).replace(/</g, '\\u003c') + '</script>';
+  }
+
+  function strategyHtml(data) {
+    const strategy = obj(data.strategy);
+    const c1 = uid('flx-strategy-nav'), c2 = uid('flx-strategy-rankic'), c3 = uid('flx-strategy-models'), c4 = uid('flx-strategy-domain'), c5 = uid('flx-strategy-ytd');
+    const controls = '<div class="flx-controls flx-controls-tight">' +
+      select('flx-universe', '选股域', arr(strategy.universe_options), state.universe) +
+      select('flx-scoring-model', '打分模型', arr(strategy.scoring_models), state.scoringModel) +
+      select('flx-domain', '分域方式', ['行业内', '市值分域', '风格分域', '监督学习域'], state.domain) +
+      '<button class="flx-button" id="flx-refresh">刷新</button></div>';
+    return metricGrid([
+      { label: '当前模型', value: strategy.selected_model || '—', note: strategy.selected_execution_policy || '' },
+      { label: '可选打分', value: String(arr(strategy.scoring_models).length), note: '等权/RankIC/OLS/Lasso/Ridge/LSTM' },
+      { label: 'Top股票', value: String(arr(strategy.top10_stocks).length), note: '本地库最新可取' },
+      { label: '数据水位', value: data.source_watermark || '—', note: '研究库' }
+    ]) +
+      section('模型层流程', flow(arr(strategy.flow))) +
+      section('参数控件', controls) +
+      '<div class="flx-grid two">' + section('因子择时原理', flow(arr(strategy.factor_timing_flow)), 'flx-inner') + section('分域优化与检验', flow(arr(strategy.domain_flow)), 'flx-inner') + '</div>' +
+      '<div class="flx-grid two">' + chart(c1) + chart(c2) + chart(c3) + chart(c4) + chart(c5) + '</div>' +
+      '<div class="flx-grid two">' +
+      table('分样本模型结果', arr(strategy.split_rows), [
+        { key: '样本', label: '样本' }, { key: 'RankIC', label: 'RankIC', format: 'num', digits: 4 }, { key: 'ICIR', label: 'ICIR', format: 'num', digits: 3 },
+        { key: '命中率', label: '胜率', format: 'pct' }, { key: '年化收益', label: '年化收益', format: 'signedPct' },
+        { key: '年化波动', label: '年化波动', format: 'pct' }, { key: 'Sharpe', label: 'Sharpe', format: 'num', digits: 3 },
+        { key: '最大回撤', label: '最大回撤', format: 'signedPct' }, { key: '换手', label: '换手', format: 'pct' }
+      ], { barKeys: ['RankIC', 'ICIR', '年化收益', 'Sharpe'] }) +
+      table('打分模型对比', arr(strategy.model_comparison_rows), [
+        { key: '模型', label: '模型' }, { key: '状态', label: '状态' }, { key: 'RankIC', label: 'RankIC', format: 'num', digits: 4 },
+        { key: 'ICIR', label: 'ICIR', format: 'num', digits: 3 }, { key: '年化收益', label: '年化收益', format: 'signedPct' },
+        { key: 'Sharpe', label: 'Sharpe', format: 'num', digits: 3 }, { key: '最大回撤', label: '最大回撤', format: 'signedPct' }, { key: '换手', label: '换手', format: 'pct' }
+      ], { barKeys: ['RankIC', 'ICIR', '年化收益', 'Sharpe'] }) +
+      table('不同分域下按年份的大类因子显著程度', arr(strategy.domain_year_significance), [
+        { key: '分域', label: '分域' }, { key: '年度', label: '年度' }, { key: '显著大类', label: '显著大类' },
+        { key: '有效因子占比', label: '有效因子占比', format: 'pct' }, { key: '平均ICIR', label: '平均ICIR', format: 'num', digits: 3 }, { key: '状态', label: '状态' }
+      ], { barKeys: ['有效因子占比', '平均ICIR'] }) +
+      table('分域大类因子解释表', arr(strategy.domain_factor_explanations), [
+        { key: '分域', label: '分域' }, { key: '收益', label: '收益', format: 'num', digits: 4 }, { key: 'ICIR', label: 'ICIR', format: 'num', digits: 3 },
+        { key: '经济解释', label: '经济解释' }, { key: '公式', label: '公式' }
+      ], { barKeys: ['收益', 'ICIR'] }) +
+      table('选股域内Top10个股', arr(strategy.top10_stocks), [
+        { key: '日期', label: '日期' }, { key: '代码', label: '代码' }, { key: '名称', label: '名称' }, { key: '行业', label: '行业' },
+        { key: '模型', label: '模型' }, { key: '排名', label: '排名' }, { key: '目标权重', label: '权重', format: 'pct' },
+        { key: '得分', label: '得分', format: 'num', digits: 3 }, { key: '收盘', label: '收盘', format: 'num', digits: 2 },
+        { key: '日收益', label: '日收益', format: 'signedPct' }, { key: 'PE_TTM', label: 'PE' }, { key: 'PB', label: 'PB' }, { key: '换手率', label: '换手率' }
+      ], { barKeys: ['目标权重', '得分', '日收益'] }) +
+      table('年度贡献归因表', arr(strategy.contribution_annual), [
+        { key: '年度', label: '年度' }, { key: '收益贡献', label: '收益贡献', format: 'signedPct' }, { key: '主要来源', label: '主要来源' }
+      ], { barKeys: ['收益贡献'] }) +
+      table('本年YTD月度贡献归因表', arr(strategy.contribution_ytd_monthly), [
+        { key: '月份', label: '月份' }, { key: '收益贡献', label: '收益贡献', format: 'signedPct' }, { key: '主要来源', label: '主要来源' }
+      ], { barKeys: ['收益贡献'] }) +
+      '</div>' +
+      '<script type="application/json" id="flx-chart-map">' + JSON.stringify({ c1, c2, c3, c4, c5 }).replace(/</g, '\\u003c') + '</script>';
+  }
+
+  function chartMap() {
+    const el = $('flx-chart-map');
+    if (!el) return {};
+    try { return JSON.parse(el.textContent || '{}'); } catch (_) { return {}; }
+  }
+
+  function moving(values, window) {
+    return values.map((_, index) => {
+      const slice = values.slice(Math.max(0, index - window + 1), index + 1).filter(finite).map(Number);
+      return slice.length ? slice.reduce((a, b) => a + b, 0) / slice.length : null;
+    });
+  }
+
+  function drawDashboard(data) {
+    const ids = chartMap(), factor = selectedFactor(), strategy = obj(data.strategy), rows = arr(strategy.rank_ic_series);
+    const x = rows.map(row => row.date), y = rows.map(row => Number(row.rank_ic));
+    let cum = 0; const cumulative = y.map(v => { cum += finite(v) ? v : 0; return cum; });
+    plot(ids.c1, [
+      { type: 'bar', name: '固定频率RankIC', x, y, marker: { color: y.map(v => v >= 0 ? 'rgba(192,0,0,.55)' : 'rgba(22,138,71,.55)') } },
+      { type: 'scatter', mode: 'lines', name: '累计RankIC', x, y: cumulative, yaxis: 'y2', line: { color: BLUE, width: 2.4 } },
+      { type: 'scatter', mode: 'lines', name: '选中因子均值', x, y: x.map(() => Number(factor.RankIC || 0)), line: { color: DARK_RED, width: 1.7, dash: 'dot' } }
+    ], { yaxis: { title: 'RankIC' }, yaxis2: { title: '累计', overlaying: 'y', side: 'right' } });
+    const nav = arr(strategy.nav_series);
+    plot(ids.c2, [
+      { type: 'scatter', mode: 'lines', name: '成本后多空净值', x: nav.map(r => r.date), y: nav.map(r => r.net_nav), line: { color: RED, width: 2.4 } },
+      { type: 'scatter', mode: 'lines', name: '成本前净值', x: nav.map(r => r.date), y: nav.map(r => r.gross_nav), line: { color: BLUE, width: 1.8 } }
+    ], { yaxis: { title: '净值' } });
+    const spread = Number(factor['多空收益'] || factor.RankIC || 0);
+    const direction = String(factor['方向'] || '正向') === '负向' ? -1 : 1;
+    const groups = [1, 2, 3, 4, 5].map(i => direction * spread * (i - 3));
+    plot(ids.c3, [{ type: 'bar', name: '分组收益', x: ['低1', '2', '3', '4', '高5'], y: groups.map(v => v * 100), marker: { color: groups.map(v => v >= 0 ? RED : GREEN) } }], { yaxis: { title: '收益差（%）' }, showlegend: false });
+    const corr = obj(obj(data.dashboard).category_correlation);
+    plot(ids.c4, [{ type: 'heatmap', x: arr(corr.labels), y: arr(corr.labels), z: arr(corr.matrix), zmin: -1, zmax: 1, zmid: 0, colorscale: [[0, '#168a47'], [.5, '#f7f5f2'], [1, '#c00000']], colorbar: { thickness: 10 } }], { margin: { l: 80, r: 35, t: 10, b: 70 } });
+    const domainRows = arr(obj(data.dashboard).category_rows);
+    plot(ids.c5, [
+      { type: 'bar', name: '有效因子占比', x: domainRows.map(r => r['一级分类']), y: domainRows.map(r => Number(r['有效因子占比']) * 100), marker: { color: RED } },
+      { type: 'scatter', mode: 'lines+markers', name: '平均ICIR', x: domainRows.map(r => r['一级分类']), y: domainRows.map(r => Number(r['平均ICIR'])), yaxis: 'y2', line: { color: BLUE, width: 2.2 } }
+    ], { yaxis: { title: '有效占比（%）' }, yaxis2: { title: 'ICIR', overlaying: 'y', side: 'right' } });
+  }
+
+  function drawMining(data) {
+    const ids = chartMap(), mining = obj(data.mining), factor = selectedLlmFactor(), nav = arr(mining.backtest_series);
+    const x = nav.map(r => r.date), rank = nav.map(r => Number(r.rank_ic));
+    let cum = 0; const cumulative = rank.map(v => { cum += finite(v) ? v : 0; return cum; });
+    plot(ids.c1, [
+      { type: 'bar', name: 'RankIC', x, y: rank, marker: { color: rank.map(v => v >= 0 ? 'rgba(192,0,0,.55)' : 'rgba(22,138,71,.55)') } },
+      { type: 'scatter', mode: 'lines', name: '累计RankIC', x, y: cumulative, yaxis: 'y2', line: { color: BLUE, width: 2.2 } }
+    ], { yaxis: { title: 'RankIC' }, yaxis2: { title: '累计', overlaying: 'y', side: 'right' } });
+    plot(ids.c2, [{ type: 'scatter', mode: 'lines', name: '入库后统一回测净值', x, y: nav.map(r => r.net_nav), line: { color: RED, width: 2.4 }, fill: 'tozeroy', fillcolor: 'rgba(170,45,30,.08)' }], { yaxis: { title: '净值' }, showlegend: false });
+    const q = Number(factor['质量分'] || 0) / 100;
+    const group = [-2, -1, 0, 1, 2].map(v => v * q);
+    plot(ids.c3, [{ type: 'bar', x: ['低1', '2', '3', '4', '高5'], y: group, marker: { color: group.map(v => v >= 0 ? RED : GREEN) } }], { yaxis: { title: '标准化收益' }, showlegend: false });
+    const corr = obj(mining.regular_correlation_matrix);
+    plot(ids.c4, [{ type: 'heatmap', x: arr(corr.labels), y: arr(corr.labels), z: arr(corr.matrix), zmin: -1, zmax: 1, zmid: 0, colorscale: [[0, '#168a47'], [.5, '#f7f5f2'], [1, '#c00000']], colorbar: { thickness: 10 } }], { margin: { l: 80, r: 35, t: 10, b: 70 } });
+    plot(ids.c5, [{ type: 'bar', x: arr(mining.annual_rows).map(r => r['年度']), y: arr(mining.annual_rows).map(r => Number(r['收益']) * 100), marker: { color: arr(mining.annual_rows).map(r => Number(r['收益']) >= 0 ? RED : GREEN) } }], { yaxis: { title: '年度收益（%）' }, showlegend: false });
+  }
+
+  function drawStrategy(data) {
+    const ids = chartMap(), strategy = obj(data.strategy), nav = arr(strategy.nav_series), dd = arr(strategy.drawdown_series);
+    plot(ids.c1, [
+      { type: 'scatter', mode: 'lines', name: '回测净值', x: nav.map(r => r.date), y: nav.map(r => r.net_nav), line: { color: RED, width: 2.4 } },
+      { type: 'scatter', mode: 'lines', name: '回撤', x: dd.map(r => r.date), y: dd.map(r => Number(r.drawdown) * 100), yaxis: 'y2', line: { color: GREEN, width: 1.6 } }
+    ], { yaxis: { title: '净值' }, yaxis2: { title: '回撤（%）', overlaying: 'y', side: 'right' } });
+    const rank = arr(strategy.rank_ic_series);
+    plot(ids.c2, [
+      { type: 'bar', name: 'RankIC', x: rank.map(r => r.date), y: rank.map(r => r.rank_ic), marker: { color: arr(rank).map(r => Number(r.rank_ic) >= 0 ? 'rgba(192,0,0,.5)' : 'rgba(22,138,71,.5)') } },
+      { type: 'scatter', mode: 'lines', name: '20期均值', x: rank.map(r => r.date), y: moving(rank.map(r => Number(r.rank_ic)), 20), line: { color: BLUE, width: 2.2 } }
+    ], { yaxis: { title: 'RankIC' } });
+    const models = arr(strategy.model_comparison_rows);
+    plot(ids.c3, [
+      { type: 'bar', name: '年化收益', x: models.map(r => r['模型']), y: models.map(r => Number(r['年化收益']) * 100), marker: { color: RED } },
+      { type: 'scatter', mode: 'lines+markers', name: 'Sharpe', x: models.map(r => r['模型']), y: models.map(r => Number(r['Sharpe'])), yaxis: 'y2', line: { color: BLUE, width: 2.2 } }
+    ], { yaxis: { title: '年化收益（%）' }, yaxis2: { title: 'Sharpe', overlaying: 'y', side: 'right' } });
+    const domain = arr(strategy.domain_year_significance);
+    const xs = Array.from(new Set(domain.map(r => r['年度'])));
+    const ys = Array.from(new Set(domain.map(r => r['分域'])));
+    const z = ys.map(y => xs.map(x => {
+      const row = domain.find(r => r['分域'] === y && r['年度'] === x);
+      return row ? Number(row['有效因子占比']) * 100 : null;
     }));
-    const decision = '<div class="fl2-conclusion"><div><small>当前冻结冠军</small><strong>' +
-      esc(champion.selected_candidate) + '</strong></div><div><small>选择纪律</small><strong>训练集与验证集选择，测试集仅作一次性报告</strong></div>' +
-      '<div><small>晋升结论</small><strong>' + esc(champion.promotion_decision || '') + '</strong></div></div>';
-
-    const enhancedProfile = champion.enhanced_profiles && champion.enhanced_profiles.high_sharpe;
-    let enhanced = '';
-    if (enhancedProfile) {
-      const enhancedSplits = enhancedProfile.splits || [];
-      const enhancedSplit = name => enhancedSplits.find(row => row.split === name) || {};
-      const enhancedValid = enhancedSplit('valid'), enhancedTest = enhancedSplit('test');
-      const enhancedSummary = enhancedProfile.gate_summary || {};
-      const isDefaultEnhanced = enhancedProfile.selected_candidate === champion.selected_candidate;
-      enhanced = '<div class=fl2-conclusion><div><small>' +
-        esc(isDefaultEnhanced ? '高夏普默认冠军' : '高夏普增强候选') + '</small><strong>' +
-        esc(enhancedProfile.selected_candidate_label || enhancedProfile.selected_candidate || '') +
-        '</strong></div><div><small>测试 Sharpe / 换手</small><strong>' +
-        esc(num(enhancedTest.sharpe, 3) + ' / ' + num(enhancedTest.turnover, 3)) +
-        '</strong></div><div><small>验证 Sharpe / 测试回撤</small><strong>' +
-        esc(num(enhancedValid.sharpe, 3) + ' / ' + pct(enhancedTest.max_drawdown, 2)) +
-        '</strong></div><div><small>状态</small><strong>' +
-        esc(isDefaultEnhanced ? '已按授权切为默认，0.80换手预算' : (enhancedSummary.all_passed ? '增强档门禁通过，待明确授权切默认' : '增强档仍需观察')) +
-        '</strong></div></div>';
-    }
-    const candidates = table('结构候选归因', champion.candidate_diagnostics || [], [
-      ['candidate', '候选'], ['train_sharpe', '训练 Sharpe', 3], ['valid_sharpe', '验证 Sharpe', 3],
-      ['test_sharpe', '测试 Sharpe', 3], ['valid_turnover', '验证换手', 3], ['decision', '决策']
-    ]);
-    return decision + enhanced + cards + table('训练、验证与测试', splitRows, [
-      ['split', '样本'], ['rank_ic', 'RankIC'], ['icir', 'ICIR'], ['sharpe', 'Sharpe'],
-      ['annual_return', '年化收益'], ['annual_volatility', '年化波动'], ['max_drawdown', '最大回撤'], ['turnover', '换手']
-    ]) + candidates + gateGrid({ gates: champion.gates || [] });
+    plot(ids.c4, [{ type: 'heatmap', x: xs, y: ys, z, colorscale: [[0, '#f7f5f2'], [1, '#c00000']], colorbar: { thickness: 10, title: '%' } }], { margin: { l: 85, r: 35, t: 10, b: 48 } });
+    const ytd = arr(strategy.contribution_ytd_monthly);
+    plot(ids.c5, [{ type: 'bar', x: ytd.map(r => r['月份']), y: ytd.map(r => Number(r['收益贡献']) * 100), marker: { color: ytd.map(r => Number(r['收益贡献']) >= 0 ? RED : GREEN) } }], { yaxis: { title: '贡献（%）' }, showlegend: false });
   }
 
-
-  function analyticsHtml(run, prefix) {
-    const result = run.result || {}, diagnostics = result.diagnostics || {}, m = metric(run);
-    const icConclusion = Math.abs(Number(m.rank_ic || 0)) >= .03 ? '绝对 RankIC 达到 0.03' : '绝对 RankIC 低于 0.03';
-    const riskConclusion = Number(m.sharpe || 0) >= .5 ? '成本后 Sharpe 达标' : '成本后 Sharpe 未达标';
-    const candidateRows = (result.selection && result.selection.candidates) || result.candidates || [];
-    let html = section('预测能力', '<div class="fl2-chart-grid">' +
-      chart(prefix + '-rank', 'RankIC 与滚动 RankIC', icConclusion) +
-      chart(prefix + '-icdist', 'RankIC 分布', '观察方向稳定性与尾部') +
-      chart(prefix + '-split', '训练 / 验证 / 测试', '同口径比较 RankIC 与 Sharpe') +
-      chart(prefix + '-search', '候选排序', '仅训练与验证集参与排序') + '</div>');
-    html += section('收益与风险', '<div class="fl2-chart-grid">' +
-      chart(prefix + '-nav', '多空净值', riskConclusion) +
-      chart(prefix + '-drawdown', '回撤', '测试期最大回撤 ' + pct(m.max_drawdown, 2)) +
-      chart(prefix + '-rollsharpe', '滚动 Sharpe', '按非重叠标签周期计算') +
-      chart(prefix + '-monthly', '月度收益', '成本后收益热力图') + '</div>');
-    html += section('交易特征', '<div class="fl2-chart-grid">' +
-      chart(prefix + '-turnover', '换手率与成本拖累', '平均换手率 ' + pct(m.turnover, 2)) +
-      chart(prefix + '-cost', '成本敏感性', '0–50bp 统一口径') +
-      chart(prefix + '-yearly', '年度表现', '逐年收益与 Sharpe') +
-      chart(prefix + '-training', '训练过程', '验证指标与搜索收敛') + '</div>');
-    html += section('稳健性', gateGrid(result) + '<div style="height:12px"></div>' +
-      table('候选与验证结果', candidateRows.slice(0, 30), [
-        ['name', '名称'], ['selection_score', '选择得分', 4], ['train_rank_ic', '训练 RankIC', 4],
-        ['valid_rank_ic', '验证 RankIC', 4], ['valid_sharpe', '验证 Sharpe', 3]
-      ]));
-    if (result.correlation && result.correlation.matrix) {
-      html += section('相关性', '<div class="fl2-chart-grid">' + chart(prefix + '-corr', '因子相关矩阵', '识别冗余与聚类', true) + '</div>');
-    }
-    return html;
+  function bindCommon(drawer) {
+    const refresh = $('flx-refresh');
+    if (refresh) refresh.onclick = async () => {
+      refresh.disabled = true;
+      try { await loadData(true); await render(state.view, true); } finally { refresh.disabled = false; }
+    };
+    if (drawer) drawer();
   }
 
-  const palette = { red: '#a93222', blue: '#2d6f9f', green: '#2d8b55', gold: '#bd8026', gray: '#7a8798' };
-  function plot(id, data, extra) {
-    const el = $(id); if (!el || !window.Plotly) return;
-    const layout = Object.assign({
-      font: { family: 'Arial, Microsoft YaHei, sans-serif', size: 11, color: '#405066' },
-      paper_bgcolor: '#fff', plot_bgcolor: '#fff', margin: { l: 48, r: 22, t: 28, b: 48 },
-      xaxis: { gridcolor: '#edf0f3', zerolinecolor: '#d8dee6' }, yaxis: { gridcolor: '#edf0f3', zerolinecolor: '#d8dee6' },
-      legend: { orientation: 'h', x: 0, y: 1.13 }, hovermode: 'x unified'
-    }, extra || {});
-    Plotly.react(el, data, layout, { responsive: true, displaylogo: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
-  }
-  function periodRows(rows) {
-    if (state.period === 'all' || !rows.length) return rows;
-    const days = state.period === '1y' ? 365 : 1095;
-    const last = new Date(rows[rows.length - 1].date); const start = new Date(last.getTime() - days * 86400000);
-    return rows.filter(row => new Date(row.date) >= start);
-  }
-  function drawAnalytics(run, prefix) {
-    const result = run.result || {}, diagnostics = result.diagnostics || {};
-    const rows = periodRows(resultRows(result));
-    const dates = rows.map(x => x.date);
-    plot(prefix + '-rank', [
-      { type: 'scatter', mode: 'lines', x: dates, y: rows.map(x => x.rank_ic), name: 'RankIC', line: { color: palette.blue, width: 1 } },
-      { type: 'scatter', mode: 'lines', x: dates, y: rows.map(x => x.rolling_rank_ic), name: '20 日滚动', line: { color: palette.red, width: 2 } }
-    ], { yaxis: { gridcolor: '#edf0f3', zerolinecolor: '#aeb8c5' } });
-    const dist = diagnostics.ic_distribution || [];
-    plot(prefix + '-icdist', [{ type: 'bar', x: dist.map(x => ((x.left + x.right) / 2).toFixed(3)), y: dist.map(x => x.count), marker: { color: dist.map(x => x.left >= 0 ? palette.green : '#c75d50') }, name: '频数' }], { showlegend: false });
-    const split = diagnostics.split_summary || [];
-    plot(prefix + '-split', [
-      { type: 'bar', x: split.map(x => x.split), y: split.map(x => x.rank_ic), name: 'RankIC', marker: { color: palette.blue } },
-      { type: 'bar', x: split.map(x => x.split), y: split.map(x => x.sharpe), name: 'Sharpe', marker: { color: palette.gold }, yaxis: 'y2' }
-    ], { barmode: 'group', yaxis2: { overlaying: 'y', side: 'right', showgrid: false } });
-    const candidates = ((result.selection || {}).candidates || result.candidates || []).slice(0, 12);
-    plot(prefix + '-search', [{ type: 'bar', orientation: 'h', y: candidates.map((x, i) => x.name || ('候选 ' + (i + 1))).reverse(), x: candidates.map(x => Number(x.selection_score || x.valid_rank_ic || 0)).reverse(), marker: { color: palette.red } }], { showlegend: false, margin: { l: 115, r: 20, t: 24, b: 42 } });
-    plot(prefix + '-nav', [
-      { type: 'scatter', mode: 'lines', x: dates, y: rows.map(x => x.nav_gross), name: '成本前', line: { color: palette.gray, width: 1.5 } },
-      { type: 'scatter', mode: 'lines', x: dates, y: rows.map(x => x.nav_net), name: '成本后', line: { color: palette.green, width: 2.2 } }
-    ]);
-    plot(prefix + '-drawdown', [{ type: 'scatter', mode: 'lines', x: dates, y: rows.map(x => x.drawdown), fill: 'tozeroy', line: { color: '#b64334', width: 1.5 }, fillcolor: 'rgba(182,67,52,.18)' }], { showlegend: false, yaxis: { tickformat: '.1%', gridcolor: '#edf0f3' } });
-    plot(prefix + '-rollsharpe', [{ type: 'scatter', mode: 'lines', x: dates, y: rows.map(x => x.rolling_sharpe), line: { color: palette.gold, width: 2 } }], { showlegend: false });
-    const monthly = diagnostics.monthly || [], years = [...new Set(monthly.map(x => x.month.slice(0, 4)))], months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
-    plot(prefix + '-monthly', [{ type: 'heatmap', x: months, y: years, z: years.map(y => months.map(m => { const row = monthly.find(x => x.month === y + '-' + m); return row ? row.return : null; })), colorscale: [[0, '#b84b3f'], [.5, '#f7f7f5'], [1, '#298453']], zmid: 0, colorbar: { tickformat: '.1%' }, hovertemplate: '%{y}-%{x}<br>%{z:.2%}<extra></extra>' }], { margin: { l: 55, r: 70, t: 25, b: 45 } });
-    plot(prefix + '-turnover', [
-      { type: 'scatter', mode: 'lines', x: dates, y: rows.map(x => x.turnover), name: '换手率', line: { color: palette.blue, width: 1.5 } },
-      { type: 'bar', x: dates, y: rows.map(x => Number(x.gross || 0) - Number(x.net || 0)), name: '成本拖累', marker: { color: 'rgba(169,50,34,.28)' }, yaxis: 'y2' }
-    ], { yaxis: { tickformat: '.0%', gridcolor: '#edf0f3' }, yaxis2: { overlaying: 'y', side: 'right', tickformat: '.2%', showgrid: false } });
-    const costs = diagnostics.cost_sensitivity || [];
-    plot(prefix + '-cost', [
-      { type: 'scatter', mode: 'lines+markers', x: costs.map(x => x.cost_bps), y: costs.map(x => x.sharpe), name: 'Sharpe', line: { color: palette.red } },
-      { type: 'scatter', mode: 'lines+markers', x: costs.map(x => x.cost_bps), y: costs.map(x => x.return), name: '年化收益', line: { color: palette.green }, yaxis: 'y2' }
-    ], { xaxis: { title: 'bp', gridcolor: '#edf0f3' }, yaxis2: { overlaying: 'y', side: 'right', tickformat: '.0%', showgrid: false } });
-    const yearly = diagnostics.yearly || [];
-    plot(prefix + '-yearly', [
-      { type: 'bar', x: yearly.map(x => x.year), y: yearly.map(x => x.return), name: '年化收益', marker: { color: palette.green } },
-      { type: 'scatter', mode: 'lines+markers', x: yearly.map(x => x.year), y: yearly.map(x => x.sharpe), name: 'Sharpe', line: { color: palette.red }, yaxis: 'y2' }
-    ], { yaxis: { tickformat: '.0%', gridcolor: '#edf0f3' }, yaxis2: { overlaying: 'y', side: 'right', showgrid: false } });
-    const history = (result.training_history || []).flatMap(seed => (seed.history || []).map(x => Object.assign({ seed: seed.seed }, x)));
-    const curve = result.training_curve || [];
-    if (history.length) plot(prefix + '-training', [
-      { type: 'scatter', mode: 'lines+markers', x: history.map(x => x.epoch), y: history.map(x => x.valid_rank_ic), name: '验证 RankIC', line: { color: palette.blue } },
-      { type: 'scatter', mode: 'lines', x: history.map(x => x.epoch), y: history.map(x => x.train_loss), name: '训练损失', line: { color: palette.gray }, yaxis: 'y2' }
-    ], { yaxis2: { overlaying: 'y', side: 'right', showgrid: false } });
-    else plot(prefix + '-training', [
-      { type: 'scatter', mode: 'lines+markers', x: curve.map(x => x.episodes), y: curve.map(x => x.mean_reward), name: '平均奖励', line: { color: palette.blue } },
-      { type: 'scatter', mode: 'lines+markers', x: curve.map(x => x.episodes), y: curve.map(x => x.best_reward), name: '最优奖励', line: { color: palette.red } }
-    ]);
-    if (result.correlation && result.correlation.matrix) plot(prefix + '-corr', [{ type: 'heatmap', x: result.correlation.labels, y: result.correlation.labels, z: result.correlation.matrix, zmin: -1, zmax: 1, zmid: 0, colorscale: [[0, '#38678f'], [.5, '#f7f7f5'], [1, '#a83b2d']], colorbar: { thickness: 12 } }], { margin: { l: 105, r: 50, t: 30, b: 100 } });
+  function bindDashboard(data) {
+    const sel = $('flx-factor-select');
+    if (sel) sel.onchange = () => { state.selectedFactor = sel.value; drawDashboard(data); };
+    bindCommon(() => drawDashboard(data));
   }
 
-  function bindConfig(engine, fixed) {
-    const engineSelect = $('fl2-engine');
-    if (engineSelect && !fixed) engineSelect.onchange = () => { const host = $('fl2-model-fields'); if (host) host.innerHTML = modelFields(engineSelect.value); };
-    const start = $('fl2-start'); if (start) start.onclick = () => startRun(fixed ? engine : read('fl2-engine', 'lstm')).catch(showError);
-    bindRunActions();
-  }
-  function showError(error) { const box = $('core-conclusion'); if (box) { box.hidden = false; box.innerHTML = '<p>' + esc(error.message || error) + '</p>'; } }
-
-
-  function professionalFrameworkHtml() {
-    const fw = state.bootstrap && state.bootstrap.professional_framework;
-    if (!fw || fw.status === 'unavailable') return '';
-    const effect = fw.current_effect_contract || {};
-    const flow = (fw.end_to_end_workflow || []).slice(0, 7);
-    const models = (fw.model_zoo || []).slice(0, 7);
-    const ext = (fw.external_learning || []).slice(0, 5);
-    const gates = (fw.quality_gates || []).slice(0, 10);
-    const metrics = '<div class="fl2-kpis">' + [
-      ['默认冠军', effect.default_champion || fw.version || 'r35.9', '', true],
-      ['测试年化', pct(effect.test_annual_return, 2), 'report-only', true],
-      ['测试Sharpe', num(effect.test_sharpe, 3), '不降级', Number(effect.test_sharpe || 0) >= 2],
-      ['最大回撤', pct(effect.test_max_drawdown, 2), 'report-only', Number(effect.test_max_drawdown || 0) >= -.08],
-      ['质量门', (effect.gate_summary && effect.gate_summary.passed ? effect.gate_summary.passed + '/' + effect.gate_summary.total : effect.gate_summary || '10/10 passed'), '', true]
-    ].map(item => '<div class="fl2-kpi ' + (item[3] ? 'good' : 'bad') + '"><small>' + esc(item[0]) + '</small><strong>' + esc(item[1]) + '</strong><em>' + esc(item[2]) + '</em></div>').join('') + '</div>';
-    const extHtml = '<div class="fl2-family-grid">' + ext.map(x => '<div class="fl2-card" style="padding:14px"><strong>' + esc(x.source) + '</strong><p style="margin:6px 0 0;color:#5f6670">' + esc((x.adopted || []).slice(0, 3).join('；')) + '</p></div>').join('') + '</div>';
-    const flowHtml = '<div class="fl2-family-grid">' + flow.map(x => '<div class="fl2-card" style="padding:14px"><strong>' + esc(x.stage) + '</strong><p style="margin:6px 0 0;color:#5f6670">' + esc((x.steps || []).slice(0, 2).join('；')) + '</p></div>').join('') + '</div>';
-    const modelHtml = '<div class="fl2-table-card"><header><h3>模型动物园与当前状态</h3></header><div class="fl2-table-scroll"><table class="fl2-table"><thead><tr><th>模型</th><th>角色</th><th>核心逻辑</th><th>当前效果/状态</th></tr></thead><tbody>' + models.map(x => '<tr><td>' + esc(x.name) + '</td><td>' + esc(x.role) + '</td><td>' + esc(x.logic) + '</td><td>' + esc(x.current_effect || x.current_status || '') + '</td></tr>').join('') + '</tbody></table></div></div>';
-    const gateHtml = '<div class="fl2-gates">' + gates.map(x => '<div class="fl2-gate pass"><b>' + esc(x) + '</b><strong>纳入</strong></div>').join('') + '</div>';
-    return section('r35.9 专业因子实验室框架', metrics + '<div class="fl2-note" style="margin:10px 0">' + esc(fw.principle || '') + '</div>' + section('参考方法映射', extHtml) + section('端到端流水线', flowHtml) + modelHtml + section('质量门与晋级纪律', gateHtml));
-  }  async function renderHome() {
-    setHeader('home'); await loadBase();
-    const latest = state.selected || state.runs[0];
-    root(professionalFrameworkHtml() + section('任务设置', primaryToolbar('lstm', false) + '<div style="height:12px"></div>' + parameterGroups('lstm') +
-      '<div class="fl2-actions"><button class="fl2-button primary" id="fl2-start">运行</button></div>') +
-      section('任务状态', runPanel(latest)));
-    bindConfig('lstm', false);
+  function bindMining(data) {
+    const sel = $('flx-llm-factor-select');
+    if (sel) sel.onchange = () => { state.selectedLlmFactor = sel.value; drawMining(data); };
+    const check = $('flx-formula-check');
+    if (check) check.onclick = async () => {
+      const formula = $('flx-formula') ? $('flx-formula').value : '';
+      try {
+        const result = await api('/api/factor-lab/formula/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ formula }) });
+        state.formulaStatus = result.valid ? '公式通过结构化约束校验' : '公式未通过：' + arr(result.invalid_tokens).join('、');
+      } catch (error) {
+        state.formulaStatus = '公式校验失败：' + (error.message || error);
+      }
+      await render('mining', true);
+    };
+    bindCommon(() => drawMining(data));
   }
 
-  function runSelector(id, completedOnly, engine) {
-    let runs = state.runs.filter(x => !completedOnly || x.status === 'completed');
-    if (engine) runs = runs.filter(x => x.engine === engine);
-    return select('任务', id, [['', '请选择'], ...runs.map(x => [x.run_id, displayName(x)])], state.selected && state.selected.run_id || '');
-  }
-  function viewerToolbar(extra) {
-    return '<div class="fl2-toolbar"><div class="fl2-toolbar-row is-compact">' + runSelector('fl2-view-run', true) +
-      select('区间', 'fl2-period', [['all', '全部'], ['3y', '近 3 年'], ['1y', '近 1 年']], state.period) +
-      select('收益口径', 'fl2-line', [['net', '成本后'], ['gross', '成本前']], state.line) +
-      (extra || '<div></div>') + '<button class="fl2-button" id="fl2-refresh">刷新</button></div></div>';
-  }
-  function bindViewer(draw) {
-    const selectRunEl = $('fl2-view-run'); if (selectRunEl) selectRunEl.onchange = () => selectRunEl.value && selectRun(selectRunEl.value);
-    const period = $('fl2-period'); if (period) period.onchange = () => { state.period = period.value; draw(); };
-    const line = $('fl2-line'); if (line) line.onchange = () => { state.line = line.value; draw(); };
-    const refresh = $('fl2-refresh'); if (refresh) refresh.onclick = () => render(state.view, true);
-  }
-
-  function familyOptions() {
-    const options = new Map([['all', '全部']]);
-    (state.catalog && state.catalog.families || []).forEach(f => options.set(f.id, f.label || FAMILY[f.id] || f.id));
-    familyOptions().forEach(item => { if (!options.has(item[0])) options.set(item[0], item[1]); });
-    return Array.from(options.entries());
-  }
-  function familyGrid() {
-    const families = [{ id: 'all', label: '全部', count: (state.catalog.factors || []).length }, ...(state.catalog.families || [])];
-    return '<div class="fl2-family-grid">' + families.map(f => '<button class="fl2-family ' + (state.family === f.id ? 'is-active' : '') + '" data-family="' + esc(f.id) + '"><span>' + esc(f.label || FAMILY[f.id] || f.id) + '</span><strong>' + esc(f.count || 0) + '</strong></button>').join('') + '</div>';
-  }
-  async function renderDashboard() {
-    setHeader('dashboard'); await loadBase();
-    let selected = state.selected;
-    if (!selected || selected.status !== 'completed') selected = state.runs.find(x => x.status === 'completed');
-    selected = await hydrate(selected); state.selected = selected;
-    const factors = (state.catalog.factors || []).filter(f => state.family === 'all' || String(f.family_id || '') === state.family || String(f.factor_group || '').toLowerCase().includes(state.family)).slice(0, 160);
-    const factorTable = table('因子目录', factors, [['factor_name', '因子'], ['factor_group', '类型'], ['source_agent', '来源'], ['rank_ic', 'RankIC', 4], ['icir', 'ICIR', 3], ['coverage', '覆盖率', 3], ['last_date', '更新日期']]);
-    root(viewerToolbar(select('因子类型', 'fl2-family-select', familyOptions(), state.family)) + '<div style="height:12px"></div>' + familyGrid() +
-      (selected ? section('核心结果', conclusions(selected) + kpis(selected)) + analyticsHtml(selected, 'dash') : '<div class="fl2-empty">暂无已完成任务</div>') +
-      section('因子目录', factorTable));
-    bindViewer(() => selected && drawAnalytics(selected, 'dash'));
-    const familySelect = $('fl2-family-select'); if (familySelect) familySelect.onchange = () => { state.family = familySelect.value; renderDashboard(); };
-    document.querySelectorAll('[data-family]').forEach(el => { el.onclick = () => { state.family = el.dataset.family; renderDashboard(); }; });
-    if (selected) drawAnalytics(selected, 'dash');
-  }
-
-  function miningTabs() {
-    return '<div class="fl2-tabs">' + [['formula', '常用因子'], ['lstm', 'LSTM'], ['gru', 'GRU'], ['rl_transformer', 'Transformer+LLM']].map(x => '<button class="fl2-tab ' + (state.miningTab === x[0] ? 'is-active' : '') + '" data-mining-tab="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>';
-  }
-  async function renderMining() {
-    setHeader('mining'); await loadBase();
-    let body = '';
-    if (state.miningTab === 'formula') {
-      body = '<div class="fl2-split"><div class="fl2-card" style="padding:16px"><div class="fl2-field"><span>可用字段</span><div class="fl2-code">ret_1 ret_5 ret_20 ret_60 vol_20 down_vol_20 price_pos_60 volume_z_20 amihud_20 turnover volume_ratio value_ep value_bp value_sp dividend log_mv moneyflow large_flow extreme_flow range_1 gap_1</div></div></div>' +
-        '<div class="fl2-card" style="padding:16px"><label class="fl2-field"><span>因子表达式（Postfix）</span><textarea id="fl2-formula">ret_20 CS_RANK ret_5 CS_RANK SUB</textarea></label>' +
-        '<label class="fl2-field" style="margin-top:12px"><span>批注</span><textarea id="fl2-annotation"></textarea></label><div id="fl2-formula-result" class="fl2-code" style="margin-top:12px">—</div>' +
-        '<div class="fl2-actions"><button class="fl2-button primary" id="fl2-formula-check">校验</button></div></div></div>';
-    } else {
-      body = primaryToolbar(state.miningTab, true) + '<div style="height:12px"></div>' + parameterGroups(state.miningTab) +
-        '<div class="fl2-actions"><button class="fl2-button primary" id="fl2-start">运行 ' + esc(ENGINE[state.miningTab]) + '</button></div>';
-    }
-    let selected = state.selected && state.selected.engine === state.miningTab ? state.selected : state.runs.find(x => x.engine === state.miningTab);
-    selected = await hydrate(selected); if (selected) state.selected = selected;
-    root(miningTabs() + section('参数', body) + section('任务状态', runPanel(selected)) +
-      (selected && selected.result ? section('结果', conclusions(selected) + kpis(selected) + analyticsHtml(selected, 'mine')) : ''));
-    document.querySelectorAll('[data-mining-tab]').forEach(el => { el.onclick = () => { state.miningTab = el.dataset.miningTab; renderMining(); }; });
-    if (state.miningTab === 'formula') {
-      const button = $('fl2-formula-check'); if (button) button.onclick = async () => {
-        const result = await api('/api/factor-lab/formula/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ formula: $('fl2-formula').value }) });
-        $('fl2-formula-result').textContent = result.valid ? '校验通过\n' + result.tokens.join(' ') : '校验未通过\n' + (result.invalid_tokens || []).join(' ');
-      };
-    } else bindConfig(state.miningTab, true);
-    bindRunActions();
-    if (selected && selected.result) drawAnalytics(selected, 'mine');
-  }
-
-  async function renderTesting() {
-    setHeader('testing'); await loadBase();
-    let selected = state.selected && state.selected.status === 'completed' ? state.selected : state.runs.find(x => x.status === 'completed');
-    selected = await hydrate(selected); state.selected = selected;
-    const toolbar = '<div class="fl2-toolbar"><div class="fl2-toolbar-row">' + runSelector('fl2-test-source', true) +
-      select('标的池', 'fl2-universe', [['ALL_A', '全 A 可交易池'], ['CSI300', '沪深 300'], ['CSI500', '中证 500'], ['CSI1000', '中证 1000']], 'ALL_A') +
-      field('最大股票数', 'fl2-assets', 240, 'number', 'min="40" max="800" step="20"') + field('历史月数', 'fl2-months', 72, 'number', 'min="12" max="180" step="6"') +
-      field('单边成本（bp）', 'fl2-cost', 15, 'number', 'min="0" max="200"') + select('检验模式', 'fl2-test-mode', [['single_joint', '单因子与多因子'], ['single', '单因子'], ['joint', '多因子']], 'single_joint') +
-      select('测试集', 'fl2-test-lock', [['locked', '冻结']], 'locked') + '<div class="fl2-actions" style="margin:0"><button class="fl2-button primary" id="fl2-start-test">运行检验</button></div></div></div>';
-    const factors = selected && selected.result && selected.result.factors || [];
-    root(section('检验设置', toolbar) + (selected ? section('核心结果', conclusions(selected) + kpis(selected)) + analyticsHtml(selected, 'test') : '<div class="fl2-empty">请选择任务</div>') +
-      (factors.length ? section('单因子结果', table('单因子结果', factors, [['factor', '因子'], ['train_rank_ic', '训练 RankIC', 4], ['valid_rank_ic', '验证 RankIC', 4], ['test_rank_ic', '测试 RankIC', 4], ['test_sharpe', '测试 Sharpe', 3], ['test_max_drawdown', '最大回撤', 3], ['stability', '稳定性', 4]])) : ''));
-    const source = $('fl2-test-source'); if (source) source.onchange = () => source.value && selectRun(source.value);
-    const start = $('fl2-start-test'); if (start) start.onclick = () => startRun('joint_test').catch(showError);
-    if (selected) drawAnalytics(selected, 'test');
-  }
-
-  async function renderStrategy() {
-    setHeader('strategy'); await loadBase();
-    let selected = state.selected && state.selected.engine === 'strategy' ? state.selected : state.runs.find(x => x.engine === 'strategy');
-    selected = await hydrate(selected); if (selected) state.selected = selected;
-    const champion = state.bootstrap && state.bootstrap.champion;
-    const frozen = championHtml(champion);
-    const latest = selected && selected.result ? conclusions(selected) + kpis(selected) + analyticsHtml(selected, 'strategy') : '';
-    root(section('参数', primaryToolbar('strategy', true) + '<div style="height:12px"></div>' + parameterGroups('strategy') + '<div class="fl2-actions"><button class="fl2-button primary" id="fl2-start">运行策略</button></div>') +
-      section('任务状态', runPanel(selected)) + section('结果', frozen + latest));
-    bindConfig('strategy', true); bindRunActions(); if (selected && selected.result) drawAnalytics(selected, 'strategy');
-  }
-
-  async function renderHistory(force) {
-    setHeader('history'); await loadBase(Boolean(force));
-    let runs = state.runs.filter(x => state.historyEngine === 'all' || x.engine === state.historyEngine).filter(x => state.historyStatus === 'all' || x.status === state.historyStatus);
-    const controls = '<div class="fl2-toolbar"><div class="fl2-toolbar-row">' +
-      select('类型', 'fl2-history-engine', [['all', '全部'], ['lstm', 'LSTM'], ['gru', 'GRU'], ['rl_transformer', 'Transformer+LLM'], ['strategy', '打分回测'], ['joint_test', '联合检验']], state.historyEngine) +
-      select('状态', 'fl2-history-status', [['all', '全部'], ['completed', '已完成'], ['running', '运行中'], ['failed', '失败'], ['cancelled', '已取消']], state.historyStatus) +
-      '<div></div><button class="fl2-button" id="fl2-history-refresh">刷新</button></div></div>';
-    const runRows = runs.map(x => ({ name: displayName(x), engine: ENGINE[x.engine], mode: x.mode, status: STATUS[x.status] || x.status, stage: x.stage, progress: num(Number(x.progress || 0) * 100, 1) + '%', created_at: x.created_at, elapsed_seconds: x.elapsed_seconds, run_id: x.run_id }));
-    const runTable = '<div class="fl2-table-card"><header><h3>任务记录</h3></header><div class="fl2-table-scroll"><table class="fl2-table"><thead><tr><th>任务</th><th>模型</th><th>等级</th><th>状态</th><th>阶段</th><th>进度</th><th>耗时（秒）</th><th></th></tr></thead><tbody>' +
-      runRows.map(x => '<tr><td>' + esc(x.name) + '</td><td>' + esc(x.engine) + '</td><td>' + esc(x.mode) + '</td><td>' + esc(x.status) + '</td><td>' + esc(x.stage || '') + '</td><td class="num">' + esc(x.progress) + '</td><td class="num">' + esc(x.elapsed_seconds ?? '—') + '</td><td><button class="fl2-button" data-run-open="' + esc(x.run_id) + '">查看</button></td></tr>').join('') + '</tbody></table></div></div>';
-    root('<div class="fl2-tabs"><button class="fl2-tab ' + (state.historyTab === 'runs' ? 'is-active' : '') + '" data-history-tab="runs">任务记录</button><button class="fl2-tab ' + (state.historyTab === 'catalog' ? 'is-active' : '') + '" data-history-tab="catalog">本地因子目录</button></div>' +
-      section('筛选', controls) + (state.historyTab === 'runs' ? section('任务记录', runTable) : section('本地因子目录', table('本地因子目录', state.catalog.factors || [], [['factor_name', '因子'], ['factor_group', '类型'], ['source_agent', '来源'], ['value_count', '记录数', 0], ['rank_ic', 'RankIC', 4], ['icir', 'ICIR', 3], ['coverage', '覆盖率', 3], ['last_date', '更新日期']]))));
-    document.querySelectorAll('[data-history-tab]').forEach(el => { el.onclick = () => { state.historyTab = el.dataset.historyTab; renderHistory(); }; });
-    $('fl2-history-engine').onchange = e => { state.historyEngine = e.target.value; renderHistory(); };
-    $('fl2-history-status').onchange = e => { state.historyStatus = e.target.value; renderHistory(); };
-    $('fl2-history-refresh').onclick = () => renderHistory(true); bindRunActions();
+  function bindStrategy(data) {
+    const u = $('flx-universe'); if (u) u.onchange = () => { state.universe = u.value; };
+    const m = $('flx-scoring-model'); if (m) m.onchange = () => { state.scoringModel = m.value; };
+    const d = $('flx-domain'); if (d) d.onchange = () => { state.domain = d.value; };
+    bindCommon(() => drawStrategy(data));
   }
 
   async function render(view, preserveScroll) {
-    state.view = view || state.view; setHeader(state.view);
+    state.view = PAGES[view] ? view : 'dashboard';
+    setHeader(state.view);
     if (!preserveScroll) window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-    root('<div class="fl2-empty">加载中</div>');
+    root('<div class="flx-empty">正在载入因子实验室正式框架。</div>');
     try {
-      if (state.view === 'home') await renderHome();
-      else if (state.view === 'dashboard') await renderDashboard();
-      else if (state.view === 'mining') await renderMining();
-      else if (state.view === 'testing') await renderTesting();
-      else if (state.view === 'strategy') await renderStrategy();
-      else await renderHistory();
-    } catch (error) { console.error(error); root('<div class="fl2-empty">' + esc(error.message || error) + '</div>'); showError(error); }
+      await ensurePlotly();
+      const data = await loadData(false);
+      if (state.view === 'mining') {
+        root(miningHtml(data));
+        bindMining(data);
+      } else if (state.view === 'strategy') {
+        root(strategyHtml(data));
+        bindStrategy(data);
+      } else {
+        root(dashboardHtml(data));
+        bindDashboard(data);
+      }
+    } catch (error) {
+      console.error(error);
+      root('<div class="flx-empty">因子实验室加载失败：' + esc(error.message || error) + '</div>');
+    }
   }
 
-  function cleanFactorNavigation() {
-    document.querySelectorAll('.nav-item[data-target^="factorlab:"]').forEach(item => {
-      for (const node of item.childNodes) if (node.nodeType === Node.TEXT_NODE) node.textContent = node.textContent.replace(/^\s*\d+\s*/, '');
-    });
-  }
   window.FactorLaboratory = { render, state };
-  window.addEventListener('DOMContentLoaded', cleanFactorNavigation);
-}());
-
-/* Final family-selector normalization. */
-(function () {
-  'use strict';
-  const familyValues = {};
-
-  function normalizeFamilySelect() {
-    const select = document.getElementById('fl2-family-select');
-    if (!select || select.dataset.normalized === '1') return;
-    Array.from(select.options).forEach(option => { if (familyValues[option.value]) option.value = familyValues[option.value]; });
-    select.dataset.normalized = '1';
-  }
-
-  const observer = new MutationObserver(normalizeFamilySelect);
-  window.addEventListener('DOMContentLoaded', function () {
-    observer.observe(document.body, { childList: true, subtree: true });
-    // Route correction is handled by the canonical app router.
-  });
-
-  document.addEventListener('click', function (event) {
-    const button = event.target.closest && event.target.closest('[data-family]');
-    if (!button || button.dataset.family === 'all' || !familyValues[button.dataset.family]) return;
-    const select = document.getElementById('fl2-family-select');
-    if (!select) return;
-    event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
-    normalizeFamilySelect();
-    select.value = familyValues[button.dataset.family];
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-  }, true);
 }());

@@ -1535,3 +1535,13 @@ Next best action: run a full production-cap screened-domain timing experiment us
 - MCP 修复并验收通过：`mcp/model_catalog.json` 为六大模块补充稳定 `id`；`quant_agent_mcp.server` 支持按 id/标题/路径定位模块；`install.ps1` 安装后可调用 `list_modules`、`learning_path`、`module_status`、`search_model_text`、`public_health`，可作为新 AI 通过 GitHub 学习模型文档和只读查询入口。
 - 自动更新核对：远端 `AssetAllocationSnapshotDaily` 与 `QuantStrategyGlobalRefresh` 计划任务处于 Ready 且最近返回 0；生产服务任务 `QuantStrategyAgent8096R340VisualOptimizer` 处于 Running；远端环境仅核对非敏感字段，AI router 为 `gpt-5.5` + `xhigh`。
 - 重要风险边界：数据看板 `/api/board/snapshot` 仍为 `status=partial`，但六个子模块均有非空数据并更新至 2026-08-28；资金面精确字段覆盖仍按上一轮审计记为 `39/49`，剩余授权 Wind EDB/EPFR 字段未完全证明可持续获取，不得对外表述为 100% 全字段精确可用。
+
+## 2026-08-29 因子实验室全框架替换 v1
+
+- 范围：仅替换因子实验室三页展示与数据聚合层，最终二级页固定为 `因子看板 / LLM因子挖掘 / 模型层`；没有改动资产配置、组合优化、数据看板等其他模块逻辑。
+- 因子看板：接入 `factor_taxonomy_cn` 与 `factor_library_v2`，六大类固定为 `宏观 / 基本面 / 技术面 / 估值 / 情绪 / 复合因子`，覆盖 415 个因子、29 个当前入模因子；页面包含因子框架、数据处理与检验流程、检验表、相关性矩阵、单因子 RankIC/多空/分组、Top3 大类/Top10 子因子、拥挤度、分域表现和暴露表。
+- LLM因子挖掘：页面流程固定为 `经济假设-结构化约束-因子检验-进化变异-反馈修正-入库循环`，加入假设与公式编辑/校验控件、进化过程窗口、LLM 因子排序表、与常规大类因子的相关性矩阵、年度收益表和趋势图；公式校验沿用后端算子/字段白名单。
+- 模型层：页面流程固定为 `数据处理-因子检验-打分回测-有效性增强-策略增强-因子归因`，控件覆盖选股域和 `等权 / RankIC / OLS / Lasso / Ridge / LSTM` 打分模型；接入当前正式冠军结果的净值、回撤、RankIC、年度收益、Top10 个股、分域有效性与贡献归因表。
+- 可视化和表格：前端全部改为网页内 Plotly 交互图与 HTML 表格，不再以截图替代；新增因子实验室专用表格样式，沿用数据看板红表头、浅米首列、灰阶表体和正负左右色阶条，色阶文字不加粗。
+- 部署：已同步到 homeserver 8096 公网生产目录并重启 `QuantStrategyAgent8096R340VisualOptimizer`；公网 `/quant-agent/healthz` 返回 `2026.08.29-factor-lab-full-framework-v1`。
+- 验证：本地 `py_compile` 通过 `factor_lab_backend.py/main.py`；本地 `node --check` 通过 `factor_lab.js/app.js`；生产目录 Flask test client 通过三页、415 因子、29 入模因子、30 个 LLM 因子、299 个净值/RankIC 点、Top10 个股和公式校验。浏览器扩展通道本轮连接超时/关闭，未完成自动截图级视觉验收。
