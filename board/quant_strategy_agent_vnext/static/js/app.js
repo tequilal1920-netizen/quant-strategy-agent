@@ -575,7 +575,7 @@
     rotation:{title:'行业风格',views:{prosperity:'行业景气度',industry:'行业轮动',style:'风格轮动'}},
     liquidity:{title:'资金面跟踪',views:{home:'主页',retail:'散户资金',public:'公募基金',etf:'ETF资金',margin:'融资资金',primary:'一级市场',private:'私募基金',foreign:'外资资金'}},
     kline:{title:'K线记忆学习',views:{home:'主页',learn:'学习记忆',backtest:'策略回测',history:'历史记录'}},
-    factor:{title:'LLM因子挖掘',views:{home:'主页',expression:'因子表达式',report:'因子检验结果',score:'综合打分',memory:'历史记忆'}}
+    factor:{title:'LLM因子挖掘',views:{home:'LLM因子挖掘',expression:'因子表达式',report:'因子检验结果',score:'综合打分',memory:'历史记忆'}}
   };
   function viewBreadcrumb(key){
     const parts=String(key||'data:market_monitor').split(':'),group=VIEW_BREADCRUMBS[parts[0]]||VIEW_BREADCRUMBS.data;
@@ -1851,7 +1851,7 @@
     'portfolio:home':['组合优化主页','研究状态、五层流程、当前权重与晋级门禁'],
     'portfolio:pool':['资产池','个股、行业、ETF、权益基金与指数的多维画像'],
     'portfolio:risk':['风险约束','风险模型、目标函数、硬软约束与参数注册'],
-    'portfolio:solve':['优化求解','训练验证选型、多求解器路由与可行解审计'],
+    'portfolio:solve':['优化求解器','训练验证选型、多求解器路由与可行解审计'],
     'portfolio:backtest':['组合回测','封闭测试、成本、压力、回撤与稳健性审计']
   });
   Object.assign(COL,{
@@ -3502,7 +3502,7 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
     'factorlab:strategy':{group:'因子实验室',title:'模型层',subtitle:'因子研究结果与配置策略',sections:[{id:'factor-strategy',label:'模型层',kind:'factorlab',page:'strategy'}]},
     'technical:learning':{group:'技术分析',title:'K线学习',subtitle:'任务设置、同类学习、情境记忆与历史记录',sections:[{id:'setup',label:'任务设置',kind:'kline',page:'home'},{id:'learning',label:'学习记忆',kind:'kline',page:'learn'},{id:'history',label:'历史记录',kind:'kline',page:'history'}]},
     'technical:strategy':{group:'技术分析',title:'配置策略',subtitle:'学习后策略、信号K线与回测归因',sections:[{id:'backtest',label:'策略回测',kind:'kline',page:'backtest'}]},
-    'portfolio:solve':{group:'组合优化',title:'优化求解',subtitle:'历史得分、可控约束、求解任务与结果审计',sections:[{id:'basic',label:'基础优化器',kind:'optimizer',page:'basic'},{id:'llm',label:'LLM约束',kind:'optimizer',page:'llm'},{id:'results',label:'结果对比',kind:'optimizer',page:'results'}]},
+    'portfolio:solve':{group:'组合优化',title:'优化求解器',subtitle:'历史得分、可控约束、求解任务与结果审计',sections:[{id:'basic',label:'基础优化器',kind:'optimizer',page:'basic'},{id:'llm',label:'LLM约束',kind:'optimizer',page:'llm'},{id:'results',label:'结果对比',kind:'optimizer',page:'results'}]},
     'portfolio:strategy':{group:'组合优化',title:'配置策略',subtitle:'组合优化与指数增强统一配置链',sections:[{id:'home',label:'主页',kind:'optimizer-strategy',page:'home'},{id:'universe',label:'资产池',kind:'optimizer-strategy',page:'universe'},{id:'alpha',label:'Alpha模型',kind:'optimizer-strategy',page:'alpha'},{id:'smartbeta',label:'SmartBeta模型',kind:'optimizer-strategy',page:'smartbeta'},{id:'risk',label:'风险模型',kind:'optimizer-strategy',page:'risk'},{id:'tracking',label:'组合跟踪',kind:'optimizer-strategy',page:'tracking'}]}
   };
   const LEGACY_ROUTE_ALIAS={
@@ -4100,9 +4100,22 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
     });
     items.slice(3).forEach(function(item){item.remove();});
   }
+  function optimizerBindPortfolioNav(){
+    document.querySelectorAll('.portfolio-optimization-nav .nav-item[data-target]').forEach(function(item){
+      if(item.dataset.optimizerBoundV4)return;
+      item.dataset.optimizerBoundV4='1';
+      item.addEventListener('click',function(event){
+        if(!event.isTrusted)return;
+        const target=item.dataset.target;
+        if(!target||target===S.active)return;
+        event.preventDefault();
+        requestNav(target).catch(function(error){console.error('组合优化导航异常',error);});
+      },true);
+    });
+  }
   const optimizerOldWorkspaceSyncNav=workspaceSyncNav;
-  workspaceSyncNav=function(){optimizerPatchPortfolioNav();return optimizerOldWorkspaceSyncNav();};
-  optimizerPatchPortfolioNav();  function kllmPatchNav(){
+  workspaceSyncNav=function(){optimizerPatchPortfolioNav();optimizerBindPortfolioNav();return optimizerOldWorkspaceSyncNav();};
+  optimizerPatchPortfolioNav();optimizerBindPortfolioNav();  function kllmPatchNav(){
     const items=Array.from(document.querySelectorAll('.nav-item')).filter(function(item){return String(item.dataset.target||'').indexOf('technical:')===0;});
     if(items[0]){items[0].dataset.target='technical:factors';const label=items[0].querySelector('.nav-label,span,strong')||items[0];label.textContent='技术因子';}
     if(items[1]){items[1].dataset.target='technical:learning';const label=items[1].querySelector('.nav-label,span,strong')||items[1];label.textContent='K线学习';}
@@ -4182,8 +4195,10 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
     ]);
   }
   async function kllmLoadContext(domain,rule,stock){
+    const routeAtStart=S.active;
     const payload=await api('/api/kline-llm/rule-context?domain='+encodeURIComponent(domain||'')+'&rule_id='+encodeURIComponent(rule||'')+'&stock='+encodeURIComponent(stock||''));
     if(payload.status==='failed'||payload.error)throw new Error(payload.message||payload.error||'规则上下文不可用');
+    if(S.active!==routeAtStart)return payload;
     S.klineLLM.context=payload;
     const stockSelect=$('kllm-rule-stock');if(stockSelect){stockSelect.innerHTML=kllmStockOptions(payload.stocks,payload.stock);if(payload.stock)stockSelect.value=payload.stock;}
     const metrics=$('kllm-metrics-host');if(metrics)metrics.innerHTML=kllmRowsTable('进化前规则检验指标（按表现排序）',payload.metrics_rows,['规则名称','形态分类','触发次数','覆盖股票数','覆盖率','20D平均方向收益','命中率','波动率','盈亏比','t值','综合得分','样本门控','进化决策','触发依据','失效条件'],{'覆盖率':function(v){return kllmPct(v,1);},'20D平均方向收益':function(v){return kllmPct(v,2);},'命中率':function(v){return kllmPct(v,1);},'波动率':function(v){return kllmPct(v,2);},'盈亏比':function(v){return kllmNum(v,2);},'t值':function(v){return kllmNum(v,2);},'综合得分':function(v){return kllmNum(v,3);}});
@@ -4193,8 +4208,10 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
   }
   async function kllmLoadStock(code,rule,syncContext){
     code=kllmAsCode(code);if(!code)return;
+    const routeAtStart=S.active;
     const payload=await api('/api/kline-llm/stock?code='+encodeURIComponent(code)+'&rule_id='+encodeURIComponent(rule||''));
     if(payload.status==='failed'||payload.error)throw new Error(payload.message||payload.error||'个股择时不可用');
+    if(S.active!==routeAtStart)return payload;
     S.klineLLM.stock=payload;
     const host=$('kllm-stock-host');if(host){const cid=pid('kllmstock');host.innerHTML=kllmStockCards(payload)+panel(cid,(payload.domain||'')+'｜'+payload.code+' '+(payload.name||'')+' 记忆学习净值与买卖点','左轴为原股价净值和策略净值，右轴为策略/原股价相对强度；阴影为规则前后60D窗口',true);kllmDrawStock(cid,payload);}
     const latest=$('kllm-latest-host');if(latest)latest.innerHTML='<section class="chart-panel wide kllm-latest"><div class="panel-header"><div><h3>最新信号与仓位依据</h3></div></div><p><strong>'+esc(payload.latest_signal||'--')+'</strong></p><ul>'+arr(payload.logic).map(function(item){return '<li>'+esc(item)+'</li>';}).join('')+'</ul></section>';
@@ -4230,9 +4247,16 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
     $('kllm-rule-stock').onchange=async function(){if(this.value)await kllmLoadStock(this.value,$('kllm-rule').value,false);};
     $('kllm-stock-load').onclick=async function(){await kllmLoadStock($('kllm-stock-input').value,$('kllm-rule').value,true);};
     $('kllm-refresh').onclick=async function(){S.klineLLM.snapshot=null;await api('/api/kline-llm/dashboard?refresh=1&_='+Date.now());invalidateView(S.active);await render(true);};
-    const ctx=await kllmLoadContext(domain,rule,'');
-    if(ctx.stock)await kllmLoadStock(ctx.stock,rule,false);
     if(llmMode)conclusion('K线学习已按 <strong>'+esc(data.domain_axis)+'</strong> 构建域级记忆池；LLM进化模式：<strong>'+esc(llmMode)+'</strong>。'+esc(data.research_boundary||''));
+    (async function(){
+      try{
+        const ctx=await kllmLoadContext(domain,rule,'');
+        if(S.active!=='technical:learning')return;
+        if(ctx.stock)await kllmLoadStock(ctx.stock,rule,false);
+      }catch(error){
+        if(S.active==='technical:learning')console.error('K线学习初始上下文加载异常',error);
+      }
+    })();
   }
 
   function tfPct(value,digits){const n=Number(value);return Number.isFinite(n)?(n*100).toFixed(digits||1)+'%':'--';}

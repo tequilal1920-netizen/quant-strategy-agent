@@ -126,24 +126,23 @@ skill/       八个一级板块对应的本地 Codex Skill
 
 ## 最新信息架构
 
-- 主页
-- 数据看板：宏观、全球市场、行业、大宗商品、个股、新闻事件、AI监控
-- 资产配置：周期跟踪、配置策略
+- 数据看板：市场监控、专题跟踪
+- 资产配置：周期跟踪、资产配置
 - 资金面跟踪：散户、公募、私募、外资、ETF、一级市场、融资资金
-- 行业景气度：行业景气度、风格轮动、配置策略
-- 因子实验室：因子看板、因子挖掘、配置策略
-- 技术分析：K线学习、配置策略
-- 组合优化：优化求解、配置策略
+- 行业风格：行业景气度、行业轮动、风格轮动
+- 因子实验室：因子看板、LLM因子挖掘、模型层
+- 技术分析：技术因子、K线学习
+- 组合优化：优化求解器、宽基择时、指数增强
 
 八个一级板块与统一 AI 文件夹：
 
-| 一级板块 | 统一 AI 文件夹 | 旧兼容目录 |
+| 板块或兼容入口 | 统一 AI 文件夹 | 旧兼容目录 |
 | --- | --- | --- |
-| 主页 | `ai-models/research-home` | `model/research_home`、`skill/research-home` |
+| 跨模型汇总兼容入口（非公开左侧入口） | `ai-models/research-home` | `model/research_home`、`skill/research-home` |
 | 数据看板 | `ai-models/data-dashboard` | `model/data_dashboard`、`skill/data-dashboard` |
 | 资产配置 | `ai-models/asset-allocation` | `model/asset_allocation`、`skill/asset-allocation` |
 | 资金面跟踪 | `ai-models/liquidity-tracking` | `model/liquidity_tracking`、`skill/liquidity-tracking` |
-| 行业景气度 | `ai-models/industry-rotation` | `model/industry_rotation`、`skill/industry-rotation` |
+| 行业风格 | `ai-models/industry-rotation` | `model/industry_rotation`、`skill/industry-rotation` |
 | 因子实验室 | `ai-models/factor-laboratory` | `model/factor_laboratory`、`skill/factor-laboratory` |
 | 技术分析 | `ai-models/technical-analysis` | `model/technical_analysis`、`skill/technical-analysis` |
 | 组合优化 | `ai-models/portfolio-optimization` | `model/portfolio_optimization`、`skill/portfolio-optimization` |

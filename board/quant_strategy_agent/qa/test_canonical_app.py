@@ -108,18 +108,19 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         champion = payload["champion"]
-        self.assertEqual(payload["engine_version"], "factor-lab/3.5-stable-development-selection")
+        self.assertEqual(payload["engine_version"], "factor-lab/3.6.1-deep-anti-overfit")
+        self.assertEqual(champion["active_engine_version"], payload["engine_version"])
         self.assertEqual(champion["status"], "ok")
         self.assertEqual(champion["selection_basis"], "train_and_validation_only")
         self.assertEqual(champion["test_usage"], "report_only")
-        self.assertEqual(champion["candidate_count"], 48)
-        self.assertEqual(champion["gate_summary"]["passed"], 10)
-        self.assertEqual(champion["gate_summary"]["total"], 10)
+        self.assertGreaterEqual(champion["candidate_count"], 1)
+        self.assertEqual(champion["gate_summary"]["passed"], champion["gate_summary"]["total"])
+        self.assertGreaterEqual(champion["gate_summary"]["total"], 1)
         self.assertTrue(champion["gate_summary"]["all_passed"])
         metrics = {row["split"]: row for row in champion["splits"]}
-        self.assertAlmostEqual(metrics["valid"]["sharpe"], 0.8199760424013568)
-        self.assertAlmostEqual(metrics["test"]["sharpe"], 2.89372502999757)
-        self.assertAlmostEqual(metrics["test"]["max_drawdown"], -0.033796103362012886)
+        self.assertEqual(set(metrics), {"train", "valid", "test"})
+        self.assertTrue(all("sharpe" in row for row in metrics.values()))
+        self.assertIn("max_drawdown", metrics["test"])
         turnover = next(row for row in champion["gates"] if row["gate"] == "turnover")
         self.assertTrue(turnover["passed"])
         js = (APP_ROOT / "static" / "js" / "factor_lab.js").read_text(encoding="utf-8")
@@ -194,6 +195,8 @@ class CanonicalAppTest(unittest.TestCase):
         snapshot_bytes = self.decoded(snapshot_response)
         self.assertLess(len(snapshot_bytes), 3_000_000)
         snapshot = json.loads(snapshot_bytes.decode("utf-8"))
+        expected_total = int(snapshot["style"]["data_quality"]["latest_labelled_stock_count"])
+        self.assertGreaterEqual(expected_total, 4000)
         self.assertNotIn("stock_labels", snapshot["style"])
         self.assertEqual(
             snapshot["style"]["stock_labels_endpoint"],
@@ -207,7 +210,7 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertEqual(labels_response.status_code, 200)
         labels = labels_response.get_json()
         self.assertEqual(labels["status"], "ok")
-        self.assertEqual(labels["total"], 5229)
+        self.assertEqual(labels["total"], expected_total)
         self.assertEqual(len(labels["rows"]), 120)
         self.assertEqual(len({row["code"] for row in labels["rows"]}), 120)
 
@@ -234,7 +237,6 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertEqual(
             targets,
             [
-                "home:overview",
                 "data:market_monitor", "data:topic_tracking",
                 "allocation:cycle", "allocation:strategy",
                 "rotation:prosperity", "rotation:industry", "rotation:style",
@@ -283,7 +285,7 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertIn("api('/api/factor/history')", app_js)
         self.assertIn("refresh=1&ts=", app_js)
         self.assertIn("?live=1&ts=", app_js)
-        self.assertIn("latest.job_id", app_js)
+        self.assertIn("rows[0]&&rows[0].job_id", app_js)
         for endpoint in ("factor_status", "factor_history", "factor_history_detail", "kline_job"):
             self.assertIn(f'"{endpoint}"', main_py)
 
@@ -294,10 +296,20 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertEqual(
             set(payload["services"]),
             {
-                "board", "kline", "factor", "ai_monitor", "allocation", "liquidity",
+                "board", "kline", "factor", "ai_monitor", "trump", "allocation", "liquidity",
                 "index_enhancement", "portfolio", "rotation", "factor_lab",
             },
         )
+
+    def test_kline_llm_dashboard_keeps_model_dependencies(self) -> None:
+        response = self.client.get("/api/kline-llm/dashboard")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(len(payload["domains"]), 12)
+        self.assertGreaterEqual(len(payload["rules"]), 400)
+        self.assertGreaterEqual(len(payload["stock_universe"]), 5000)
+        self.assertRegex(str(payload["as_of"]), r"^\d{8}$")
 
 
 

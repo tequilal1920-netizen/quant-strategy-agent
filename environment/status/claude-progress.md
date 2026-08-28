@@ -1526,3 +1526,12 @@ Next best action: run a full production-cap screened-domain timing experiment us
 - Hardened the initial frontend state in both main and vnext so `S.active` starts at `data:market_monitor`; this prevents cache or load-order edge cases from falling back to the old `data:macro` direct route.
 - Cleaned the Git staging set by unstaging obvious shadow/probe/audit iteration files while keeping formal runtime assets and dependency chains needed by the public dashboard and vnext.
 - Final pre-commit checks passed: `git diff --cached --check`, exact sensitive-token fragment scan, main/vnext authenticated endpoint suite, and data-dashboard module freshness probe. No private API credentials or account fragments are staged.
+
+## 2026-08-29 final workspace/MCP/public verification v4
+
+- 外层目录核对通过：`reference`、`数据看板`、`资产配置`、`因子实验室`、`技术分析`、`行业风格`、`组合优化`、`数据库`、`公网`、`environment`、`mcp`、`skill` 均存在；`reference/SOP` 已包含用户指定的 17 个 SOP/Excel 文件；因子实验室外层二级目录已按要求保留为 `因子看板 / LLM因子挖掘 / 模型层`。
+- 公网页面验收通过：`/quant-agent/` 默认进入 `数据看板 > 市场监控 > 中国宏观`，左侧 `主页` 项为 0，全部二级导航默认展开，因子实验室显示 `因子看板 / LLM因子挖掘 / 模型层`；Playwright 公网矩阵逐个点击 15 个板块，失败 0、console error 0、page error 0。
+- 公网 API 验收通过：`/healthz` 返回 `2026.08.28-all-modules-final-verification-v4`；15 个关键接口均 200；个股新闻 `603259` 返回 10 条且首条与该股相关，个股研报返回 5 条且 5 条均为 PDF/attachment 型链接；K线学习股票池 5522、规则 480、as_of `20260820`；技术因子 as_of `20260820`；因子实验室引擎 `factor-lab/3.6.1-deep-anti-overfit`；AI监控指标目录 31；行业风格行业数 31；资产配置 schema `asset-allocation-interactive-v66/1.0`；组合优化 bootstrap 与 strategy 均 `ready`；川普专题 `ok`。
+- MCP 修复并验收通过：`mcp/model_catalog.json` 为六大模块补充稳定 `id`；`quant_agent_mcp.server` 支持按 id/标题/路径定位模块；`install.ps1` 安装后可调用 `list_modules`、`learning_path`、`module_status`、`search_model_text`、`public_health`，可作为新 AI 通过 GitHub 学习模型文档和只读查询入口。
+- 自动更新核对：远端 `AssetAllocationSnapshotDaily` 与 `QuantStrategyGlobalRefresh` 计划任务处于 Ready 且最近返回 0；生产服务任务 `QuantStrategyAgent8096R340VisualOptimizer` 处于 Running；远端环境仅核对非敏感字段，AI router 为 `gpt-5.5` + `xhigh`。
+- 重要风险边界：数据看板 `/api/board/snapshot` 仍为 `status=partial`，但六个子模块均有非空数据并更新至 2026-08-28；资金面精确字段覆盖仍按上一轮审计记为 `39/49`，剩余授权 Wind EDB/EPFR 字段未完全证明可持续获取，不得对外表述为 100% 全字段精确可用。

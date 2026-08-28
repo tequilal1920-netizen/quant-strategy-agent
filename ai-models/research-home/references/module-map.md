@@ -1,7 +1,7 @@
 # 研究主页模块地图
 
-- 一级标题：主页
-- 二级页面：无；主页是独立入口
+- 公开左侧入口：无
+- 定位：跨模型汇总兼容入口；公网根地址默认进入“数据看板 / 市场监控 / 宏观”
 - 本地模型：`ai-models/research-home/source`
 - 统一服务入口：`board/quant_strategy_agent/main.py`
 - 页面模板：`board/quant_strategy_agent/templates/index_rotation_factor_lab.html`
@@ -10,7 +10,7 @@
 - 输入快照：`board/quant_strategy_agent/data/`
 - 模块元数据：`ai-models/research-home/source/MODULE.json`
 
-主页按以下顺序消费模型结果：
+跨模型汇总按以下顺序消费模型结果：
 
 1. `model/data_dashboard`
 2. `model/asset_allocation`

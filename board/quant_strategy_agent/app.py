@@ -527,7 +527,9 @@ def create_app() -> Flask:
         try:
             try:
                 from kline_llm_backend import build_dashboard_snapshot
-            except ModuleNotFoundError:
+            except ModuleNotFoundError as exc:
+                if exc.name != "kline_llm_backend":
+                    raise
                 from agent.board.quant_strategy_agent.kline_llm_backend import build_dashboard_snapshot
 
             refresh = request.args.get("refresh") == "1"
@@ -540,7 +542,9 @@ def create_app() -> Flask:
         try:
             try:
                 from kline_llm_backend import rule_context
-            except ModuleNotFoundError:
+            except ModuleNotFoundError as exc:
+                if exc.name != "kline_llm_backend":
+                    raise
                 from agent.board.quant_strategy_agent.kline_llm_backend import rule_context
 
             return jsonify(
@@ -558,7 +562,9 @@ def create_app() -> Flask:
         try:
             try:
                 from kline_llm_backend import stock_timing_payload
-            except ModuleNotFoundError:
+            except ModuleNotFoundError as exc:
+                if exc.name != "kline_llm_backend":
+                    raise
                 from agent.board.quant_strategy_agent.kline_llm_backend import stock_timing_payload
 
             return jsonify(

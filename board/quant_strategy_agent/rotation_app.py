@@ -148,6 +148,39 @@ def _snapshot_contract(payload: dict[str, Any]) -> dict[str, Any]:
         "as_of": payload.get("as_of"),
     }
 
+
+def _compact_high_frequency(high_frequency: dict[str, Any]) -> dict[str, Any]:
+    """Keep the first rotation snapshot light; detailed industry data is loaded on demand."""
+    public_hf = dict(high_frequency or {})
+    public_hf["industries_endpoint"] = "/api/rotation/industry-dashboard"
+    compact_rows: list[dict[str, Any]] = []
+    source_rows = high_frequency.get("industries", []) if isinstance(high_frequency, dict) else []
+    for row in source_rows:
+        compact_rows.append({
+            "industry": row.get("industry"),
+            "rank": row.get("rank"),
+            "score": row.get("score"),
+            "selected": row.get("selected"),
+            "live_indicators": row.get("live_indicators", 0),
+            "total_indicators": row.get("total_indicators", 0),
+            "data_quality": row.get("data_quality"),
+        })
+    public_hf["industries"] = compact_rows
+    return public_hf
+
+
+def _compact_industry(industry: dict[str, Any]) -> dict[str, Any]:
+    """Remove duplicate heavy research fields from frequency snapshots."""
+    public_industry = dict(industry or {})
+    frequencies: dict[str, Any] = {}
+    for frequency, model in (industry.get("frequencies", {}) if isinstance(industry, dict) else {}).items():
+        public_model = dict(model or {})
+        public_model.pop("six_dimension", None)
+        frequencies[frequency] = public_model
+    public_industry["frequencies"] = frequencies
+    return public_industry
+
+
 def rotation_index():
     return render_template(
         "index.html",
@@ -178,6 +211,8 @@ def rotation_snapshot():
         if contract["status"] != "ok":
             return jsonify({"status": "failed", "quality": contract}), 503
         public_payload = dict(payload)
+        public_payload["industry"] = _compact_industry(payload.get("industry", {}))
+        public_payload["high_frequency"] = _compact_high_frequency(payload.get("high_frequency", {}))
         public_style = dict(payload.get("style", {}))
         public_style.pop("stock_labels", None)
         public_style["stock_labels_endpoint"] = "/api/rotation/style-labels"

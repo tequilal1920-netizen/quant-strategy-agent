@@ -23,8 +23,18 @@
     const version = escapeAttribute(boot.version || "dev");
     const cssBase = `${basePath}/static/ai_monitor/css`;
     const styles = STYLE_FILES.map((file) => `<link rel="stylesheet" href="${cssBase}/${file}?v=${version}">`).join("");
+    const immediateControlStyle = `<style>
+      .ai-monitor-native button,
+      .ai-monitor-native input,
+      .ai-monitor-native select,
+      .ai-monitor-native option,
+      .ai-monitor-native textarea {
+        font-family: Arial, "KaiTi", "STKaiti", "Kaiti SC", "楷体", sans-serif !important;
+        font-size: 14px !important;
+      }
+    </style>`;
 
-    return `${styles}
+    return `${styles}${immediateControlStyle}
       <div class="ai-monitor-native">
         <section class="ai-monitor-status" aria-label="AI监控数据状态">
           <div><span id="ai-monitor-status-dot" class="status-dot running" aria-hidden="true"></span><strong id="ai-monitor-status-text">正在加载科技扩散数据</strong></div>

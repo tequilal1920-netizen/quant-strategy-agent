@@ -34,7 +34,7 @@ import optimizer_backend
 import technical_factor_backend
 
 
-APP_VERSION = "2026.08.28-all-modules-merge-repair-v3"
+APP_VERSION = "2026.08.28-all-modules-final-verification-v4"
 legacy.APP_VERSION = APP_VERSION
 rotation.APP_VERSION = APP_VERSION
 

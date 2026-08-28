@@ -43,6 +43,7 @@ PROFESSIONAL_FRAMEWORK = Path(
         str(PROJECT_ROOT / "model" / "factor_laboratory" / "professional_framework.json"),
     )
 ).resolve()
+DEFAULT_ENGINE_VERSION = "factor-lab/3.6.1-deep-anti-overfit"
 
 STATE_DB.parent.mkdir(parents=True, exist_ok=True)
 PROCESS_LOCK = threading.RLock()
@@ -91,6 +92,24 @@ def worker_python() -> Path:
         if raw and Path(raw).exists():
             return Path(raw).resolve()
     return Path(sys.executable)
+
+
+def active_engine_version() -> str:
+    """Read the callable worker version without importing the heavy model stack."""
+    try:
+        text = ENGINE_PATH.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return DEFAULT_ENGINE_VERSION
+    for pattern in (
+        r'VERSION\s*=\s*"([^"]+)"',
+        r"VERSION\s*=\s*'([^']+)'",
+        r'ENGINE_VERSION\s*=\s*"([^"]+)"',
+        r"ENGINE_VERSION\s*=\s*'([^']+)'",
+    ):
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1)
+    return DEFAULT_ENGINE_VERSION
 
 
 @contextmanager
@@ -514,7 +533,7 @@ def champion_payload() -> dict[str, Any]:
     """Load the compact, audited strategy champion contract for the UI."""
     unavailable = {
         "status": "unavailable",
-        "engine_version": "factor-lab/3.2-inverse-volatility-rank-execution",
+        "engine_version": active_engine_version(),
         "message": "validated_champion_manifest_unavailable",
     }
     try:
@@ -579,6 +598,7 @@ def professional_framework_payload(champion: dict[str, Any] | None = None) -> di
     if champion and champion.get("status") == "ok":
         effect = dict(payload.get("current_effect_contract") or {})
         effect.update({
+            "active_engine_version": active_engine_version(),
             "default_champion": champion.get("selected_candidate"),
             "selection_basis": champion.get("selection_basis"),
             "test_usage": champion.get("test_usage"),
@@ -589,12 +609,15 @@ def professional_framework_payload(champion: dict[str, Any] | None = None) -> di
     return payload
 def bootstrap_payload() -> dict[str, Any]:
     path, python = warehouse_path(), worker_python()
+    active_version = active_engine_version()
     champion = champion_payload()
     framework = professional_framework_payload(champion)
+    champion = dict(champion)
+    champion["active_engine_version"] = active_version
     return {
         "status": "ok" if path.exists() and ENGINE_PATH.exists() and python.exists() else "blocked",
         "api_version": API_VERSION,
-        "engine_version": champion.get("engine_version", "factor-lab/3.2-inverse-volatility-rank-execution"),
+        "engine_version": active_version,
         "data": {
             "database_available": path.exists(),
             "database_hint": "server-side research warehouse",

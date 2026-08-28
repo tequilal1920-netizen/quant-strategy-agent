@@ -301,13 +301,30 @@
     if (s) state.config.universe.score_source = s.id || s.code || s.name || "";
     state.config.universe.holdings = 50;
   }
+  async function loadBootstrap(force) {
+    if (state.bootstrap && !force) return state.bootstrap;
+    state.bootstrap = await api("/api/optimizer/bootstrap");
+    init();
+    return state.bootstrap;
+  }
+  async function loadSnapshot(force) {
+    await loadBootstrap(force);
+    if (state.snapshot && !force) return state.snapshot;
+    if (state.snapshotPromise && !force) return state.snapshotPromise;
+    state.snapshotPromise = api("/api/optimizer/strategy-snapshot")
+      .then((payload) => {
+        state.snapshot = payload;
+        return payload;
+      })
+      .finally(() => {
+        state.snapshotPromise = null;
+      });
+    return state.snapshotPromise;
+  }
   async function load(force) {
     if (state.bootstrap && state.snapshot && !force) return;
-    [state.bootstrap, state.snapshot] = await Promise.all([
-      api("/api/optimizer/bootstrap"),
-      api("/api/optimizer/strategy-snapshot"),
-    ]);
-    init();
+    await loadBootstrap(force);
+    await loadSnapshot(force);
   }
   async function loadRotation(force) {
     if (state.rotation && !force) return state.rotation;
@@ -1342,7 +1359,7 @@
   async function llmPage() {
     state.currentPage = "llm";
     try {
-      await load(false);
+      await loadBootstrap(false);
     } catch (e) {
       root().innerHTML = block("工作台加载失败", e.message);
       return;
@@ -3569,19 +3586,27 @@
   }
   async function learningPage() {
     state.currentPage = "learning";
+    const token = (state.learningToken || 0) + 1;
+    state.learningToken = token;
     try {
-      await load(false);
+      await loadBootstrap(false);
     } catch (e) {
       root().innerHTML = block("优化求解器加载失败", e.message);
       return;
     }
-    const p = problems();
-    if (p.length) {
-      conclusion("真实资产池或策略快照未就绪，已阻断降级展示。", true);
-      root().innerHTML = block("模块已阻断", p.join("；"));
+    const b = boot();
+    if (b.data_ready === false) {
+      conclusion("真实资产池未就绪，已阻断降级展示。", true);
+      root().innerHTML = block("模块已阻断", b.block_reason || "研究数据未就绪");
       return;
     }
     renderLearningContent();
+    loadSnapshot(false)
+      .then(() => {
+        const active = document.querySelector(".nav-item.is-active")?.dataset.target;
+        if (state.currentPage === "learning" && state.learningToken === token && active === "portfolio:solve") renderLearningContent();
+      })
+      .catch((e) => conclusion("策略快照后台加载失败：" + e.message, true));
   }  function go(page) {
     const b = document.querySelector('[data-workspace-section="' + page + '"]');
     if (b) b.click();

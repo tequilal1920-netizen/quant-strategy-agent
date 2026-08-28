@@ -57,7 +57,7 @@
           lastError = error;
           const retryable = !error.status || error.status >= 500;
           if (!retryable || attempt === 2) throw error;
-          await new Promise((resolve) => setTimeout(resolve, 600));
+          await new Promise((resolve) => setTimeout(resolve, 250));
         }
       }
       throw lastError;

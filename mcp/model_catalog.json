@@ -4,43 +4,55 @@
   "active_repo": ".",
   "modules": [
     {
+      "id": "data-dashboard",
       "title": "数据看板",
       "secondary": ["市场监控", "专题跟踪"],
+      "coverage": ["宏观", "全球市场", "行业", "大宗商品", "个股", "新闻事件", "资金面", "AI监控", "川普指数", "内需股"],
       "ai_model": "ai-models/data-dashboard",
       "sources": ["model/data_dashboard", "model/liquidity_tracking", "board/quant_strategy_agent"],
       "query_examples": ["python ai-models/data-dashboard/scripts/query.py status"]
     },
     {
+      "id": "asset-allocation",
       "title": "资产配置",
       "secondary": ["周期跟踪", "资产配置"],
+      "coverage": ["美林时钟", "普林格周期", "多模型配置", "资产权重", "风险贡献", "换手", "回测治理"],
       "ai_model": "ai-models/asset-allocation",
       "sources": ["model/asset_allocation"],
       "query_examples": ["python ai-models/asset-allocation/scripts/query.py current 画像=平衡"]
     },
     {
+      "id": "industry-rotation",
       "title": "行业风格",
       "secondary": ["行业景气度", "行业轮动", "风格轮动"],
+      "coverage": ["高频景气", "月频行业轮动", "周频行业轮动", "风格轮动", "六维归因", "因子归因"],
       "ai_model": "ai-models/industry-rotation",
       "sources": ["model/industry_rotation"],
       "query_examples": ["python ai-models/industry-rotation/scripts/query.py ranking 频率=高频 数量=10"]
     },
     {
+      "id": "factor-laboratory",
       "title": "因子实验室",
       "secondary": ["因子看板", "LLM因子挖掘", "模型层"],
+      "coverage": ["因子数据库", "因子看板", "因子检验", "因子归因", "LLM因子挖掘", "打分回测个股信号", "指数增强"],
       "ai_model": "ai-models/factor-laboratory",
       "sources": ["model/factor_laboratory", "model/llm_factor_mining", "model/index_enhancement"],
       "query_examples": ["python ai-models/factor-laboratory/scripts/query.py champion"]
     },
     {
+      "id": "technical-analysis",
       "title": "技术分析",
       "secondary": ["技术因子", "K线学习"],
+      "coverage": ["技术因子轮动", "技术归因", "LLM个股仓位历史决策点", "当下信号", "K线形态记忆"],
       "ai_model": "ai-models/technical-analysis",
       "sources": ["model/technical_analysis", "model/kline_memory_learning"],
       "query_examples": ["python ai-models/technical-analysis/scripts/query.py status"]
     },
     {
+      "id": "portfolio-optimization",
       "title": "组合优化",
       "secondary": ["优化求解器", "宽基择时", "指数增强"],
+      "coverage": ["自适应优化求解器", "LLM约束编译", "任意宽基择时", "指数增强", "个股行业信号", "组合归因"],
       "ai_model": "ai-models/portfolio-optimization",
       "sources": ["model/portfolio_optimization", "model/index_enhancement"],
       "query_examples": ["python ai-models/portfolio-optimization/scripts/query.py current 最小权重=0.001"]

@@ -1,7 +1,7 @@
 # 数据看板模块地图
 
 - 一级标题：数据看板
-- 二级页面：宏观、全球市场、行业、大宗商品、个股、新闻事件、AI监控
+- 二级页面：市场监控、专题跟踪
 - 本地模型：`model/data_dashboard`
 - 数据看板源码：`board/public_dashboard`
 - 统一服务入口：`board/quant_strategy_agent/main.py`

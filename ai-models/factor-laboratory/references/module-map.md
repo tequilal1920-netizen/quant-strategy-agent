@@ -1,7 +1,7 @@
 # 因子实验室模块地图
 
 - 一级标题：因子实验室
-- 二级页面：因子看板、因子挖掘、配置策略
+- 二级页面：因子看板、LLM因子挖掘、模型层
 - 隔离实验模型：`ai-models/factor-laboratory/source`
 - LLM 挖掘模型：`ai-models/factor-laboratory/components/llm_factor_mining`
 - 指数增强模型：`ai-models/factor-laboratory/components/index_enhancement`

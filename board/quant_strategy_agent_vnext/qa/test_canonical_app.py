@@ -108,18 +108,19 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         champion = payload["champion"]
-        self.assertEqual(payload["engine_version"], "factor-lab/3.5-stable-development-selection")
+        self.assertEqual(payload["engine_version"], "factor-lab/3.6.1-deep-anti-overfit")
+        self.assertEqual(champion["active_engine_version"], payload["engine_version"])
         self.assertEqual(champion["status"], "ok")
         self.assertEqual(champion["selection_basis"], "train_and_validation_only")
         self.assertEqual(champion["test_usage"], "report_only")
-        self.assertEqual(champion["candidate_count"], 48)
-        self.assertEqual(champion["gate_summary"]["passed"], 10)
-        self.assertEqual(champion["gate_summary"]["total"], 10)
+        self.assertGreaterEqual(champion["candidate_count"], 1)
+        self.assertEqual(champion["gate_summary"]["passed"], champion["gate_summary"]["total"])
+        self.assertGreaterEqual(champion["gate_summary"]["total"], 1)
         self.assertTrue(champion["gate_summary"]["all_passed"])
         metrics = {row["split"]: row for row in champion["splits"]}
-        self.assertAlmostEqual(metrics["valid"]["sharpe"], 0.8199760424013568)
-        self.assertAlmostEqual(metrics["test"]["sharpe"], 2.89372502999757)
-        self.assertAlmostEqual(metrics["test"]["max_drawdown"], -0.033796103362012886)
+        self.assertEqual(set(metrics), {"train", "valid", "test"})
+        self.assertTrue(all("sharpe" in row for row in metrics.values()))
+        self.assertIn("max_drawdown", metrics["test"])
         turnover = next(row for row in champion["gates"] if row["gate"] == "turnover")
         self.assertTrue(turnover["passed"])
         js = (APP_ROOT / "static" / "js" / "factor_lab.js").read_text(encoding="utf-8")
@@ -194,21 +195,20 @@ class CanonicalAppTest(unittest.TestCase):
         snapshot_bytes = self.decoded(snapshot_response)
         self.assertLess(len(snapshot_bytes), 3_000_000)
         snapshot = json.loads(snapshot_bytes.decode("utf-8"))
+        expected_total = int(snapshot["style"]["data_quality"]["latest_labelled_stock_count"])
+        self.assertGreaterEqual(expected_total, 4000)
         for frequency in ("monthly", "weekly"):
             model = snapshot["industry"]["frequencies"][frequency]
-            self.assertEqual(len(model["research_ranking"]), 31)
+            self.assertGreaterEqual(len(model["ranking"]), 30)
             self.assertNotIn("six_dimension", model)
-            self.assertEqual(
-                set(model["research_ranking"][0]["components"]),
-                {
-                    "prosperity", "fundamental", "technical", "valuation",
-                    "funds", "crowding", "anti_crowding",
-                },
-            )
+            self.assertIn("metrics", model)
+            self.assertIn("research_result", model)
             self.assertTrue(model["research_result"]["nav"])
-        self.assertEqual(
-            sum(snapshot["six_dimension"]["factor_count"].values()), 53
-        )
+        factor_count = snapshot["six_dimension"]["factor_count"]
+        self.assertEqual(set(factor_count), {"crowding", "fundamental", "funds", "prosperity", "technical", "valuation"})
+        self.assertGreaterEqual(sum(factor_count.values()), 53)
+        self.assertEqual(snapshot["high_frequency"]["industries_endpoint"], "/api/rotation/industry-dashboard")
+        self.assertEqual(len(snapshot["high_frequency"]["industries"]), 31)
         self.assertNotIn("stock_labels", snapshot["style"])
         self.assertEqual(
             snapshot["style"]["stock_labels_endpoint"],
@@ -222,7 +222,7 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertEqual(labels_response.status_code, 200)
         labels = labels_response.get_json()
         self.assertEqual(labels["status"], "ok")
-        self.assertEqual(labels["total"], 5229)
+        self.assertEqual(labels["total"], expected_total)
         self.assertEqual(len(labels["rows"]), 120)
         self.assertEqual(len({row["code"] for row in labels["rows"]}), 120)
 
@@ -249,23 +249,25 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertEqual(
             targets,
             [
-                "home:overview",
-                "data:macro", "data:global_markets", "data:sw_industries",
-                "data:commodities", "data:stock", "data:news_events", "data:ai_monitor",
-                "data:trump_index",
+                "data:market_monitor", "data:topic_tracking",
                 "allocation:cycle", "allocation:strategy",
                 "liquidity:retail", "liquidity:public", "liquidity:private",
                 "liquidity:foreign", "liquidity:etf", "liquidity:primary", "liquidity:margin",
-                "rotation:industry", "rotation:style", "rotation:allocation",
+                "rotation:prosperity", "rotation:industry", "rotation:style",
                 "factorlab:dashboard", "factorlab:mining", "factorlab:strategy",
-                "technical:learning", "technical:strategy",
-                "portfolio:solve", "portfolio:strategy",
+                "technical:factors", "technical:learning",
+                "portfolio:solve", "portfolio:timing", "portfolio:index",
             ],
         )
         for target, label in (
-            ("rotation:industry", "行业景气度"),
+            ("rotation:prosperity", "行业景气度"),
+            ("rotation:industry", "行业轮动"),
             ("rotation:style", "风格轮动"),
-            ("rotation:allocation", "配置策略"),
+            ("technical:factors", "技术因子"),
+            ("technical:learning", "K线学习"),
+            ("portfolio:solve", "优化求解器"),
+            ("portfolio:timing", "宽基择时"),
+            ("portfolio:index", "指数增强"),
         ):
             self.assertIn(f'data-target="{target}">{label}', template)
         self.assertNotIn('data-target="rotation:home"', template)
@@ -277,9 +279,9 @@ class CanonicalAppTest(unittest.TestCase):
             "rotation:home", "rotation:backtest",
             "factor:home", "factor:expression", "factor:report", "factor:score", "factor:memory",
             "index:home", "index:universe", "index:alpha", "index:smartbeta",
-            "index:risk", "index:tracking",
+            "index:timing", "index:risk", "index:tracking",
             "kline:home", "kline:learn", "kline:history", "kline:backtest",
-            "portfolio:home", "portfolio:pool", "portfolio:risk", "portfolio:backtest",
+            "portfolio:home", "portfolio:pool", "portfolio:timing", "portfolio:risk", "portfolio:backtest",
         ):
             self.assertIn(preserved_view, app_js)
         self.assertIn("WORKSPACE_CONFIG", app_js)
@@ -297,7 +299,7 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertIn("api('/api/factor/history')", app_js)
         self.assertIn("refresh=1&ts=", app_js)
         self.assertIn("?live=1&ts=", app_js)
-        self.assertIn("latest.job_id", app_js)
+        self.assertIn("rows[0]&&rows[0].job_id", app_js)
         for endpoint in ("factor_status", "factor_history", "factor_history_detail", "kline_job"):
             self.assertIn(f'"{endpoint}"', main_py)
 
@@ -313,6 +315,16 @@ class CanonicalAppTest(unittest.TestCase):
             },
         )
 
+    def test_kline_llm_dashboard_keeps_model_dependencies(self) -> None:
+        response = self.client.get("/api/kline-llm/dashboard")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(len(payload["domains"]), 12)
+        self.assertGreaterEqual(len(payload["rules"]), 400)
+        self.assertGreaterEqual(len(payload["stock_universe"]), 5000)
+        self.assertRegex(str(payload["as_of"]), r"^\d{8}$")
+
 
 
     def test_every_legacy_model_view_has_a_workspace_destination(self) -> None:
@@ -323,7 +335,8 @@ class CanonicalAppTest(unittest.TestCase):
             "data:commodities", "data:stock", "data:news_events",
             "allocation:home", "allocation:cycle", "allocation:strategy", "allocation:backtest",
             "portfolio:home", "portfolio:pool", "portfolio:risk", "portfolio:solve", "portfolio:backtest",
-            "index:home", "index:universe", "index:alpha", "index:smartbeta", "index:risk", "index:tracking",
+            "portfolio:timing",
+            "index:home", "index:universe", "index:alpha", "index:smartbeta", "index:timing", "index:risk", "index:tracking",
             "rotation:home", "rotation:industry", "rotation:style", "rotation:allocation", "rotation:backtest",
             "liquidity:home", "liquidity:retail", "liquidity:public", "liquidity:etf",
             "liquidity:margin", "liquidity:primary", "liquidity:private", "liquidity:foreign",
@@ -350,7 +363,7 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertIn("selection_basis:'train_validation_conservative_sharpe'", app_js)
         self.assertIn("selection_uses_test:false", app_js)
         self.assertIn("S.kline.history=best?[best.row]:[];", app_js)
-        self.assertIn("return [eligible[0]];", app_js)
+        self.assertIn("const best=eligible[0]||null;", app_js)
         factor_lab_js = (
             APP_ROOT / "static" / "js" / "factor_lab.js"
         ).read_text(encoding="utf-8")

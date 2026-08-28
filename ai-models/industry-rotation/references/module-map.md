@@ -3,7 +3,7 @@
 ## 固定页面与代码入口
 
 - 一级标题：行业景气度
-- 二级页面：行业景气度、风格轮动、配置策略
+- 二级页面：行业景气度、行业轮动、风格轮动
 - AI查询入口：`ai-models/industry-rotation/scripts/query.py`
 - 只读运行时：`ai-models/industry-rotation/runtime/agent_runtime/core.py`
 - 本地模型镜像：`ai-models/industry-rotation/source`

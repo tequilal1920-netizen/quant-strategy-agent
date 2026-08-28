@@ -527,7 +527,9 @@ def create_app() -> Flask:
         try:
             try:
                 from kline_llm_backend import build_dashboard_snapshot
-            except ModuleNotFoundError:
+            except ModuleNotFoundError as exc:
+                if exc.name != "kline_llm_backend":
+                    raise
                 from agent.board.quant_strategy_agent.kline_llm_backend import build_dashboard_snapshot
 
             refresh = request.args.get("refresh") == "1"
@@ -540,7 +542,9 @@ def create_app() -> Flask:
         try:
             try:
                 from kline_llm_backend import rule_context
-            except ModuleNotFoundError:
+            except ModuleNotFoundError as exc:
+                if exc.name != "kline_llm_backend":
+                    raise
                 from agent.board.quant_strategy_agent.kline_llm_backend import rule_context
 
             return jsonify(
@@ -558,7 +562,9 @@ def create_app() -> Flask:
         try:
             try:
                 from kline_llm_backend import stock_timing_payload
-            except ModuleNotFoundError:
+            except ModuleNotFoundError as exc:
+                if exc.name != "kline_llm_backend":
+                    raise
                 from agent.board.quant_strategy_agent.kline_llm_backend import stock_timing_payload
 
             return jsonify(
@@ -687,7 +693,15 @@ def load_allocation_snapshot() -> dict[str, Any]:
         if ALLOCATION_CACHE.get("mtime_ns") == stat.st_mtime_ns and isinstance(ALLOCATION_CACHE.get("payload"), dict):
             return ALLOCATION_CACHE["payload"]
         payload = json.loads(ALLOCATION_SNAPSHOT_PATH.read_text(encoding="utf-8"))
-        if payload.get("status") != "ready" or payload.get("quality", {}).get("status") != "passed":
+        legacy_passed = payload.get("status") == "ready" and payload.get("quality", {}).get("status") == "passed"
+        v64_visible = (
+            str(payload.get("schema_version") or "") in {"6.3.0", "6.4.0"}
+            and str(payload.get("engine_version") or "").startswith("asset-allocation-v64")
+            and payload.get("governance", {}).get("selection_uses_test") is False
+            and isinstance(payload.get("allocation_models"), dict)
+            and isinstance(payload.get("recommended"), dict)
+        )
+        if not (legacy_passed or v64_visible):
             raise ValueError("snapshot_quality_gate_not_passed")
         ALLOCATION_CACHE.update({"mtime_ns": stat.st_mtime_ns, "payload": payload})
         return payload
@@ -700,8 +714,9 @@ def allocation_health_payload() -> dict[str, Any]:
             "status": "ok",
             "engine_version": payload.get("engine_version"),
             "generated_at": payload.get("generated_at"),
-            "data_as_of": payload.get("data_as_of"),
-            "quality": payload.get("quality", {}).get("status"),
+            "data_as_of": payload.get("data_as_of") or payload.get("generated_at"),
+            "quality": payload.get("quality", {}).get("status") or payload.get("data_quality", {}).get("status"),
+            "governance": payload.get("governance", {}).get("status"),
         }
     except Exception as exc:  # noqa: BLE001 - health checks must stay serializable
         return {"status": "failed", "message": str(exc)}

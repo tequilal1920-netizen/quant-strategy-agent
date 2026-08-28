@@ -23,10 +23,26 @@
     const version = escapeAttribute(boot.version || "dev");
     const cssBase = `${basePath}/static/ai_monitor/css`;
     const styles = STYLE_FILES.map((file) => `<link rel="stylesheet" href="${cssBase}/${file}?v=${version}">`).join("");
+    const immediateControlStyle = `<style>
+      .ai-monitor-native button,
+      .ai-monitor-native input,
+      .ai-monitor-native select,
+      .ai-monitor-native option,
+      .ai-monitor-native textarea {
+        font-family: Arial, "KaiTi", "STKaiti", "Kaiti SC", "楷体", sans-serif !important;
+        font-size: 14px !important;
+      }
+    </style>`;
 
-    return `${styles}
+    return `${styles}${immediateControlStyle}
       <div class="ai-monitor-native">
-<section class="primary-controls" aria-label="行业与时序设置">
+        <section class="ai-monitor-status" aria-label="AI监控数据状态">
+          <div><span id="ai-monitor-status-dot" class="status-dot running" aria-hidden="true"></span><strong id="ai-monitor-status-text">正在加载科技扩散数据</strong></div>
+          <span>最新交易日 <b id="latest-date">载入中</b></span>
+          <span>五维扩散 · 申万三级行业 · 个股归因</span>
+        </section>
+
+        <section class="primary-controls" aria-label="行业与时序设置">
           <label class="control-field"><span>一级行业</span><select id="level1-select"></select></label>
           <label class="control-field"><span>三级行业</span><select id="industry-select"></select></label>
           <label class="control-field metric-field"><span>时序指标</span><select id="metric-select"></select></label>
@@ -42,8 +58,8 @@
         <section id="overview" class="dashboard-section" data-ai-section="overview">
           <header class="section-header"><span class="section-index">01</span><h2>综合总览</h2></header>
           <div class="panel-grid overview-grid">
-            <article class="chart-panel"><header class="panel-header"><h3>扩散指数</h3><strong id="market-last"></strong></header><div id="market-chart" class="plot-frame plot-large"></div></article>
-            <article class="chart-panel"><header class="panel-header"><h3>扩散分数</h3></header><div id="level1-chart" class="plot-frame plot-large"></div></article>
+            <article class="chart-panel span-2"><header class="panel-header"><h3>科技扩散指数时序</h3><strong id="market-last"></strong></header><div id="market-chart" class="plot-frame plot-large"></div></article>
+            <article class="chart-panel"><header class="panel-header"><h3>一级行业对标</h3></header><div id="level1-chart" class="plot-frame plot-large"></div></article>
             <article class="chart-panel rank-panel"><header class="panel-header"><h3>全部三级行业排名</h3></header><div id="all-rank-chart" class="plot-frame plot-rank-all"></div></article>
             <article class="chart-panel rank-panel"><header class="panel-header"><h3 id="level1-rank-title">一级行业内三级行业排名</h3></header><div id="level1-rank-chart" class="plot-frame plot-rank"></div></article>
           </div>

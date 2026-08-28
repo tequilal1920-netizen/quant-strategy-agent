@@ -6,7 +6,8 @@ requires-python = ">=3.10"
 dependencies = ["mcp>=1.2.0"]
 
 [project.scripts]
-quant-agent-mcp = "server:main"
+quant-agent-mcp = "quant_agent_mcp.server:main"
 
-[tool.setuptools]
-py-modules = ["server"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["quant_agent_mcp*"]

@@ -127,7 +127,17 @@
     rankChart(p1.id,im.ranking);coverageChart(p2.id,rows);navChart(p4.id,im,"industry");
   }
 
-  async function industry(){await ensureFinalFigures();const m=model("industry",S.frequency),rows=arr(obj(S.snapshot.high_frequency).industries),row=rows.find(r=>r.industry===S.industry)||rows[0]||{},track=obj(obj(S.tracking.industries)[row.industry]);S.industry=row.industry;const indicators=arr(row.indicators);setHeader("行业景气度","行业选择器 · 8个专属指标 · 归因 · 可用日 · 高频跟踪");conclusion('<b>'+esc(row.industry)+'</b> 当前排名 '+esc(row.rank)+' / 31，景气分 '+fmt(row.score,3)+'，'+(row.selected?'进入Top10。':'处于观察池。')+'');
+  async function industry(){
+    await ensureFinalFigures();
+    const m=model("industry",S.frequency),rows=arr(obj(S.snapshot.high_frequency).industries),baseRow=rows.find(r=>r.industry===S.industry)||rows[0]||{};
+    let row=baseRow;
+    if(baseRow.industry){
+      try{const detail=await api("/api/rotation/industry-dashboard?industries="+encodeURIComponent(baseRow.industry));row=arr(detail.industries)[0]||baseRow;}catch(_){row=baseRow;}
+    }
+    const track=obj(obj(S.tracking.industries)[row.industry]);
+    S.industry=row.industry;
+    const indicators=arr(row.indicators);
+    setHeader("行业景气度","行业选择器 · 8个专属指标 · 归因 · 可用日 · 高频跟踪");conclusion('<b>'+esc(row.industry)+'</b> 当前排名 '+esc(row.rank)+' / 31，景气分 '+fmt(row.score,3)+'，'+(row.selected?'进入Top10。':'处于观察池。')+'');
     const controls=toolbar([select("v4-frequency","策略频率",[{value:"monthly",label:"月度"},{value:"weekly",label:"周度"}],S.frequency),select("v4-industry","申万一级行业",rows.map(r=>r.industry),S.industry),readout("当前排名",row.rank+" / 31"),readout("专属字段",row.live_indicators+" live / 8")]);
     const p1=panel(row.industry+" vs 31行业等权","仅用于表现核查，不进入景气信号",false,false),p2=panel("当前指标贡献","训练期方向 × 最新可见特征；红正蓝负",false,false);
     const small=indicators.map(function(ind){const p=panel(ind.name,ind.source+" · "+ind.frequency+" · "+ind.last_date,false,true);return {ind:ind,p:p};});
