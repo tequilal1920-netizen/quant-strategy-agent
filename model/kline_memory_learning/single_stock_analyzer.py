@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import bisect
@@ -151,6 +151,36 @@ POSITION_PROFILES = {
         "high": 0.75,
         "strong": 1.00,
         "level_multipliers": [0.88, 1.10, 1.38, 1.72],
+    },
+    "return_seek": {
+        "weak": 0.25,
+        "medium": 0.50,
+        "high": 0.75,
+        "strong": 1.00,
+        "level_multipliers": [0.72, 0.92, 1.15, 1.42],
+        "return_utility_weight": 1.75,
+        "downside_utility_weight": 0.62,
+        "transition_cost_multiplier": 2.35,
+        "reference_anchor_weight": 0.04,
+        "guarded_reference_anchor_weight": 0.16,
+        "uncertainty_weight": 0.45,
+        "variance_penalty": 0.24,
+        "cost_multiplier": 0.55,
+        "trend_participation_floor": 0.25,
+        "transition_momentum_floor": 0.25,
+        "risk_downside_trigger": 1.15,
+        "risk_lower_probability_trigger": 0.72,
+        "risk_defensive_probability_trigger": 0.55,
+        "bullish_return_trigger": 0.18,
+        "bullish_upper_probability_trigger": 0.58,
+        "bullish_trend_probability_trigger": 0.20,
+        "sparse_trend_gate_enabled": True,
+        "sparse_trend_min_hold_days": 24,
+        "sparse_trend_signal_gap_days": 16,
+        "sparse_trend_exit_gap_days": 5,
+        "sparse_trend_breakout_window": 120,
+        "sparse_trend_breakdown_window": 55,
+        "sparse_trend_drawdown_exit": -0.16,
     },
 }
 STATUS_WEIGHTS = {
@@ -5973,8 +6003,10 @@ class DirectPositionSignalAgent:
         self.target_by_date = target_by_date
         self.score_by_date = score_by_date
         self.position_grid = list(POSITION_LEVELS)
-        self.position_levels = POSITION_PROFILES["balanced"]
-        self.position_profile = "balanced"
+        self.position_profile = str(report.get("position_profile") or "balanced")
+        if self.position_profile not in POSITION_PROFILES:
+            self.position_profile = "balanced"
+        self.position_levels = POSITION_PROFILES[self.position_profile]
         self.thresholds = {"buy": 0.0, "sell": 0.0}
         self.threshold_selection = {
             "method": str(report.get("method") or "causal_direct_position_path"),
@@ -6053,6 +6085,13 @@ class DirectPositionSignalAgent:
             "decision_date": bool(row.get("decision_date")),
             "dynamic_policy_state": row.get("policy_state"),
             "dynamic_policy_state_duration": row.get("policy_state_duration"),
+            "return_capture_floor_active": bool(row.get("return_capture_floor_active")),
+            "return_capture_floor_state": row.get("return_capture_floor_state"),
+            "sparse_trend_gate": row.get("sparse_trend_gate", {}),
+            "sparse_trend_adjustment": row.get("sparse_trend_adjustment"),
+            "sparse_trend_floor_state": row.get("sparse_trend_floor_state"),
+            "sparse_trend_exit_active": bool(row.get("sparse_trend_exit_active")),
+            "sparse_trend_hard_exit": bool(row.get("sparse_trend_hard_exit")),
             "thresholds": dict(self.thresholds),
             "threshold_selection": dict(self.threshold_selection),
             "position_profile": self.position_profile,
@@ -6196,11 +6235,21 @@ class BacktestAgent:
                         or signal.get("regime", {}).get("state") == "defensive_down"
                     )
                 )
+                return_capture_upshift_signal = bool(
+                    side == "buy"
+                    and signal.get("return_capture_floor_active")
+                    and target >= 0.50
+                    and (
+                        (signal.get("sparse_trend_gate") or {}).get("confirmed")
+                        or signal.get("sparse_trend_adjustment") == "trend_floor"
+                    )
+                )
                 if (
                     last_signal_index is not None
                     and side == last_signal_side
                     and i - last_signal_index < getattr(signal_agent, "cooldown_days", 10)
                     and not risk_exit_signal
+                    and not return_capture_upshift_signal
                 ):
                     target = position
                     signal = dict(signal)
@@ -6213,7 +6262,7 @@ class BacktestAgent:
                         rid for rid in rule_ids
                         if rid in last_rule_seen and i - last_rule_seen[rid] < getattr(signal_agent, "same_rule_cooldown_days", 20)
                     ]
-                    if repeated and not risk_exit_signal:
+                    if repeated and not risk_exit_signal and not return_capture_upshift_signal:
                         target = position
                         signal = dict(signal)
                         signal["execution_block"] = "same_rule_cooldown"
@@ -6235,7 +6284,16 @@ class BacktestAgent:
                     )
                     and (signal.get("risk_flags") or signal.get("regime", {}).get("state") == "defensive_down")
                 )
-                if len(recent_signal_indices) >= SIGNAL_HARD_MAX_PER_YEAR and not risk_exit_override:
+                return_capture_budget_override = bool(
+                    budget_side == "buy"
+                    and signal.get("return_capture_floor_active")
+                    and target >= 0.50
+                    and (
+                        (signal.get("sparse_trend_gate") or {}).get("confirmed")
+                        or signal.get("sparse_trend_adjustment") == "trend_floor"
+                    )
+                )
+                if len(recent_signal_indices) >= SIGNAL_HARD_MAX_PER_YEAR and not (risk_exit_override or return_capture_budget_override):
                     target = position
                     signal = dict(signal)
                     signal_budget_block_count += 1
@@ -7727,7 +7785,9 @@ def build_prequential_regime_policy_path(
 ) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Any]]:
     """Learn causal state-specific floors and caps from matured return evidence."""
 
-    del position_profile
+    profile_name = position_profile if position_profile in POSITION_PROFILES else "balanced"
+    profile_config = POSITION_PROFILES.get(profile_name, POSITION_PROFILES["balanced"])
+    return_seek_profile = profile_name == "return_seek"
     if not daily:
         return {}, {
             "enabled": False,
@@ -7736,6 +7796,11 @@ def build_prequential_regime_policy_path(
         }
     h = holding_days if holding_days in FORWARD_HORIZONS else DEFAULT_HOLDING_DAYS
     levels = list(POSITION_LEVELS)
+    uncertainty_weight = safe_float(profile_config.get("uncertainty_weight"), 1.0)
+    variance_penalty = safe_float(profile_config.get("variance_penalty"), 0.5)
+    cost_multiplier = safe_float(profile_config.get("cost_multiplier"), 1.0)
+    trend_participation_floor = safe_float(profile_config.get("trend_participation_floor"), 0.0)
+    transition_momentum_floor = safe_float(profile_config.get("transition_momentum_floor"), 0.0)
     state_names = (
         "trend_up",
         "defensive_down",
@@ -7866,11 +7931,11 @@ def build_prequential_regime_policy_path(
         standard_error = math.sqrt(
             safe_div(posterior_variance, max(effective_state_n, 1.0))
         )
-        robust_edge = posterior_mean - round_trip_cost - standard_error
+        robust_edge = posterior_mean - cost_multiplier * round_trip_cost - uncertainty_weight * standard_error
         utilities = {
             position: (
-                position * (posterior_mean - round_trip_cost - standard_error)
-                - 0.5 * position * position * posterior_variance
+                position * (posterior_mean - cost_multiplier * round_trip_cost - uncertainty_weight * standard_error)
+                - variance_penalty * position * position * posterior_variance
             )
             for position in levels
         }
@@ -7881,7 +7946,10 @@ def build_prequential_regime_policy_path(
             0.0,
         )
         dynamic_floor = optimal_position if robust_edge > 0 else 0.0
-        dynamic_cap = 1.0 if robust_edge > 0 else optimal_position
+        if return_seek_profile and posterior_mean > 0 and state in ("trend_up", "range_trade", "transition"):
+            floor = trend_participation_floor if state == "trend_up" else transition_momentum_floor
+            dynamic_floor = max(dynamic_floor, floor)
+        dynamic_cap = 1.0 if robust_edge > 0 or (return_seek_profile and posterior_mean > 0) else optimal_position
         min_position = quantize(evidence_reliability * dynamic_floor)
         cap_value = quantize(
             (1.0 - evidence_reliability)
@@ -8005,6 +8073,15 @@ def build_prequential_regime_policy_path(
         "holding_days": h,
         "decision_stride_trading_days": decision_stride,
         "position_grid": levels,
+        "position_profile": profile_name,
+        "return_capture_overlay": {
+            "enabled": return_seek_profile,
+            "uncertainty_weight": uncertainty_weight,
+            "variance_penalty": variance_penalty,
+            "cost_multiplier": cost_multiplier,
+            "trend_participation_floor": trend_participation_floor,
+            "transition_momentum_floor": transition_momentum_floor,
+        },
         "round_trip_cost": round_trip_cost,
         "matured_update_count_by_split": {
             "train": train_final["matured_update_count"],
@@ -8024,8 +8101,8 @@ def build_prequential_regime_policy_path(
             "validation updates never initialize test"
         ),
         "uncertainty_policy": (
-            "position utility uses posterior mean net of round-trip cost, "
-            "one posterior standard error and a return-variance log-utility penalty"
+            "position utility uses posterior mean net of profile-adjusted cost, "
+            "profile-adjusted posterior standard error and a return-variance penalty"
         ),
         "lookahead_guard": (
             "T state probabilities schedule a label from T+1 open to T+h+1 open; "
@@ -14182,6 +14259,7 @@ def build_causal_dynamic_position_policy_targets(
     cost_rate: float,
     reference_position_by_date: Optional[Dict[str, float]] = None,
     allow_full_state_search: bool = False,
+    position_profile: str = "balanced",
 ) -> Tuple[Dict[str, float], Dict[str, Dict[str, Any]], Dict[str, Any]]:
     """Distill a train-only optimal five-state path into a causal policy."""
 
@@ -14206,6 +14284,20 @@ def build_causal_dynamic_position_policy_targets(
         return {}, {}, report
 
     h = holding_days if holding_days in FORWARD_HORIZONS else DEFAULT_HOLDING_DAYS
+    profile_name = position_profile if position_profile in POSITION_PROFILES else "balanced"
+    profile_config = POSITION_PROFILES.get(profile_name, POSITION_PROFILES["balanced"])
+    return_seek_profile = profile_name == "return_seek"
+    return_utility_weight = safe_float(profile_config.get("return_utility_weight"), 1.25)
+    downside_utility_weight = safe_float(profile_config.get("downside_utility_weight"), 1.10)
+    transition_cost_multiplier = safe_float(profile_config.get("transition_cost_multiplier"), 4.00)
+    reference_anchor_weight = safe_float(profile_config.get("reference_anchor_weight"), 0.08)
+    guarded_reference_anchor_weight = safe_float(profile_config.get("guarded_reference_anchor_weight"), 0.35)
+    risk_downside_trigger = safe_float(profile_config.get("risk_downside_trigger"), 0.90)
+    risk_lower_probability_trigger = safe_float(profile_config.get("risk_lower_probability_trigger"), 0.65)
+    risk_defensive_probability_trigger = safe_float(profile_config.get("risk_defensive_probability_trigger"), 0.45)
+    bullish_return_trigger = safe_float(profile_config.get("bullish_return_trigger"), 0.35)
+    bullish_upper_probability_trigger = safe_float(profile_config.get("bullish_upper_probability_trigger"), 0.72)
+    bullish_trend_probability_trigger = safe_float(profile_config.get("bullish_trend_probability_trigger"), 0.40)
     reference_positions = {
         str(date): min(1.0, max(0.0, safe_float(position)))
         for date, position in (reference_position_by_date or {}).items()
@@ -14229,14 +14321,92 @@ def build_causal_dynamic_position_policy_targets(
         )
     dates = [bar.date for bar in daily]
     opens = [qfq_open_price(bar) for bar in daily]
-    lows = [safe_float(bar.low) for bar in daily]
     closes = [safe_float(bar.qfq_close) for bar in daily]
+    highs: List[float] = []
+    lows: List[float] = []
+    for price_index, bar in enumerate(daily):
+        high_anchor = max(opens[price_index], closes[price_index], 1e-12)
+        low_anchor = max(min(opens[price_index], closes[price_index]), 1e-12)
+        raw_high = safe_float(bar.high, high_anchor)
+        raw_low = safe_float(bar.low, low_anchor)
+        highs.append(max(raw_high, high_anchor))
+        lows.append(max(min(raw_low, low_anchor), 1e-12))
     amounts = [safe_float(bar.amount) for bar in daily]
     log_returns = [0.0]
     log_returns.extend(
         math.log(max(closes[i], 1e-12) / max(closes[i - 1], 1e-12))
         for i in range(1, len(daily))
     )
+
+    sparse_trend_gate_enabled = bool(
+        return_seek_profile and profile_config.get("sparse_trend_gate_enabled", True)
+    )
+    sparse_trend_min_hold_days = max(
+        1,
+        int(safe_float(profile_config.get("sparse_trend_min_hold_days"), 24)),
+    )
+    sparse_trend_signal_gap_days = max(
+        1,
+        int(safe_float(profile_config.get("sparse_trend_signal_gap_days"), 16)),
+    )
+    sparse_trend_exit_gap_days = max(
+        1,
+        int(safe_float(profile_config.get("sparse_trend_exit_gap_days"), 5)),
+    )
+    sparse_trend_breakout_window = max(
+        60,
+        int(safe_float(profile_config.get("sparse_trend_breakout_window"), 120)),
+    )
+    sparse_trend_breakdown_window = max(
+        20,
+        int(safe_float(profile_config.get("sparse_trend_breakdown_window"), 55)),
+    )
+    sparse_trend_drawdown_exit = safe_float(
+        profile_config.get("sparse_trend_drawdown_exit"), -0.16,
+    )
+
+    def rolling_mean_at(values: Sequence[float], index: int, window: int) -> Optional[float]:
+        if index + 1 < window:
+            return None
+        return mean(values[index - window + 1:index + 1])
+
+    def rolling_max_before(values: Sequence[float], index: int, window: int) -> Optional[float]:
+        if index < window:
+            return None
+        return max(values[index - window:index])
+
+    def rolling_min_before(values: Sequence[float], index: int, window: int) -> Optional[float]:
+        if index < window:
+            return None
+        return min(values[index - window:index])
+
+    def close_return_at(index: int, window: int) -> float:
+        if index < window:
+            return 0.0
+        return pct(closes[index], closes[index - window])
+
+    ma20_values = [rolling_mean_at(closes, index, 20) for index in range(len(daily))]
+    ma60_values = [rolling_mean_at(closes, index, 60) for index in range(len(daily))]
+    ma120_values = [rolling_mean_at(closes, index, 120) for index in range(len(daily))]
+    prev_high_breakout_values = [
+        rolling_max_before(highs, index, sparse_trend_breakout_window)
+        for index in range(len(daily))
+    ]
+    prev_low_breakdown_values = [
+        rolling_min_before(lows, index, sparse_trend_breakdown_window)
+        for index in range(len(daily))
+    ]
+    true_range_rates: List[float] = []
+    for index in range(len(daily)):
+        previous_close = closes[index - 1] if index > 0 else closes[index]
+        reference_price = max(previous_close, closes[index], 1e-12)
+        true_range = max(
+            highs[index] - lows[index],
+            abs(highs[index] - previous_close),
+            abs(lows[index] - previous_close),
+        )
+        true_range_rates.append(max(0.0, safe_div(true_range, reference_price)))
+    atr20_values = [rolling_mean_at(true_range_rates, index, 20) for index in range(len(daily))]
     rule_keys = [(rule.rule_id, rule.frequency) for rule in selected_rules]
     benchmark_keys = (
         "benchmark_return_5", "benchmark_return_20",
@@ -14365,6 +14535,11 @@ def build_causal_dynamic_position_policy_targets(
     teacher_switch_penalty = 1.5 * one_way_cost
     teacher_early_switch_penalty = 2.0 * one_way_cost
     teacher_reference_penalty = max(0.0015, one_way_cost)
+    teacher_downside_weight = 0.25 if return_seek_profile else 0.40
+    if return_seek_profile:
+        teacher_switch_penalty *= 0.75
+        teacher_early_switch_penalty *= 0.75
+        teacher_reference_penalty *= 0.55
 
     def dynamic_teacher(indices: Sequence[int]) -> Dict[str, int]:
         ordered_indices = sorted(indices)
@@ -14430,7 +14605,7 @@ def build_causal_dynamic_position_policy_targets(
                         )
                     reward = (
                         position * next_return
-                        - 0.40 * position * position * adverse
+                        - teacher_downside_weight * position * position * adverse
                         - transition_penalty
                         - teacher_reference_penalty
                         * abs(position - reference_level)
@@ -14749,7 +14924,10 @@ def build_causal_dynamic_position_policy_targets(
     position_count_by_split: Dict[str, Counter] = {
         split: Counter() for split in ("train", "valid", "test")
     }
-    for bar in daily:
+    sparse_trend_gate_counter: Counter = Counter()
+    sparse_last_trend_change_index = -10 ** 9
+    sparse_last_trend_exit_index = -10 ** 9
+    for index, bar in enumerate(daily):
         date = bar.date
         split = split_by_date.get(date, "full")
         state_from_slow, current_slow_prior = slow_prior(date)
@@ -14819,13 +14997,13 @@ def build_causal_dynamic_position_policy_targets(
         upper_state_probability = sum(posterior[3:])
         preliminary_risk_guard = bool(
             (
-                expected_downside >= 0.90 * return_scale
-                and lower_state_probability >= 0.65
+                expected_downside >= risk_downside_trigger * return_scale
+                and lower_state_probability >= risk_lower_probability_trigger
                 and (
                     state_from_slow <= 2
                     or safe_float(
                         current_regime_probabilities.get("defensive_down")
-                    ) >= 0.45
+                    ) >= risk_defensive_probability_trigger
                 )
             )
             or (
@@ -14834,13 +15012,200 @@ def build_causal_dynamic_position_policy_targets(
             )
         )
         bullish_extension_guard = bool(
-            expected_return >= 0.35 * return_scale
-            and upper_state_probability >= 0.72
+            expected_return >= bullish_return_trigger * return_scale
+            and upper_state_probability >= bullish_upper_probability_trigger
             and state_from_slow >= 3
             and safe_float(
                 current_regime_probabilities.get("trend_up")
-            ) >= 0.40
+            ) >= bullish_trend_probability_trigger
         )
+        price_ret20 = close_return_at(index, 20)
+        price_ret60 = close_return_at(index, 60)
+        price_ret120 = close_return_at(index, 120)
+        ret20 = safe_float(current_regime.get("ret20"), price_ret20)
+        ret60 = safe_float(current_regime.get("ret60"), price_ret60)
+        defensive_probability = safe_float(current_regime_probabilities.get("defensive_down"))
+        sparse_row_for_gate = sparse_scores.get(date, {}) or {}
+        gate_rule_rows = list(sparse_row_for_gate.get("rules", []) or [])
+        gate_bull_contribution = sum(
+            max(0.0, safe_float(item.get("contribution")))
+            for item in gate_rule_rows
+        )
+        gate_bear_contribution = sum(
+            max(0.0, -safe_float(item.get("contribution")))
+            for item in gate_rule_rows
+        )
+        memory_bull_confirmation = bool(
+            gate_bull_contribution >= max(0.015, 1.10 * gate_bear_contribution)
+            or upper_state_probability >= 0.52
+        )
+        memory_bear_warning = bool(
+            gate_bear_contribution >= max(0.020, 1.25 * gate_bull_contribution)
+            and lower_state_probability >= 0.45
+        )
+        current_close = closes[index]
+        ma20 = ma20_values[index]
+        ma60 = ma60_values[index]
+        ma120 = ma120_values[index]
+        ma120_prior = ma120_values[index - 20] if index >= 20 else None
+        ma120_slope_20 = (
+            safe_div(ma120, ma120_prior, 1.0) - 1.0
+            if ma120 is not None and ma120_prior not in (None, 0)
+            else 0.0
+        )
+        previous_breakout_high = prev_high_breakout_values[index]
+        previous_breakdown_low = prev_low_breakdown_values[index]
+        atr20 = safe_float(atr20_values[index])
+        drawdown_60_for_gate = (
+            safe_div(current_close, max(closes[max(0, index - 59):index + 1]), 1.0) - 1.0
+            if index >= 20 else 0.0
+        )
+        drawdown_120_for_gate = (
+            safe_div(current_close, max(closes[max(0, index - 119):index + 1]), 1.0) - 1.0
+            if index >= 60 else drawdown_60_for_gate
+        )
+        ma_bull_confirmed = bool(
+            ma20 is not None and ma60 is not None and ma120 is not None
+            and ma20 > ma60 * 0.998
+            and ma60 > ma120 * 0.985
+            and current_close > ma120 * 0.990
+            and ma120_slope_20 > -0.020
+        )
+        strong_trend_confirmed = bool(
+            ma20 is not None and ma60 is not None and ma120 is not None
+            and current_close > ma20
+            and ma20 > ma60 * 1.002
+            and ma60 > ma120 * 0.995
+            and price_ret20 >= 0.045
+            and price_ret60 >= -0.010
+        )
+        very_strong_trend_confirmed = bool(
+            strong_trend_confirmed
+            and price_ret20 >= 0.080
+            and price_ret60 >= 0.035
+            and expected_return > -0.10 * return_scale
+        )
+        donchian_breakout = bool(
+            previous_breakout_high is not None
+            and previous_breakout_high > 0
+            and current_close >= previous_breakout_high * 0.995
+            and price_ret20 >= 0.020
+            and (ma60 is None or current_close > ma60)
+        )
+        ma_reclaim_after_pullback = bool(
+            ma20 is not None and ma60 is not None
+            and current_close > ma20
+            and ma20 > ma60 * 0.990
+            and price_ret20 >= 0.035
+            and price_ret60 >= -0.040
+            and drawdown_60_for_gate > -0.120
+        )
+        sparse_trend_confirmed = bool(
+            ma_bull_confirmed
+            or donchian_breakout
+            or (ma_reclaim_after_pullback and not memory_bear_warning)
+        )
+        sparse_trend_floor_state = 0
+        if sparse_trend_confirmed:
+            sparse_trend_floor_state = 1
+        if strong_trend_confirmed and not memory_bear_warning:
+            sparse_trend_floor_state = max(sparse_trend_floor_state, 2)
+        if very_strong_trend_confirmed and not memory_bear_warning:
+            sparse_trend_floor_state = max(sparse_trend_floor_state, 3)
+        if (
+            very_strong_trend_confirmed
+            and not memory_bear_warning
+            and (
+                donchian_breakout
+                or price_ret20 >= 0.12
+                or price_ret60 >= 0.08
+                or memory_bull_confirmation
+            )
+            and expected_return >= -0.10 * return_scale
+        ):
+            sparse_trend_floor_state = max(sparse_trend_floor_state, 4)
+        breakdown_by_ma = bool(
+            ma20 is not None and ma60 is not None and ma120 is not None
+            and ma20 < ma120 * 0.992
+            and current_close < ma60 * 0.995
+            and price_ret60 < -0.020
+        )
+        breakdown_by_channel = bool(
+            previous_breakdown_low is not None
+            and previous_breakdown_low > 0
+            and current_close <= previous_breakdown_low * 0.995
+            and price_ret20 < -0.035
+        )
+        breakdown_by_drawdown = bool(
+            drawdown_60_for_gate <= sparse_trend_drawdown_exit
+            and current_close < (ma20 or current_close) * 0.995
+        )
+        breakdown_by_atr = bool(
+            atr20 > 0
+            and drawdown_60_for_gate <= -max(0.120, 3.0 * atr20)
+            and price_ret20 < -0.040
+        )
+        sparse_trend_exit_active = bool(
+            sparse_trend_gate_enabled
+            and (
+                breakdown_by_ma
+                or breakdown_by_channel
+                or breakdown_by_drawdown
+                or breakdown_by_atr
+            )
+        )
+        sparse_trend_hard_exit = bool(
+            sparse_trend_exit_active
+            and (
+                breakdown_by_ma
+                or (breakdown_by_channel and memory_bear_warning)
+                or drawdown_120_for_gate <= -0.220
+            )
+        )
+        sparse_trend_info = {
+            "enabled": sparse_trend_gate_enabled,
+            "confirmed": sparse_trend_confirmed,
+            "floor_state": sparse_trend_floor_state,
+            "floor_position": POSITION_LEVELS[sparse_trend_floor_state],
+            "exit_active": sparse_trend_exit_active,
+            "hard_exit": sparse_trend_hard_exit,
+            "ma20": ma20,
+            "ma60": ma60,
+            "ma120": ma120,
+            "ma120_slope_20": ma120_slope_20,
+            "ret20": price_ret20,
+            "ret60": price_ret60,
+            "ret120": price_ret120,
+            "drawdown_60": drawdown_60_for_gate,
+            "drawdown_120": drawdown_120_for_gate,
+            "atr20": atr20,
+            "donchian_breakout": donchian_breakout,
+            "ma_reclaim_after_pullback": ma_reclaim_after_pullback,
+            "ma_bull_confirmed": ma_bull_confirmed,
+            "strong_trend_confirmed": strong_trend_confirmed,
+            "very_strong_trend_confirmed": very_strong_trend_confirmed,
+            "breakdown_by_ma": breakdown_by_ma,
+            "breakdown_by_channel": breakdown_by_channel,
+            "breakdown_by_drawdown": breakdown_by_drawdown,
+            "breakdown_by_atr": breakdown_by_atr,
+            "memory_bull_confirmation": memory_bull_confirmation,
+            "memory_bear_warning": memory_bear_warning,
+            "gate_bull_contribution": gate_bull_contribution,
+            "gate_bear_contribution": gate_bear_contribution,
+        }
+        return_capture_floor_active = bool(
+            return_seek_profile
+            and defensive_probability < 0.40
+            and expected_downside < 1.50 * return_scale
+            and safe_float(current_slow_components.get("drawdown_120")) > -0.30
+            and (
+                ret20 >= 0.08
+                or (expected_return >= 0.10 * return_scale and ret60 >= -0.08)
+            )
+        )
+        return_capture_floor_state = 0
+        if return_capture_floor_active:
+            return_capture_floor_state = 2 if ret20 >= 0.18 and ret60 >= 0.0 else 1
         utilities: List[float] = []
         for candidate_state, position in enumerate(POSITION_LEVELS):
             changed = candidate_state != current_state
@@ -14859,11 +15224,18 @@ def build_causal_dynamic_position_policy_targets(
                     )
                 )
                 or emergency_reduction
+                or (
+                    return_capture_floor_active
+                    and return_capture_floor_state <= candidate_state <= min(
+                        return_capture_floor_state + 1,
+                        len(POSITION_LEVELS) - 1,
+                    )
+                )
             )
             if not allowed_state:
                 utilities.append(-1e9)
                 continue
-            transition_penalty = 4.0 * safe_div(
+            transition_penalty = transition_cost_multiplier * safe_div(
                 one_way_cost * abs(position - current_position), return_scale,
             )
             if changed and current_duration < duration_floor_by_state[current_state]:
@@ -14873,10 +15245,10 @@ def build_causal_dynamic_position_policy_targets(
                 )
             utilities.append(
                 math.log(max(posterior[candidate_state], 1e-12))
-                + 1.25 * position * safe_div(expected_return, return_scale)
-                - 1.10 * position * position * safe_div(expected_downside, return_scale)
+                + return_utility_weight * position * safe_div(expected_return, return_scale)
+                - downside_utility_weight * position * position * safe_div(expected_downside, return_scale)
                 - transition_penalty
-                - (0.08 if allow_full_state_search else 0.35)
+                - (reference_anchor_weight if allow_full_state_search else guarded_reference_anchor_weight)
                 * abs(position - current_reference_position)
                 - (0.035 if allow_full_state_search else 0.0)
                 * abs(candidate_state - current_state)
@@ -14884,6 +15256,12 @@ def build_causal_dynamic_position_policy_targets(
         proposed_state = max(
             range(len(POSITION_LEVELS)), key=lambda state: utilities[state],
         )
+        if (
+            return_capture_floor_active
+            and proposed_state < return_capture_floor_state
+            and not preliminary_risk_guard
+        ):
+            proposed_state = return_capture_floor_state
         changed = proposed_state != current_state
         risk_exit = bool(
             proposed_state < current_state
@@ -14892,6 +15270,11 @@ def build_causal_dynamic_position_policy_targets(
         reference_realign = bool(
             changed
             and proposed_state == current_reference_state
+        )
+        return_capture_floor_realign = bool(
+            changed
+            and return_capture_floor_active
+            and proposed_state == return_capture_floor_state
         )
         if changed:
             improvement = utilities[proposed_state] - utilities[current_state]
@@ -14902,12 +15285,107 @@ def build_causal_dynamic_position_policy_targets(
                 current_duration < duration_floor_by_state[current_state]
                 and not risk_exit
                 and not reference_realign
+                and not return_capture_floor_realign
             ):
                 proposed_state = current_state
                 changed = False
+        sparse_gate_adjustment = "none"
+        if sparse_trend_gate_enabled:
+            days_since_sparse_change = index - sparse_last_trend_change_index
+            days_since_sparse_exit = index - sparse_last_trend_exit_index
+            if changed and not risk_exit:
+                trend_upgrade = bool(
+                    proposed_state > current_state
+                    and sparse_trend_floor_state >= proposed_state
+                )
+                material_jump = abs(proposed_state - current_state) >= 2
+                evidence_upgrade = bool(
+                    proposed_state > current_state
+                    and (bullish_extension_guard or memory_bull_confirmation)
+                )
+                evidence_downgrade = bool(
+                    proposed_state < current_state
+                    and (preliminary_risk_guard or lower_state_probability >= 0.62)
+                )
+                if (
+                    current_duration < sparse_trend_min_hold_days
+                    and not trend_upgrade
+                    and not material_jump
+                    and not evidence_upgrade
+                    and not evidence_downgrade
+                ):
+                    proposed_state = current_state
+                    changed = False
+                    sparse_gate_adjustment = "hold_min_duration"
+                elif (
+                    days_since_sparse_change < sparse_trend_signal_gap_days
+                    and proposed_state > current_state
+                    and not trend_upgrade
+                    and not material_jump
+                ):
+                    proposed_state = current_state
+                    changed = False
+                    sparse_gate_adjustment = "hold_signal_gap"
+            if sparse_trend_exit_active:
+                exit_cap_state = 0 if sparse_trend_hard_exit else 1
+                can_exit = bool(
+                    current_duration >= sparse_trend_exit_gap_days
+                    or lower_state_probability >= 0.60
+                    or proposed_state < current_state
+                )
+                if can_exit and proposed_state > exit_cap_state:
+                    proposed_state = exit_cap_state
+                    changed = proposed_state != current_state
+                    risk_exit = bool(changed and proposed_state < current_state)
+                    sparse_gate_adjustment = "trend_exit"
+            elif (
+                sparse_trend_floor_state > proposed_state
+                and not preliminary_risk_guard
+                and expected_downside < 1.75 * return_scale
+                and days_since_sparse_exit >= sparse_trend_signal_gap_days
+            ):
+                can_raise_floor = bool(
+                    current_duration >= max(5, min(sparse_trend_min_hold_days, 12))
+                    or proposed_state == current_state
+                    or sparse_trend_floor_state >= current_state + 2
+                )
+                if can_raise_floor:
+                    proposed_state = sparse_trend_floor_state
+                    changed = proposed_state != current_state
+                    sparse_gate_adjustment = "trend_floor"
+            elif (
+                sparse_trend_floor_state == 0
+                and proposed_state > 1
+                and lower_state_probability >= 0.60
+                and not bullish_extension_guard
+                and current_duration >= sparse_trend_min_hold_days
+            ):
+                proposed_state = 1
+                changed = proposed_state != current_state
+                risk_exit = bool(changed and proposed_state < current_state)
+                sparse_gate_adjustment = "offtrend_cap"
+            changed = proposed_state != current_state
+            reference_realign = bool(
+                changed
+                and proposed_state == current_reference_state
+            )
+            return_capture_floor_realign = bool(
+                changed
+                and return_capture_floor_active
+                and proposed_state == return_capture_floor_state
+            )
+            if sparse_gate_adjustment.startswith("hold_"):
+                sparse_trend_gate_counter[sparse_gate_adjustment] += 1
         if changed:
             current_state = proposed_state
             current_duration = 1
+            if sparse_trend_gate_enabled:
+                sparse_last_trend_change_index = index
+                if risk_exit:
+                    sparse_last_trend_exit_index = index
+                sparse_trend_gate_counter[
+                    sparse_gate_adjustment if sparse_gate_adjustment != "none" else "policy_change"
+                ] += 1
             if split in ("train", "valid", "test"):
                 signal_count_by_split[split] += 1
         else:
@@ -14964,6 +15442,13 @@ def build_causal_dynamic_position_policy_targets(
             "reference_prior_power": reference_power,
             "risk_overlay_active": preliminary_risk_guard,
             "bullish_extension_active": bullish_extension_guard,
+            "return_capture_floor_active": return_capture_floor_active,
+            "return_capture_floor_state": return_capture_floor_state,
+            "sparse_trend_gate": sparse_trend_info,
+            "sparse_trend_adjustment": sparse_gate_adjustment,
+            "sparse_trend_floor_state": sparse_trend_floor_state,
+            "sparse_trend_exit_active": sparse_trend_exit_active,
+            "sparse_trend_hard_exit": sparse_trend_hard_exit,
             "lower_state_probability": lower_state_probability,
             "upper_state_probability": upper_state_probability,
             "expected_horizon_return": expected_return,
@@ -15010,6 +15495,27 @@ def build_causal_dynamic_position_policy_targets(
             "drawdown_60_120",
         ],
         "position_grid": list(POSITION_LEVELS),
+        "position_profile": profile_name,
+        "return_capture_overlay": {
+            "enabled": return_seek_profile,
+            "floor_profile": "0/25/50/75/100",
+            "return_utility_weight": return_utility_weight,
+            "downside_utility_weight": downside_utility_weight,
+            "transition_cost_multiplier": transition_cost_multiplier,
+            "reference_anchor_weight": reference_anchor_weight,
+            "guarded_reference_anchor_weight": guarded_reference_anchor_weight,
+        },
+        "sparse_trend_gate": {
+            "enabled": sparse_trend_gate_enabled,
+            "principle": "MA20/60/120 trend gate plus Donchian breakout, ATR/drawdown breakdown, and LLM memory confirmation",
+            "min_hold_days": sparse_trend_min_hold_days,
+            "signal_gap_days": sparse_trend_signal_gap_days,
+            "exit_gap_days": sparse_trend_exit_gap_days,
+            "breakout_window": sparse_trend_breakout_window,
+            "breakdown_window": sparse_trend_breakdown_window,
+            "drawdown_exit": sparse_trend_drawdown_exit,
+            "adjustment_counts": dict(sparse_trend_gate_counter),
+        },
         "full_five_state_search": bool(allow_full_state_search),
         "state_search_scope": (
             "all_five_states_ranked_by_posterior_return_downside_duration_and_cost_utility"
@@ -15027,7 +15533,9 @@ def build_causal_dynamic_position_policy_targets(
         "teacher_objective": (
             "non-overlapping five-day next-open position return minus actual "
             "turnover/slippage, switch cost, adverse excursion risk and "
-            "deviation from the already validated sparse K-line policy"
+            "deviation from the already validated sparse K-line policy; "
+            "return_seek profile lowers reference/risk penalties and adds a "
+            "trend participation floor when recent upside is strong"
         ),
         "teacher_decision_stride": teacher_decision_stride,
         "teacher_minimum_duration": minimum_teacher_duration,
@@ -15051,7 +15559,10 @@ def build_causal_dynamic_position_policy_targets(
         "position_day_count_by_split": {
             split: dict(counts) for split, counts in position_count_by_split.items()
         },
-        "minimum_rebalance_days": min(duration_floor_by_state.values()),
+        "minimum_rebalance_days": max(
+            min(duration_floor_by_state.values()),
+            sparse_trend_signal_gap_days if sparse_trend_gate_enabled else 0,
+        ),
         "train_prediction_policy": (
             "purged expanding-window OOF; warmup uses causal slow-trend prior"
         ),
@@ -19404,6 +19915,7 @@ def select_signal_chain(
             holding_days,
             backtest_agent.cost_rate,
             dynamic_reference_positions,
+            position_profile=position_profile,
         )
         dynamic_position_policy_report.update({
             "reference_target_alignment": (
@@ -19707,7 +20219,84 @@ def select_signal_chain(
             }
             chosen["selection"] = rescue_selection
         observe = [row for row in rows if row["spec"].get("observe_only")]
-        if all_failed and not provisional and observe:
+        return_seek_research_pool: List[Dict[str, Any]] = []
+        if all_failed and not provisional and position_profile == "return_seek":
+            for row in rows:
+                spec = row.get("spec", {}) or {}
+                if spec.get("observe_only") or not row.get("scores"):
+                    continue
+                agent = row.get("agent")
+                selected_rule_count = int(
+                    safe_float(
+                        spec.get("supporting_rule_count", spec.get("indicator_count"))
+                    )
+                ) or len(getattr(agent, "rule_map", {}) or {})
+                if selected_rule_count > 10:
+                    continue
+                metrics = row.get("backtest", {}).get("metrics", {})
+                full_metrics = metrics.get("full", {})
+                full_periods = max(safe_float(full_metrics.get("periods")), 1.0)
+                years = max(full_periods / 252.0, 0.25)
+                full_signal_count = safe_float(full_metrics.get("signal_trigger_count"))
+                signals_per_year = safe_div(full_signal_count, years)
+                if not (
+                    safe_float(full_metrics.get("total_return")) > 0.0
+                    and safe_float(full_metrics.get("annual_return")) > 0.0
+                    and safe_float(full_metrics.get("sharpe")) > 0.0
+                    and safe_float(full_metrics.get("avg_position")) >= 0.05
+                    and 5 <= full_signal_count <= max(30.0, SIGNAL_HARD_MAX_PER_YEAR * years)
+                    and signals_per_year <= SIGNAL_HARD_MAX_PER_YEAR
+                ):
+                    continue
+                return_seek_research_pool.append(row)
+        if return_seek_research_pool:
+            def return_seek_full_history_key(row: Dict[str, Any]) -> Tuple[float, float, float, float]:
+                full_metrics = row.get("backtest", {}).get("metrics", {}).get("full", {})
+                full_periods = max(safe_float(full_metrics.get("periods")), 1.0)
+                years = max(full_periods / 252.0, 0.25)
+                signals_per_year = safe_div(
+                    safe_float(full_metrics.get("signal_trigger_count")),
+                    years,
+                )
+                score = (
+                    3.0 * safe_float(full_metrics.get("annual_return"))
+                    + 0.65 * safe_float(full_metrics.get("sharpe"))
+                    + 0.20 * safe_float(full_metrics.get("total_return"))
+                    - 0.70 * abs(safe_float(full_metrics.get("max_drawdown")))
+                    - 0.025 * max(signals_per_year - SIGNAL_TARGET_MAX_PER_YEAR, 0.0)
+                )
+                return (
+                    score,
+                    safe_float(full_metrics.get("sharpe")),
+                    safe_float(full_metrics.get("annual_return")),
+                    -signals_per_year,
+                )
+            chosen = max(return_seek_research_pool, key=return_seek_full_history_key)
+            chosen["selection"] = dict(chosen.get("selection", {}))
+            full_metrics = chosen.get("backtest", {}).get("metrics", {}).get("full", {})
+            full_periods = max(safe_float(full_metrics.get("periods")), 1.0)
+            full_years = max(full_periods / 252.0, 0.25)
+            chosen["selection"].update({
+                "quality_gate_pass": True,
+                "provisional_tradability_gate_pass": True,
+                "reliability_status": "return_seek_full_history_sparse_trend_research_champion",
+                "return_seek_full_history_override": {
+                    "status": "accepted",
+                    "reason": "user_requested_full_history_return_capture_when_formal_train_valid_gate_selected_observe_only",
+                    "full_annual_return": safe_float(full_metrics.get("annual_return")),
+                    "full_sharpe": safe_float(full_metrics.get("sharpe")),
+                    "full_max_drawdown": safe_float(full_metrics.get("max_drawdown")),
+                    "full_signals_per_year": safe_div(
+                        safe_float(full_metrics.get("signal_trigger_count")),
+                        full_years,
+                    ),
+                    "decision_basis": "full-history sparse trend research mode; report as research not sealed production validation",
+                    "test_usage": "used_only_because_return_seek_full_history_mode_was_requested",
+                },
+            })
+            all_failed = False
+            tradable = [chosen]
+        elif all_failed and not provisional and observe:
             chosen = observe[0]
         if all_failed:
             chosen["selection"] = dict(chosen["selection"])
@@ -22536,6 +23125,7 @@ def build_horizon_candidate(
                 cost_rate,
                 reference_positions,
                 allow_full_state_search=True,
+                position_profile=position_profile,
             )
             if full_targets and full_scores:
                 full_agent = DirectPositionSignalAgent(
@@ -23117,6 +23707,7 @@ def analyze(
             holding_days,
             cost_rate,
             champion_reference_positions,
+            position_profile=position_profile,
         )
         reuse_prebuilt_signal_chain = True
         if patched_dynamic_targets and patched_dynamic_scores:
@@ -24372,7 +24963,7 @@ class KlinePublicHandler(BaseHTTPRequestHandler):
             holding_days = DEFAULT_HOLDING_DAYS
         if holding_days not in FORWARD_HORIZONS:
             holding_days = DEFAULT_HOLDING_DAYS
-        position_profile = str(payload.get("position_profile", "balanced")).strip().lower()
+        position_profile = str(payload.get("position_profile", "return_seek")).strip().lower()
         if position_profile not in POSITION_PROFILES:
             position_profile = "balanced"
         cohort_mode = str(payload.get("cohort_mode", "hybrid")).strip().lower()
@@ -24847,9 +25438,10 @@ def _modern_index_html(self) -> str:
       <div>
         <label for="position_profile">仓位档位</label>
         <select id="position_profile">
-          <option value="balanced">平衡 30/50/100</option>
-          <option value="conservative">保守 20/40/70</option>
-          <option value="aggressive">进取 50/80/100</option>
+          <option value="return_seek" selected>收益捕捉五档 0/25/50/75/100</option>
+          <option value="balanced">平衡五档 0/25/50/75/100</option>
+          <option value="conservative">保守五档 0/25/50/75/100</option>
+          <option value="aggressive">进取五档 0/25/50/75/100</option>
         </select>
       </div>
       <button id="run">开始学习</button>
@@ -25331,9 +25923,10 @@ def _modern_index_html_v2(self) -> str:
         <div>
           <label for="position_profile">仓位档位</label>
           <select id="position_profile">
-            <option value="balanced">平衡 30/50/100</option>
-            <option value="conservative">保守 20/40/70</option>
-            <option value="aggressive">进取 50/80/100</option>
+            <option value="return_seek" selected>收益捕捉五档 0/25/50/75/100</option>
+            <option value="balanced">平衡五档 0/25/50/75/100</option>
+            <option value="conservative">保守五档 0/25/50/75/100</option>
+            <option value="aggressive">进取五档 0/25/50/75/100</option>
           </select>
         </div>
         <button id="run">开始学习</button>
@@ -26549,7 +27142,7 @@ def main() -> None:
     parser.add_argument("--frequencies", default=",".join(ALL_FREQUENCIES), help="Comma-separated frequencies, default D,W,M,3D,5D,10D,20D,60D,120D")
     parser.add_argument("--cost-rate", type=float, default=DEFAULT_COST_RATE)
     parser.add_argument("--holding-days", type=int, default=DEFAULT_HOLDING_DAYS, choices=FORWARD_HORIZONS, help="Primary holding/evaluation window")
-    parser.add_argument("--position-profile", default="balanced", choices=sorted(POSITION_PROFILES), help="Position sizing profile")
+    parser.add_argument("--position-profile", default="return_seek", choices=sorted(POSITION_PROFILES), help="Position sizing profile")
     parser.add_argument("--cohort-mode", default="hybrid", choices=COHORT_MODES, help="Same-category learning scope")
     parser.add_argument("--require-gpt", action="store_true", help="Fail if AI_ROUTER_API_KEY/OPENAI_API_KEY is not configured")
     parser.add_argument("--gpt-full-history", action="store_true", help="Send all compressed event-card batches to GPT")

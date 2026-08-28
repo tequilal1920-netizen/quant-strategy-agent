@@ -59,6 +59,8 @@ FACTOR_LATEX = (
 
 def _load_factor_miner() -> Any:
     path = Path(__file__).resolve().parents[1] / "05_factor_mining_agent" / "factor_miner.py"
+    if not path.exists():
+        path = Path(__file__).resolve().parents[1] / "llm_factor_mining" / "factor_miner.py"
     spec = importlib.util.spec_from_file_location("factor_miner_for_cross_section", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Cannot load factor miner from {path}")
@@ -1493,4 +1495,3 @@ def load_runtime(path: Path) -> Optional[Dict[str, Any]]:
         "frequency_indices": {key: data[f"frequency_{key}"] for key in FREQUENCIES},
         "names": json.loads(str(data["names_json"][0])),
     }
-

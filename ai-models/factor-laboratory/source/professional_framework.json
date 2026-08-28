@@ -1,0 +1,351 @@
+{
+  "schema_version": "factor-lab-professional-framework/1.0",
+  "version": "r36.2-domain-factor-timing-upgrade",
+  "generated_at": "2026-08-18T00:00:00+08:00",
+  "status": "domain_factor_timing_added_champion_preserved",
+  "principle": "以本地 research_warehouse.db 为训练主源；新增券商式分域因子择时层：先审计因子构造质量，再用行业、市值、风格、DS快变量和监督学习定价域做置换检验+BH校正，季度滚动筛选因子并保留当前冠军回退。测试集只报告，不参与因子择时或分域选择。",
+  "external_learning": [
+    {
+      "source": "QuantaAlpha",
+      "reference": "https://github.com/QuantaAlpha/QuantaAlpha",
+      "adopted": [
+        "自然语言研究目标拆成可执行计划",
+        "多候选轨迹并行生成",
+        "每条因子保留假设、数据依赖、验证结果和失败原因",
+        "通过验证后进入因子库而非直接交易"
+      ]
+    },
+    {
+      "source": "DEAP",
+      "reference": "https://github.com/DEAP/deap",
+      "adopted": [
+        "遗传编程表达式树",
+        "多目标适应度：IC、分层收益、换手、相关性、复杂度",
+        "Hall of Fame 精英库",
+        "谱系记录、checkpoint 和失败黑名单"
+      ]
+    },
+    {
+      "source": "Qlib-style benchmark workflow",
+      "reference": "Alpha158/Alpha360 + Signal/Portfolio evaluation pattern",
+      "adopted": [
+        "标准 Alpha 特征库和扩展特征库分层",
+        "信号评价与组合评价分离",
+        "IC/RankIC、分层收益、组合净值、换手成本统一报告",
+        "训练、验证、测试冻结"
+      ]
+    },
+    {
+      "source": "MASTER / market-guided Transformer",
+      "reference": "market-guided temporal attention and cross-stock relation modeling",
+      "adopted": [
+        "市场状态作为门控输入",
+        "时序注意力提取路径信息",
+        "股票间注意力吸收截面关系",
+        "收益、排序、风险多任务头"
+      ]
+    },
+    {
+      "source": "OpenFE / AlphaGen-style automatic feature search",
+      "reference": "自动交互特征、表达式搜索、强化学习/遗传变异",
+      "adopted": [
+        "自动交互项搜索",
+        "MCTS 表达式树",
+        "遗传交叉变异",
+        "复杂度惩罚和低相关入库"
+      ]
+    }
+  ],
+  "end_to_end_workflow": [
+    {
+      "stage": "数据契约",
+      "steps": [
+        "股票池、交易日历、复权行情、成交额、停牌涨跌停、行业/风格暴露、财报披露可见日全部点时对齐",
+        "标签只使用 T+1 以后可实现收益，长周期标签加 embargo，避免重叠收益泄漏",
+        "所有候选因子输出统一为日期-股票-因子暴露三列宽表/长表契约"
+      ]
+    },
+    {
+      "stage": "因子来源分层",
+      "steps": [
+        "传统因子：技术、资金、基本面、估值、宏观、SmartBeta、外部 Secking/Subject 因子",
+        "自动挖掘：MCTS、遗传编程、OpenFE 交互、表达式模板",
+        "深度挖掘：LSTM、GRU、Transformer、自编码器、TabNet/FT-Transformer 潜因子",
+        "LLM 挖掘：券商/论文/本地知识卡生成假设，再转受限 DSL 表达式"
+      ]
+    },
+    {
+      "stage": "候选生成",
+      "steps": [
+        "每个候选必须带经济含义、字段依赖、可得性、单调方向、预期低相关来源和失败模式",
+        "表达式类因子通过白名单算子编译，深度类因子通过冻结训练图输出 embedding 或 score",
+        "候选先在训练/验证内排名，测试集只在冻结后报告"
+      ]
+    },
+    {
+      "stage": "因子筛选",
+      "steps": [
+        "先筛覆盖率、缺失率、极端值、行业/规模中性后有效性",
+        "再筛 RankIC、ICIR、IC 命中率、分层收益、单调性、衰减、换手、容量、相关性",
+        "最后做逐年稳定性、市场状态稳定性、PBO/DSR、多重试验修正和失败黑名单写回"
+      ]
+    },
+    {
+      "stage": "打分模型",
+      "steps": [
+        "等权和 RankIC 权重作为透明基准",
+        "OLS/Lasso/Ridge/ElasticNet 处理线性、稀疏和收缩",
+        "MLP/Transformer/GRU/LSTM 处理非线性和路径信息",
+        "自适应 ICIR 与固定秩集成负责稳健融合"
+      ]
+    },
+    {
+      "stage": "组合执行",
+      "steps": [
+        "Top10%、连续排名、换仓缓冲、成本感知、逆波动、可靠性调仓并行评估",
+        "交易成本、冲击成本、停牌涨跌停、容量、行业/风格偏离和换手预算进入执行层",
+        "默认线上冠军只使用训练/验证选择，测试期只报告一次"
+      ]
+    },
+    {
+      "stage": "看板与治理",
+      "steps": [
+        "网页展示因子库、单因子诊断、候选轨迹、模型动物园、冠军与挑战者、三段绩效和质量门",
+        "Skill 包与网页共享同一套专业框架 artifact",
+        "Release 只发布 code-only，不发布数据库、凭证、缓存和大体量输出"
+      ]
+    }
+  ],
+  "model_zoo": [
+    {
+      "id": "standard_factor_factory",
+      "name": "常用/券商式标准因子工厂",
+      "role": "baseline_and_candidate_source",
+      "logic": "用透明经济逻辑覆盖技术、资金、质量、价值、成长、低波、红利、规模、宏观和行业风格，形成可解释基准库。",
+      "implementation": [
+        "Alpha158/Alpha360 风格的量价窗口特征作为基础模板",
+        "财务和估值字段按披露可见日滞后",
+        "行业内标准化、规模/行业中性、极端值缩尾",
+        "滚动季度筛选有效因子，低覆盖/高相关/不稳定因子进入观察或黑名单"
+      ],
+      "current_status": "已接入统一因子库；核心模型特征 29 个，显式因子 385 个。"
+    },
+    {
+      "id": "lstm_sequence_miner",
+      "name": "LSTM 路径挖掘",
+      "role": "deep_sequence_challenger",
+      "logic": "对个股过去价格、成交、波动、资金和拥挤路径建模，记住中期趋势和反转结构，输出未来横截面排序分。",
+      "implementation": [
+        "滚动取过去 N 日序列，因果卷积先提短期量价局部结构",
+        "Projected LSTM 读取中期记忆",
+        "时间注意力识别关键历史片段",
+        "状态 MoE 区分动量、流动性、拥挤、低风险等市场环境",
+        "Rank loss、Huber、换手惩罚和不确定性头共同训练"
+      ],
+      "current_effect": "早期独立 run 测试 Sharpe 约 9.168、RankIC 约 0.0905；但该口径未替代 r35.8 正式冠军。"
+    },
+    {
+      "id": "gru_sequence_miner",
+      "name": "GRU 轻量路径挖掘",
+      "role": "deep_sequence_challenger",
+      "logic": "用更轻的门控循环单元复用 LSTM 管线，降低参数量和训练成本，适合高频滚动挑战模型。",
+      "implementation": [
+        "与 LSTM 共用点时序列和验证流程",
+        "循环单元替换为 GRU，更新门控制历史保留，重置门控制噪声遗忘",
+        "输出同样进入横截面排序和组合检验",
+        "必须通过独立 run 的三段绩效和质量门才可晋级"
+      ],
+      "current_effect": "代码 runner 已具备；当前没有正式独立 GRU run 产物，因此仅标记为挑战模型，不声明收益。"
+    },
+    {
+      "id": "rl_transformer_expression_miner",
+      "name": "RL + Transformer 表达式挖掘",
+      "role": "formula_search_challenger",
+      "logic": "把因子公式看成受限语法树，Transformer 提议公式，PPO/MCTS/遗传变异按训练验证表现优化。",
+      "implementation": [
+        "字段、算子、窗口、栈深度和数据类型全部白名单",
+        "Transformer actor 生成 token，critic 评估状态价值",
+        "奖励同时看 IC、分层收益、低换手、低相关、低复杂度和样本外衰减",
+        "Hall of Fame 保存精英表达式，失败表达式进入黑名单"
+      ],
+      "current_effect": "早期 RL+Transformer 独立 run 测试 Sharpe 约 0.672、RankIC 约 0.0013，未通过正式晋级门。"
+    },
+    {
+      "id": "deep_representation_autoencoder",
+      "name": "深度表征/自编码潜因子",
+      "role": "nonlinear_embedding_source",
+      "logic": "把传统和自动挖掘因子压缩成低维非线性潜因子，捕捉简单线性模型难以表达的共同结构。",
+      "implementation": [
+        "输入经标准化、中性化、缺失掩码处理后的候选因子矩阵",
+        "自编码器学习重构和压缩，中间层 embedding 作为深度潜因子",
+        "潜因子再接受 IC、相关性、稳定性和组合收益检验",
+        "通过后作为普通因子进入 OLS/Lasso/Ridge/MLP/ICIR"
+      ],
+      "current_effect": "当前最终 48 个入模特征中已有 2 个深度自编码表征因子。"
+    },
+    {
+      "id": "llm_factor_research_agent",
+      "name": "LLM 因子研究代理",
+      "role": "hypothesis_and_repair_engine",
+      "logic": "LLM 不直接预测股价，而是生成经济假设、表达式草案、失败修复计划和可审计解释；真实验收由程序完成。",
+      "implementation": [
+        "券商/论文/本地方法卡进入 RAG 知识层",
+        "LLM 产出假设、字段依赖、表达式、预期低相关来源、失败模式和反过拟合计划",
+        "DSL 编译器只接受白名单字段和算子",
+        "训练/验证失败会写入失败记忆；测试结果不回写给 LLM",
+        "通过因子进入统一候选池，等待季度筛选和打分模型吸收"
+      ],
+      "current_effect": "ALL_A run 生成 21 个候选、7 个通过；当前 48 个入模特征中已有 4 个 LLM 假设因子。"
+    },
+    {
+      "id": "scoring_and_execution_zoo",
+      "name": "打分与执行模型动物园",
+      "role": "production_selection_layer",
+      "logic": "所有因子最后都必须回到统一打分和执行层，比较净收益、夏普、回撤、换手和稳定性。",
+      "implementation": [
+        "等权、RankIC、旧版 21 因子 OLS、全 29 因子 OLS",
+        "Lasso 稀疏筛选、经济域 Ridge、横截面 Ridge、ElasticNet",
+        "256-128-64 MLP 非线性打分",
+        "自适应 ICIR 和 OLS/ICIR 固定秩集成",
+        "Top10%、连续排名、换仓缓冲、波动预算、成本感知和可靠性调仓"
+      ],
+      "current_effect": "r35.8 默认冠军为 OLS/ICIR 固定秩集成 + 分位缓冲与波动预算，测试年化约 37.72%、Sharpe 约 2.674、最大回撤约 -4.95%。"
+    }
+  ],
+  "quality_gates": [
+    "点时数据、可见日和 T+1 标签成熟",
+    "Purged walk-forward / embargo / 冻结测试集",
+    "覆盖率、缺失率、极端值和可交易性",
+    "RankIC、ICIR、IC 命中率、分层收益和单调性",
+    "换手、交易成本、容量、停牌涨跌停和冲击成本",
+    "行业/风格/规模中性和暴露漂移",
+    "相关性冗余、因子拥挤度、半衰期和跨市场状态稳定性",
+    "分域异质性：置换检验、BH校正、因子-域匹配稳定性和季度滚动ICIR择时",
+    "Deflated Sharpe、PBO、多重试验台账和失败黑名单",
+    "训练/验证选择，测试集只报告一次",
+    "网页、Skill、Release 三端一致"
+  ],
+  "current_effect_contract": {
+    "default_champion": "incumbent_ols_adaptive_icir_rank_ensemble::robust_volatility_budget_rank_buffer",
+    "selection_basis": "train_and_validation_only",
+    "test_usage": "report_only",
+    "test_annual_return": 0.377169,
+    "test_sharpe": 2.6737214264778237,
+    "test_max_drawdown": -0.049482,
+    "test_turnover": 0.7690995362464033,
+    "gate_summary": "10/10 passed",
+    "performance_policy": "r36.2 新增分域因子择时和构造质量审计层，但不使用测试集反向调参；默认冠军保持不变，避免未经全量验证的结果变差。"
+  },
+  "web_blocks": [
+    "专业总框架",
+    "外部方法映射",
+    "端到端流水线",
+    "模型动物园",
+    "质量门与晋级纪律",
+    "当前效果与未晋级模型说明"
+  ],
+  "four_miner_upgrade": {
+    "LSTM": {
+      "定位": "长记忆路径因子挖掘器",
+      "本次优化": [
+        "减参稳健默认",
+        "加入 patience/min_delta 早停",
+        "保留因果卷积+时间注意力+状态专家混合",
+        "测试集仍只做一次性报告"
+      ],
+      "晋级要求": "训练和验证 RankIC、夏普、回撤、换手同时过门槛，测试仅用于最终报告。"
+    },
+    "GRU": {
+      "定位": "中短周期轻量路径因子挖掘器",
+      "本次优化": [
+        "正式独立 engine 输出",
+        "120日序列、96隐层、2层GRU、2层注意力默认",
+        "更适合量价/资金短中期路径",
+        "中文模型板说明补齐"
+      ],
+      "晋级要求": "必须产生独立 run、独立 RankIC/多空/纯做多绩效，不能再只作为 LSTM 参数替身。"
+    },
+    "RL+Transformer": {
+      "定位": "语法约束表达式因子搜索器",
+      "本次优化": [
+        "表达式空间加入 TS_Z60/DELTA20/DECAY20",
+        "奖励函数加入四折 IC 稳定、IC 正占比、回撤惩罚、复杂度惩罚",
+        "默认四层稳健 Transformer，降低过拟合",
+        "保持质量多样性 archive 和测试隔离"
+      ],
+      "晋级要求": "候选公式必须训练/验证稳定，低冗余、低换手、样本外衰减可控。"
+    },
+    "LLM": {
+      "定位": "研究假设、变异、交叉、树搜索、失败记忆反馈的因子工厂",
+      "本次优化": [
+        "输出数据层审计合同",
+        "明确 Wind/iFinD/米筐/公共源优先级",
+        "保留失败原因驱动变异和父代选择",
+        "不保存任何密钥"
+      ],
+      "晋级要求": "LLM 只提出可计算假设；是否入库完全由 RankIC、ICIR、分层、多空/做多、冗余、成本和 PBO/DSR 决定。"
+    }
+  },
+  "data_source_contract": {
+    "供应商优先级": [
+      "Wind",
+      "iFinD",
+      "米筐 RQData/RQFactor",
+      "Tushare Pro",
+      "AKShare/baostock"
+    ],
+    "安全原则": "账号、密码、token、license 只从环境变量或本机私密配置读取，绝不进入代码、日志、网页、JSON、GitHub Release。",
+    "更新路径": "外部源 -> 原始缓存层 -> 标准化 staging -> research_warehouse.db -> 因子暴露面板 -> 模型训练/回测。",
+    "默认策略": "模型训练只读本地仓库；付费源默认只允许小样本探针，批量刷新需要显式运行开关。"
+  },
+  "performance_policy": {
+    "禁止事项": [
+      "不使用测试集调参",
+      "不伪造 Sharpe",
+      "不把框架占位当成已完成绩效",
+      "不把深度/LLM 单因子收益冒充冠军组合收益"
+    ],
+    "报告口径": "每个挖掘器单独报告 RankIC、ICIR、多空 spread、多空夏普、纯做多年化/夏普、回撤、换手和通过门槛。"
+  },
+  "anti_overfit_upgrade": {
+    "scope": [
+      "LSTM",
+      "GRU",
+      "RL+Transformer"
+    ],
+    "selection_rule": "只用训练集和验证集选模；测试集保持一次性报告，不参与调参。",
+    "lstm_gru": [
+      "训练期加入随机时间裁剪、特征 dropout 和小幅输入噪声，降低对单一路径的记忆化。",
+      "早停目标由验证均值 RankIC 改为：验证均值、最弱时间折、正 IC 占比、验证波动、前后折漂移和训练-验证落差的综合稳健分。",
+      "超参搜索按稳健分排序，而不是按单一验证均值排序。"
+    ],
+    "transformer": [
+      "候选表达式增加训练-验证 IC 落差惩罚。",
+      "候选表达式增加验证期 RankIC、Sharpe、换手和回撤硬门控。",
+      "组合公式优先从通过抗过拟合门的候选池中选择；若全部失败才降级回全池并保留标记。"
+    ],
+    "performance_policy": "该升级改善泛化与晋级纪律，不承诺用测试集刷高夏普；正式冠军仍需完整窗口重跑后按质量门晋级。"
+  },
+  "domain_factor_timing_upgrade": {
+    "version": "r36.2-domain-factor-timing",
+    "reference_report": "G:/中信建投/reference/多因子/量化专题报告：因子布阵手册：从“盲打”到“精准”的分域选股实战.pdf",
+    "scope": [
+      "因子构造质量审计：覆盖率、有效取值、极端值、截面常数、训练验证RankIC强度和构造升级建议",
+      "慢分域：行业、市值、风格",
+      "快分域：相对同行波动率/换手/振幅的DS偏离显著性",
+      "监督学习分域：用均值回复/趋势种子因子的成熟定价误差构造训练期三域标签",
+      "分域有效性：域内RankIC矩阵、置换检验、BH校正和前后半窗口Spearman稳定性",
+      "季度滚动因子择时：过去窗口Rank ICIR负值归零后归一化，生成下一季度候选因子权重",
+      "冠军保护：新分域候选必须训练和验证优于当前冠军并通过门禁，否则维持原冠军"
+    ],
+    "domain_schemes": {
+      "industry": "行业域，优先使用PIT行业标签",
+      "size": "按流通市值对数截面分为小/中/大市值域",
+      "style": "价值得分减成长得分，分为成长/均衡/价值域",
+      "behavior_ds": "相对行业同行在波动、换手、振幅上的偏离程度，分为低/中/高偏离域",
+      "supervised_pricing": "训练验证内基于成熟收益构造均值回复/均衡/趋势域标签；不把测试标签用于训练或调参"
+    },
+    "promotion_policy": "本次只新增严格诊断和候选层，不改默认冠军manifest；全量生产重跑后若训练/验证门禁优于旧冠军，才允许进入默认。",
+    "test_usage": "excluded_from_domain_factor_timing_and_heterogeneity_tests"
+  }
+}

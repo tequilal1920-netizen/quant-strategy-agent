@@ -1,0 +1,973 @@
+{
+  "schema_version": "rqdata-asset-allocation-v5.1",
+  "mode": "probe",
+  "retrieved_at": "2026-08-11T08:56:44Z",
+  "provider": "RQData",
+  "source_priority_role": "PIT supplement and cross-check after Wind/iFind",
+  "date_window": {
+    "start": "2025-01-01",
+    "end": "2026-08-11"
+  },
+  "whitelist": {
+    "assets": {
+      "equity_execution": "510300.XSHG",
+      "bond_execution": "511010.XSHG",
+      "gold_execution": "518880.XSHG",
+      "gold_research_crosscheck": "AU9999.SGEX"
+    },
+    "macro_factors": {
+      "pmi_manufacturing": "制造业采购经理指数PMI_当月",
+      "pmi_production": "制造业采购经理指数PMI_生产",
+      "pmi_new_orders": "制造业采购经理指数PMI_新订单",
+      "pmi_raw_material_inventory": "制造业采购经理指数PMI_原材料库存",
+      "pmi_finished_goods_inventory": "制造业采购经理指数PMI_产成品库存",
+      "pmi_supplier_delivery": "制造业采购经理指数PMI_供应商配送时间",
+      "cpi_national_yoy": "居民消费价格指数CPI_当月同比(上年同月=100)",
+      "ppi_yoy": "工业品出厂价格指数PPI_当月同比_(上年同月=100)",
+      "sf_monthly": "社会融资规模_当月值",
+      "sf_new_rmb_loan": "社会融资规模_新增贷款(人民币)_当月值",
+      "sf_stock_yoy": "社会融资规模存量_同比增速_月末数",
+      "financial_institution_medium_long_loan": "金融机构境内中长期贷款(人民币)_月末数",
+      "fixed_asset_investment_yoy": "固定资产投资完成额(不含农户):累计同比:月",
+      "industrial_activity_quarterly_yoy": "工业增加值:当期同比:季",
+      "government_bond_yield_1y": "中债国债到期收益率曲线:1年:日",
+      "government_bond_yield_10y": "中债国债到期收益率曲线:10年:日",
+      "dr007": "存款类机构质押式回购加权利率:DR007:日"
+    }
+  },
+  "non_substitution_rules": {
+    "pmi_finished_goods_inventory": "survey_confirmation_only_not_real_industrial_inventory",
+    "financial_institution_medium_long_loan": "aggregate_validation_only_not_enterprise_medium_long_credit",
+    "fixed_asset_investment_yoy": "aggregate_validation_only_not_manufacturing_investment",
+    "industrial_activity_quarterly_yoy": "activity_confirmation_only_not_capacity_utilization_or_profit",
+    "government_bond_yield_10y": "macro_factor_only_not_bond_total_return"
+  },
+  "assets": {
+    "equity_execution": {
+      "code": "510300.XSHG",
+      "metadata": {
+        "order_book_id": "510300.XSHG",
+        "symbol": "华泰柏瑞沪深300ETF",
+        "type": "ETF",
+        "listed_date": "2012-05-28",
+        "de_listed_date": "0000-00-00",
+        "currency": null,
+        "exchange": "XSHG",
+        "underlying_symbol": null
+      },
+      "rows": [
+        {
+          "order_book_id": "510300.XSHG",
+          "date": "2026-08-05T00:00:00",
+          "close": 4.714
+        },
+        {
+          "order_book_id": "510300.XSHG",
+          "date": "2026-08-06T00:00:00",
+          "close": 4.709
+        },
+        {
+          "order_book_id": "510300.XSHG",
+          "date": "2026-08-07T00:00:00",
+          "close": 4.751
+        },
+        {
+          "order_book_id": "510300.XSHG",
+          "date": "2026-08-10T00:00:00",
+          "close": 4.759
+        },
+        {
+          "order_book_id": "510300.XSHG",
+          "date": "2026-08-11T00:00:00",
+          "close": 4.728
+        }
+      ],
+      "row_count": 389,
+      "query_hash": "2a366b9ca770d2cbd4930d8c6487a6c8d2374a9de76189f301102d67d9de5d25"
+    },
+    "bond_execution": {
+      "code": "511010.XSHG",
+      "metadata": {
+        "order_book_id": "511010.XSHG",
+        "symbol": "国泰上证5年期国债ETF",
+        "type": "ETF",
+        "listed_date": "2013-03-25",
+        "de_listed_date": "0000-00-00",
+        "currency": null,
+        "exchange": "XSHG",
+        "underlying_symbol": null
+      },
+      "rows": [
+        {
+          "order_book_id": "511010.XSHG",
+          "date": "2026-08-05T00:00:00",
+          "close": 141.0
+        },
+        {
+          "order_book_id": "511010.XSHG",
+          "date": "2026-08-06T00:00:00",
+          "close": 141.015
+        },
+        {
+          "order_book_id": "511010.XSHG",
+          "date": "2026-08-07T00:00:00",
+          "close": 141.086
+        },
+        {
+          "order_book_id": "511010.XSHG",
+          "date": "2026-08-10T00:00:00",
+          "close": 141.101
+        },
+        {
+          "order_book_id": "511010.XSHG",
+          "date": "2026-08-11T00:00:00",
+          "close": 141.07
+        }
+      ],
+      "row_count": 389,
+      "query_hash": "e4b3733244e507bea3de694e8b7519c8104bbce85482a9b906297f7be8c354c0"
+    },
+    "gold_execution": {
+      "code": "518880.XSHG",
+      "metadata": {
+        "order_book_id": "518880.XSHG",
+        "symbol": "华安黄金ETF",
+        "type": "ETF",
+        "listed_date": "2013-07-29",
+        "de_listed_date": "0000-00-00",
+        "currency": null,
+        "exchange": "XSHG",
+        "underlying_symbol": null
+      },
+      "rows": [
+        {
+          "order_book_id": "518880.XSHG",
+          "date": "2026-08-05T00:00:00",
+          "close": 8.64
+        },
+        {
+          "order_book_id": "518880.XSHG",
+          "date": "2026-08-06T00:00:00",
+          "close": 8.795
+        },
+        {
+          "order_book_id": "518880.XSHG",
+          "date": "2026-08-07T00:00:00",
+          "close": 8.892
+        },
+        {
+          "order_book_id": "518880.XSHG",
+          "date": "2026-08-10T00:00:00",
+          "close": 9.005
+        },
+        {
+          "order_book_id": "518880.XSHG",
+          "date": "2026-08-11T00:00:00",
+          "close": 9.009
+        }
+      ],
+      "row_count": 389,
+      "query_hash": "9d47816ff038cf98a274ab6b9ccdd9b7055b5e7582f443927fb2225fd1da7ea9"
+    },
+    "gold_research_crosscheck": {
+      "code": "AU9999.SGEX",
+      "metadata": {
+        "order_book_id": "AU9999.SGEX",
+        "symbol": "黄金9999",
+        "type": "Spot",
+        "listed_date": "2002-10-30",
+        "de_listed_date": "0000-00-00",
+        "currency": null,
+        "exchange": "SGEX",
+        "underlying_symbol": null
+      },
+      "rows": [
+        {
+          "order_book_id": "AU9999.SGEX",
+          "date": "2026-08-05T00:00:00",
+          "close": 904.92
+        },
+        {
+          "order_book_id": "AU9999.SGEX",
+          "date": "2026-08-06T00:00:00",
+          "close": 925.6
+        },
+        {
+          "order_book_id": "AU9999.SGEX",
+          "date": "2026-08-07T00:00:00",
+          "close": 930.47
+        },
+        {
+          "order_book_id": "AU9999.SGEX",
+          "date": "2026-08-10T00:00:00",
+          "close": 944.67
+        },
+        {
+          "order_book_id": "AU9999.SGEX",
+          "date": "2026-08-11T00:00:00",
+          "close": 946.7
+        }
+      ],
+      "row_count": 389,
+      "query_hash": "51292f21c71e93222367d1f2021c33895a59c4333f32412bb705979bf926c563"
+    }
+  },
+  "macro": {
+    "row_count": 1426,
+    "fields": [
+      "end_date",
+      "factor",
+      "info_date",
+      "rice_create_tm",
+      "start_date",
+      "value"
+    ],
+    "query_hash": "232c3f7fb91f83144fd9e9e73d51d46989f5ee7914e12b2521590cd3e6a9a1f1",
+    "samples_by_alias": {
+      "government_bond_yield_10y": [
+        {
+          "factor": "中债国债到期收益率曲线:10年:日",
+          "info_date": "2026-08-04T00:00:00",
+          "start_date": "2026-08-04T00:00:00",
+          "end_date": "2026-08-04T00:00:00",
+          "value": 1.7126,
+          "rice_create_tm": "2026-08-05T08:27:56"
+        },
+        {
+          "factor": "中债国债到期收益率曲线:10年:日",
+          "info_date": "2026-08-05T00:00:00",
+          "start_date": "2026-08-05T00:00:00",
+          "end_date": "2026-08-05T00:00:00",
+          "value": 1.7137,
+          "rice_create_tm": "2026-08-06T08:28:26"
+        },
+        {
+          "factor": "中债国债到期收益率曲线:10年:日",
+          "info_date": "2026-08-06T00:00:00",
+          "start_date": "2026-08-06T00:00:00",
+          "end_date": "2026-08-06T00:00:00",
+          "value": 1.7143,
+          "rice_create_tm": "2026-08-07T08:32:31"
+        },
+        {
+          "factor": "中债国债到期收益率曲线:10年:日",
+          "info_date": "2026-08-07T00:00:00",
+          "start_date": "2026-08-07T00:00:00",
+          "end_date": "2026-08-07T00:00:00",
+          "value": 1.7114,
+          "rice_create_tm": "2026-08-08T08:26:44"
+        },
+        {
+          "factor": "中债国债到期收益率曲线:10年:日",
+          "info_date": "2026-08-10T00:00:00",
+          "start_date": "2026-08-10T00:00:00",
+          "end_date": "2026-08-10T00:00:00",
+          "value": 1.7074,
+          "rice_create_tm": "2026-08-11T08:28:23"
+        }
+      ],
+      "government_bond_yield_1y": [
+        {
+          "factor": "中债国债到期收益率曲线:1年:日",
+          "info_date": "2026-08-04T00:00:00",
+          "start_date": "2026-08-04T00:00:00",
+          "end_date": "2026-08-04T00:00:00",
+          "value": 1.1624,
+          "rice_create_tm": "2026-08-05T08:27:56"
+        },
+        {
+          "factor": "中债国债到期收益率曲线:1年:日",
+          "info_date": "2026-08-05T00:00:00",
+          "start_date": "2026-08-05T00:00:00",
+          "end_date": "2026-08-05T00:00:00",
+          "value": 1.1635,
+          "rice_create_tm": "2026-08-06T08:28:26"
+        },
+        {
+          "factor": "中债国债到期收益率曲线:1年:日",
+          "info_date": "2026-08-06T00:00:00",
+          "start_date": "2026-08-06T00:00:00",
+          "end_date": "2026-08-06T00:00:00",
+          "value": 1.1631,
+          "rice_create_tm": "2026-08-07T08:32:31"
+        },
+        {
+          "factor": "中债国债到期收益率曲线:1年:日",
+          "info_date": "2026-08-07T00:00:00",
+          "start_date": "2026-08-07T00:00:00",
+          "end_date": "2026-08-07T00:00:00",
+          "value": 1.2043,
+          "rice_create_tm": "2026-08-08T08:26:44"
+        },
+        {
+          "factor": "中债国债到期收益率曲线:1年:日",
+          "info_date": "2026-08-10T00:00:00",
+          "start_date": "2026-08-10T00:00:00",
+          "end_date": "2026-08-10T00:00:00",
+          "value": 1.2076,
+          "rice_create_tm": "2026-08-11T08:28:23"
+        }
+      ],
+      "dr007": [
+        {
+          "factor": "存款类机构质押式回购加权利率:DR007:日",
+          "info_date": "2026-08-04T00:00:00",
+          "start_date": "2026-08-04T00:00:00",
+          "end_date": "2026-08-04T00:00:00",
+          "value": 1.3816,
+          "rice_create_tm": "2026-08-04T20:27:42"
+        },
+        {
+          "factor": "存款类机构质押式回购加权利率:DR007:日",
+          "info_date": "2026-08-05T00:00:00",
+          "start_date": "2026-08-05T00:00:00",
+          "end_date": "2026-08-05T00:00:00",
+          "value": 1.3738,
+          "rice_create_tm": "2026-08-05T20:26:58"
+        },
+        {
+          "factor": "存款类机构质押式回购加权利率:DR007:日",
+          "info_date": "2026-08-06T00:00:00",
+          "start_date": "2026-08-06T00:00:00",
+          "end_date": "2026-08-06T00:00:00",
+          "value": 1.3816,
+          "rice_create_tm": "2026-08-06T20:29:49"
+        },
+        {
+          "factor": "存款类机构质押式回购加权利率:DR007:日",
+          "info_date": "2026-08-07T00:00:00",
+          "start_date": "2026-08-07T00:00:00",
+          "end_date": "2026-08-07T00:00:00",
+          "value": 1.3881,
+          "rice_create_tm": "2026-08-07T20:25:51"
+        },
+        {
+          "factor": "存款类机构质押式回购加权利率:DR007:日",
+          "info_date": "2026-08-10T00:00:00",
+          "start_date": "2026-08-10T00:00:00",
+          "end_date": "2026-08-10T00:00:00",
+          "value": 1.3953,
+          "rice_create_tm": "2026-08-10T20:26:52"
+        }
+      ],
+      "cpi_national_yoy": [
+        {
+          "factor": "居民消费价格指数CPI_当月同比(上年同月=100)",
+          "info_date": "2026-04-10T00:00:00",
+          "start_date": "2026-03-01T00:00:00",
+          "end_date": "2026-03-31T00:00:00",
+          "value": 101.0,
+          "rice_create_tm": "2026-04-10T11:25:36"
+        },
+        {
+          "factor": "居民消费价格指数CPI_当月同比(上年同月=100)",
+          "info_date": "2026-05-11T00:00:00",
+          "start_date": "2026-04-01T00:00:00",
+          "end_date": "2026-04-30T00:00:00",
+          "value": 101.2,
+          "rice_create_tm": "2026-05-11T11:25:38"
+        },
+        {
+          "factor": "居民消费价格指数CPI_当月同比(上年同月=100)",
+          "info_date": "2026-06-10T00:00:00",
+          "start_date": "2026-05-01T00:00:00",
+          "end_date": "2026-05-31T00:00:00",
+          "value": 101.2,
+          "rice_create_tm": "2026-06-10T11:25:43"
+        },
+        {
+          "factor": "居民消费价格指数CPI_当月同比(上年同月=100)",
+          "info_date": "2026-07-09T00:00:00",
+          "start_date": "2026-06-01T00:00:00",
+          "end_date": "2026-06-30T00:00:00",
+          "value": 101.0,
+          "rice_create_tm": "2026-07-09T11:25:52"
+        },
+        {
+          "factor": "居民消费价格指数CPI_当月同比(上年同月=100)",
+          "info_date": "2026-08-09T00:00:00",
+          "start_date": "2026-07-01T00:00:00",
+          "end_date": "2026-07-31T00:00:00",
+          "value": 100.5,
+          "rice_create_tm": "2026-08-09T11:25:44"
+        }
+      ],
+      "ppi_yoy": [
+        {
+          "factor": "工业品出厂价格指数PPI_当月同比_(上年同月=100)",
+          "info_date": "2026-04-10T00:00:00",
+          "start_date": "2026-03-01T00:00:00",
+          "end_date": "2026-03-31T00:00:00",
+          "value": 100.5,
+          "rice_create_tm": "2026-04-10T11:25:36"
+        },
+        {
+          "factor": "工业品出厂价格指数PPI_当月同比_(上年同月=100)",
+          "info_date": "2026-05-11T00:00:00",
+          "start_date": "2026-04-01T00:00:00",
+          "end_date": "2026-04-30T00:00:00",
+          "value": 102.8,
+          "rice_create_tm": "2026-05-11T11:25:38"
+        },
+        {
+          "factor": "工业品出厂价格指数PPI_当月同比_(上年同月=100)",
+          "info_date": "2026-06-10T00:00:00",
+          "start_date": "2026-05-01T00:00:00",
+          "end_date": "2026-05-31T00:00:00",
+          "value": 103.9,
+          "rice_create_tm": "2026-06-10T11:25:43"
+        },
+        {
+          "factor": "工业品出厂价格指数PPI_当月同比_(上年同月=100)",
+          "info_date": "2026-07-09T00:00:00",
+          "start_date": "2026-06-01T00:00:00",
+          "end_date": "2026-06-30T00:00:00",
+          "value": 104.1,
+          "rice_create_tm": "2026-07-09T11:25:52"
+        },
+        {
+          "factor": "工业品出厂价格指数PPI_当月同比_(上年同月=100)",
+          "info_date": "2026-08-09T00:00:00",
+          "start_date": "2026-07-01T00:00:00",
+          "end_date": "2026-07-31T00:00:00",
+          "value": 103.5,
+          "rice_create_tm": "2026-08-09T11:25:44"
+        }
+      ],
+      "sf_monthly": [
+        {
+          "factor": "社会融资规模_当月值",
+          "info_date": "2026-03-13T00:00:00",
+          "start_date": "2026-02-01T00:00:00",
+          "end_date": "2026-02-28T00:00:00",
+          "value": 23837.0,
+          "rice_create_tm": "2026-03-13T20:25:48"
+        },
+        {
+          "factor": "社会融资规模_当月值",
+          "info_date": "2026-04-13T00:00:00",
+          "start_date": "2026-03-01T00:00:00",
+          "end_date": "2026-03-31T00:00:00",
+          "value": 52240.0,
+          "rice_create_tm": "2026-04-13T20:25:43"
+        },
+        {
+          "factor": "社会融资规模_当月值",
+          "info_date": "2026-05-14T00:00:00",
+          "start_date": "2026-04-01T00:00:00",
+          "end_date": "2026-04-30T00:00:00",
+          "value": 6238.0,
+          "rice_create_tm": "2026-05-14T20:26:44"
+        },
+        {
+          "factor": "社会融资规模_当月值",
+          "info_date": "2026-06-12T00:00:00",
+          "start_date": "2026-05-01T00:00:00",
+          "end_date": "2026-05-31T00:00:00",
+          "value": 20293.0,
+          "rice_create_tm": "2026-06-12T20:25:55"
+        },
+        {
+          "factor": "社会融资规模_当月值",
+          "info_date": "2026-07-15T00:00:00",
+          "start_date": "2026-06-01T00:00:00",
+          "end_date": "2026-06-30T00:00:00",
+          "value": 33645.0,
+          "rice_create_tm": "2026-07-15T20:30:18"
+        }
+      ],
+      "sf_new_rmb_loan": [
+        {
+          "factor": "社会融资规模_新增贷款(人民币)_当月值",
+          "info_date": "2026-03-13T00:00:00",
+          "start_date": "2026-02-01T00:00:00",
+          "end_date": "2026-02-28T00:00:00",
+          "value": 8458.0,
+          "rice_create_tm": "2026-03-13T20:25:48"
+        },
+        {
+          "factor": "社会融资规模_新增贷款(人民币)_当月值",
+          "info_date": "2026-04-13T00:00:00",
+          "start_date": "2026-03-01T00:00:00",
+          "end_date": "2026-03-31T00:00:00",
+          "value": 31522.0,
+          "rice_create_tm": "2026-04-13T20:25:43"
+        },
+        {
+          "factor": "社会融资规模_新增贷款(人民币)_当月值",
+          "info_date": "2026-05-14T00:00:00",
+          "start_date": "2026-04-01T00:00:00",
+          "end_date": "2026-04-30T00:00:00",
+          "value": -4006.0,
+          "rice_create_tm": "2026-05-14T20:26:44"
+        },
+        {
+          "factor": "社会融资规模_新增贷款(人民币)_当月值",
+          "info_date": "2026-06-12T00:00:00",
+          "start_date": "2026-05-01T00:00:00",
+          "end_date": "2026-05-31T00:00:00",
+          "value": 4965.0,
+          "rice_create_tm": "2026-06-12T20:25:55"
+        },
+        {
+          "factor": "社会融资规模_新增贷款(人民币)_当月值",
+          "info_date": "2026-07-15T00:00:00",
+          "start_date": "2026-06-01T00:00:00",
+          "end_date": "2026-06-30T00:00:00",
+          "value": 17650.0,
+          "rice_create_tm": "2026-07-15T20:30:18"
+        }
+      ],
+      "sf_stock_yoy": [
+        {
+          "factor": "社会融资规模存量_同比增速_月末数",
+          "info_date": "2026-03-13T00:00:00",
+          "start_date": "2026-01-31T00:00:00",
+          "end_date": "2026-02-28T00:00:00",
+          "value": 8.2,
+          "rice_create_tm": "2026-03-13T20:25:48"
+        },
+        {
+          "factor": "社会融资规模存量_同比增速_月末数",
+          "info_date": "2026-04-13T00:00:00",
+          "start_date": "2026-02-28T00:00:00",
+          "end_date": "2026-03-31T00:00:00",
+          "value": 7.9,
+          "rice_create_tm": "2026-04-13T20:25:43"
+        },
+        {
+          "factor": "社会融资规模存量_同比增速_月末数",
+          "info_date": "2026-05-14T00:00:00",
+          "start_date": "2026-03-31T00:00:00",
+          "end_date": "2026-04-30T00:00:00",
+          "value": 7.8,
+          "rice_create_tm": "2026-05-14T20:26:44"
+        },
+        {
+          "factor": "社会融资规模存量_同比增速_月末数",
+          "info_date": "2026-06-12T00:00:00",
+          "start_date": "2026-04-30T00:00:00",
+          "end_date": "2026-05-31T00:00:00",
+          "value": 7.7,
+          "rice_create_tm": "2026-06-12T20:25:55"
+        },
+        {
+          "factor": "社会融资规模存量_同比增速_月末数",
+          "info_date": "2026-07-15T00:00:00",
+          "start_date": "2026-05-31T00:00:00",
+          "end_date": "2026-06-30T00:00:00",
+          "value": 7.4,
+          "rice_create_tm": "2026-07-15T20:30:18"
+        }
+      ],
+      "fixed_asset_investment_yoy": [
+        {
+          "factor": "固定资产投资完成额(不含农户):累计同比:月",
+          "info_date": "2026-03-16T00:00:00",
+          "start_date": "2026-01-01T00:00:00",
+          "end_date": "2026-02-28T00:00:00",
+          "value": 1.8,
+          "rice_create_tm": "2026-03-16T11:25:33"
+        },
+        {
+          "factor": "固定资产投资完成额(不含农户):累计同比:月",
+          "info_date": "2026-04-16T00:00:00",
+          "start_date": "2026-01-01T00:00:00",
+          "end_date": "2026-03-31T00:00:00",
+          "value": 1.7,
+          "rice_create_tm": "2026-04-16T11:25:38"
+        },
+        {
+          "factor": "固定资产投资完成额(不含农户):累计同比:月",
+          "info_date": "2026-05-18T00:00:00",
+          "start_date": "2026-01-01T00:00:00",
+          "end_date": "2026-04-30T00:00:00",
+          "value": -1.6,
+          "rice_create_tm": "2026-05-18T11:25:42"
+        },
+        {
+          "factor": "固定资产投资完成额(不含农户):累计同比:月",
+          "info_date": "2026-06-16T00:00:00",
+          "start_date": "2026-01-01T00:00:00",
+          "end_date": "2026-05-31T00:00:00",
+          "value": -4.1,
+          "rice_create_tm": "2026-06-16T11:26:04"
+        },
+        {
+          "factor": "固定资产投资完成额(不含农户):累计同比:月",
+          "info_date": "2026-07-15T00:00:00",
+          "start_date": "2026-01-01T00:00:00",
+          "end_date": "2026-06-30T00:00:00",
+          "value": -5.7,
+          "rice_create_tm": "2026-07-15T11:25:50"
+        }
+      ],
+      "industrial_activity_quarterly_yoy": [
+        {
+          "factor": "工业增加值:当期同比:季",
+          "info_date": "2025-07-16T00:00:00",
+          "start_date": "2025-03-31T00:00:00",
+          "end_date": "2025-06-30T00:00:00",
+          "value": 6.2,
+          "rice_create_tm": "2025-07-17T08:25:36"
+        },
+        {
+          "factor": "工业增加值:当期同比:季",
+          "info_date": "2025-10-21T00:00:00",
+          "start_date": "2025-06-30T00:00:00",
+          "end_date": "2025-09-30T00:00:00",
+          "value": 5.8,
+          "rice_create_tm": "2025-10-21T11:25:44"
+        },
+        {
+          "factor": "工业增加值:当期同比:季",
+          "info_date": "2026-01-20T00:00:00",
+          "start_date": "2025-09-30T00:00:00",
+          "end_date": "2025-12-31T00:00:00",
+          "value": 5.0,
+          "rice_create_tm": "2026-01-20T11:25:36"
+        },
+        {
+          "factor": "工业增加值:当期同比:季",
+          "info_date": "2026-04-17T00:00:00",
+          "start_date": "2025-12-31T00:00:00",
+          "end_date": "2026-03-31T00:00:00",
+          "value": 6.1,
+          "rice_create_tm": "2026-04-17T11:25:39"
+        },
+        {
+          "factor": "工业增加值:当期同比:季",
+          "info_date": "2026-07-16T00:00:00",
+          "start_date": "2026-03-31T00:00:00",
+          "end_date": "2026-06-30T00:00:00",
+          "value": 4.7,
+          "rice_create_tm": "2026-07-16T11:25:46"
+        }
+      ],
+      "pmi_finished_goods_inventory": [
+        {
+          "factor": "制造业采购经理指数PMI_产成品库存",
+          "info_date": "2026-03-31T00:00:00",
+          "start_date": "2026-02-28T00:00:00",
+          "end_date": "2026-03-31T00:00:00",
+          "value": 46.7,
+          "rice_create_tm": "2026-03-31T11:25:49"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_产成品库存",
+          "info_date": "2026-04-30T00:00:00",
+          "start_date": "2026-03-31T00:00:00",
+          "end_date": "2026-04-30T00:00:00",
+          "value": 47.5,
+          "rice_create_tm": "2026-04-30T11:25:43"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_产成品库存",
+          "info_date": "2026-05-31T00:00:00",
+          "start_date": "2026-04-30T00:00:00",
+          "end_date": "2026-05-31T00:00:00",
+          "value": 49.3,
+          "rice_create_tm": "2026-05-31T11:25:47"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_产成品库存",
+          "info_date": "2026-06-30T00:00:00",
+          "start_date": "2026-05-31T00:00:00",
+          "end_date": "2026-06-30T00:00:00",
+          "value": 47.7,
+          "rice_create_tm": "2026-06-30T11:25:45"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_产成品库存",
+          "info_date": "2026-07-31T00:00:00",
+          "start_date": "2026-06-30T00:00:00",
+          "end_date": "2026-07-31T00:00:00",
+          "value": 48.6,
+          "rice_create_tm": "2026-07-31T11:26:35"
+        }
+      ],
+      "pmi_supplier_delivery": [
+        {
+          "factor": "制造业采购经理指数PMI_供应商配送时间",
+          "info_date": "2026-03-31T00:00:00",
+          "start_date": "2026-02-28T00:00:00",
+          "end_date": "2026-03-31T00:00:00",
+          "value": 49.5,
+          "rice_create_tm": "2026-03-31T11:25:49"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_供应商配送时间",
+          "info_date": "2026-04-30T00:00:00",
+          "start_date": "2026-03-31T00:00:00",
+          "end_date": "2026-04-30T00:00:00",
+          "value": 49.5,
+          "rice_create_tm": "2026-04-30T11:25:43"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_供应商配送时间",
+          "info_date": "2026-05-31T00:00:00",
+          "start_date": "2026-04-30T00:00:00",
+          "end_date": "2026-05-31T00:00:00",
+          "value": 49.2,
+          "rice_create_tm": "2026-05-31T11:25:47"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_供应商配送时间",
+          "info_date": "2026-06-30T00:00:00",
+          "start_date": "2026-05-31T00:00:00",
+          "end_date": "2026-06-30T00:00:00",
+          "value": 49.9,
+          "rice_create_tm": "2026-06-30T11:25:45"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_供应商配送时间",
+          "info_date": "2026-07-31T00:00:00",
+          "start_date": "2026-06-30T00:00:00",
+          "end_date": "2026-07-31T00:00:00",
+          "value": 49.5,
+          "rice_create_tm": "2026-07-31T11:26:35"
+        }
+      ],
+      "pmi_raw_material_inventory": [
+        {
+          "factor": "制造业采购经理指数PMI_原材料库存",
+          "info_date": "2026-03-31T00:00:00",
+          "start_date": "2026-02-28T00:00:00",
+          "end_date": "2026-03-31T00:00:00",
+          "value": 47.7,
+          "rice_create_tm": "2026-03-31T11:25:49"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_原材料库存",
+          "info_date": "2026-04-30T00:00:00",
+          "start_date": "2026-03-31T00:00:00",
+          "end_date": "2026-04-30T00:00:00",
+          "value": 49.3,
+          "rice_create_tm": "2026-04-30T11:25:43"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_原材料库存",
+          "info_date": "2026-05-31T00:00:00",
+          "start_date": "2026-04-30T00:00:00",
+          "end_date": "2026-05-31T00:00:00",
+          "value": 48.6,
+          "rice_create_tm": "2026-05-31T11:25:47"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_原材料库存",
+          "info_date": "2026-06-30T00:00:00",
+          "start_date": "2026-05-31T00:00:00",
+          "end_date": "2026-06-30T00:00:00",
+          "value": 48.4,
+          "rice_create_tm": "2026-06-30T11:25:45"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_原材料库存",
+          "info_date": "2026-07-31T00:00:00",
+          "start_date": "2026-06-30T00:00:00",
+          "end_date": "2026-07-31T00:00:00",
+          "value": 48.3,
+          "rice_create_tm": "2026-07-31T11:26:35"
+        }
+      ],
+      "pmi_manufacturing": [
+        {
+          "factor": "制造业采购经理指数PMI_当月",
+          "info_date": "2026-03-31T00:00:00",
+          "start_date": "2026-03-01T00:00:00",
+          "end_date": "2026-03-31T00:00:00",
+          "value": 50.4,
+          "rice_create_tm": "2026-03-31T11:25:49"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_当月",
+          "info_date": "2026-04-30T00:00:00",
+          "start_date": "2026-04-01T00:00:00",
+          "end_date": "2026-04-30T00:00:00",
+          "value": 50.3,
+          "rice_create_tm": "2026-04-30T11:25:43"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_当月",
+          "info_date": "2026-05-31T00:00:00",
+          "start_date": "2026-05-01T00:00:00",
+          "end_date": "2026-05-31T00:00:00",
+          "value": 50.0,
+          "rice_create_tm": "2026-05-31T11:25:47"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_当月",
+          "info_date": "2026-06-30T00:00:00",
+          "start_date": "2026-06-01T00:00:00",
+          "end_date": "2026-06-30T00:00:00",
+          "value": 50.3,
+          "rice_create_tm": "2026-06-30T11:25:45"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_当月",
+          "info_date": "2026-07-31T00:00:00",
+          "start_date": "2026-07-01T00:00:00",
+          "end_date": "2026-07-31T00:00:00",
+          "value": 49.2,
+          "rice_create_tm": "2026-07-31T11:26:35"
+        }
+      ],
+      "pmi_new_orders": [
+        {
+          "factor": "制造业采购经理指数PMI_新订单",
+          "info_date": "2026-03-31T00:00:00",
+          "start_date": "2026-02-28T00:00:00",
+          "end_date": "2026-03-31T00:00:00",
+          "value": 51.6,
+          "rice_create_tm": "2026-03-31T11:25:49"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_新订单",
+          "info_date": "2026-04-30T00:00:00",
+          "start_date": "2026-03-31T00:00:00",
+          "end_date": "2026-04-30T00:00:00",
+          "value": 50.6,
+          "rice_create_tm": "2026-04-30T11:25:43"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_新订单",
+          "info_date": "2026-05-31T00:00:00",
+          "start_date": "2026-04-30T00:00:00",
+          "end_date": "2026-05-31T00:00:00",
+          "value": 49.9,
+          "rice_create_tm": "2026-05-31T11:25:47"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_新订单",
+          "info_date": "2026-06-30T00:00:00",
+          "start_date": "2026-05-31T00:00:00",
+          "end_date": "2026-06-30T00:00:00",
+          "value": 51.2,
+          "rice_create_tm": "2026-06-30T11:25:45"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_新订单",
+          "info_date": "2026-07-31T00:00:00",
+          "start_date": "2026-06-30T00:00:00",
+          "end_date": "2026-07-31T00:00:00",
+          "value": 48.5,
+          "rice_create_tm": "2026-07-31T11:26:35"
+        }
+      ],
+      "pmi_production": [
+        {
+          "factor": "制造业采购经理指数PMI_生产",
+          "info_date": "2026-03-31T00:00:00",
+          "start_date": "2026-02-28T00:00:00",
+          "end_date": "2026-03-31T00:00:00",
+          "value": 51.4,
+          "rice_create_tm": "2026-03-31T11:25:49"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_生产",
+          "info_date": "2026-04-30T00:00:00",
+          "start_date": "2026-03-31T00:00:00",
+          "end_date": "2026-04-30T00:00:00",
+          "value": 51.5,
+          "rice_create_tm": "2026-04-30T11:25:43"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_生产",
+          "info_date": "2026-05-31T00:00:00",
+          "start_date": "2026-04-30T00:00:00",
+          "end_date": "2026-05-31T00:00:00",
+          "value": 51.2,
+          "rice_create_tm": "2026-05-31T11:25:47"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_生产",
+          "info_date": "2026-06-30T00:00:00",
+          "start_date": "2026-05-31T00:00:00",
+          "end_date": "2026-06-30T00:00:00",
+          "value": 51.4,
+          "rice_create_tm": "2026-06-30T11:25:45"
+        },
+        {
+          "factor": "制造业采购经理指数PMI_生产",
+          "info_date": "2026-07-31T00:00:00",
+          "start_date": "2026-06-30T00:00:00",
+          "end_date": "2026-07-31T00:00:00",
+          "value": 49.9,
+          "rice_create_tm": "2026-07-31T11:26:35"
+        }
+      ]
+    }
+  },
+  "money_supply": {
+    "row_count": 19,
+    "fields": [
+      "effective_date",
+      "info_date",
+      "m0",
+      "m0_growth_yoy",
+      "m1",
+      "m1_growth_yoy",
+      "m2",
+      "m2_growth_yoy"
+    ],
+    "query_hash": "52de712484593ebea17fb7d963c9388b84409cb21f1e44443e311a4aabdae9be",
+    "rows": [
+      {
+        "info_date": "2026-03-13T00:00:00",
+        "effective_date": "2026-02-28T00:00:00",
+        "m2": 349215991.0,
+        "m1": 115925882.0,
+        "m0": 15143641.0,
+        "m2_growth_yoy": 0.09,
+        "m1_growth_yoy": 0.059,
+        "m0_growth_yoy": 0.141
+      },
+      {
+        "info_date": "2026-04-13T00:00:00",
+        "effective_date": "2026-03-31T00:00:00",
+        "m2": 353863653.0,
+        "m1": 119320299.0,
+        "m0": 14708281.0,
+        "m2_growth_yoy": 0.085,
+        "m1_growth_yoy": 0.051,
+        "m0_growth_yoy": 0.125
+      },
+      {
+        "info_date": "2026-05-14T00:00:00",
+        "effective_date": "2026-04-30T00:00:00",
+        "m2": 353042521.0,
+        "m1": 114583373.0,
+        "m0": 14747738.0,
+        "m2_growth_yoy": 0.086,
+        "m1_growth_yoy": 0.05,
+        "m0_growth_yoy": 0.122
+      },
+      {
+        "info_date": "2026-06-12T00:00:00",
+        "effective_date": "2026-05-31T00:00:00",
+        "m2": 353668892.0,
+        "m1": 114889141.0,
+        "m0": 14685471.0,
+        "m2_growth_yoy": 0.086,
+        "m1_growth_yoy": 0.055,
+        "m0_growth_yoy": 0.119
+      },
+      {
+        "info_date": "2026-07-15T00:00:00",
+        "effective_date": "2026-06-30T00:00:00",
+        "m2": 356710843.0,
+        "m1": 118477553.0,
+        "m0": 14736479.0,
+        "m2_growth_yoy": 0.08,
+        "m1_growth_yoy": 0.04,
+        "m0_growth_yoy": 0.118
+      }
+    ]
+  },
+  "pit_policy": {
+    "info_date": "candidate availability date, subject to sample verification",
+    "rice_create_tm": "provider record creation timestamp; not automatically a complete revision vintage",
+    "latest_vintage_warning": "raw exports are not admitted to historical backtests until revision/as-of checks pass"
+  },
+  "secrets_stored": false
+}

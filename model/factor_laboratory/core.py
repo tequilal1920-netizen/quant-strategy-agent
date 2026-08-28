@@ -40,7 +40,7 @@ from research_metrics import (  # noqa: E402
 )
 
 
-ENGINE_VERSION = "factor-lab/1.1-hac-evaluation"
+ENGINE_VERSION = "factor-lab/3.6.6-domain-timing-conservative-residual-guard"
 FEATURES = [
     "ret_1", "ret_5", "ret_20", "ret_60", "vol_20", "down_vol_20",
     "price_pos_60", "volume_z_20", "amihud_20", "turnover", "volume_ratio",
@@ -85,7 +85,8 @@ def atomic_json(path: Path, payload: dict[str, Any]) -> None:
 def progress(path: Path | None, stage: str, pct: float, message: str, **extra: Any) -> None:
     if not path:
         return
-    payload = {"stage": stage, "progress": round(float(pct), 4), "message": message, "updated_at": now_iso()}
+    bounded_pct = max(0.0, min(1.0, float(pct)))
+    payload = {"stage": stage, "progress": round(bounded_pct, 4), "message": message, "updated_at": now_iso()}
     payload.update(extra)
     atomic_json(path, payload)
 
@@ -294,6 +295,53 @@ def cost_aware_sleeve_weights(
     }
 
 
+def causal_rank_innovation_gain(
+    current_signal: dict[str, float],
+    previous_signal: dict[str, float],
+) -> float:
+    """Kalman-style update gain from observable cross-sectional innovation."""
+
+    overlap = sorted(set(current_signal) & set(previous_signal))
+    if len(overlap) < 10:
+        return 1.0
+    current = np.asarray([current_signal[name] for name in overlap], dtype=float)
+    previous = np.asarray([previous_signal[name] for name in overlap], dtype=float)
+    current -= float(np.mean(current))
+    previous -= float(np.mean(previous))
+    signal_variance = float(np.var(current, ddof=1))
+    innovation_variance = float(np.var(current - previous, ddof=1))
+    denominator = signal_variance + innovation_variance
+    if denominator <= 1.0e-12:
+        return 1.0
+    return finite(float(np.clip(signal_variance / denominator, 0.0, 1.0)), 1.0)
+
+
+def reliability_blended_sleeve(
+    desired: dict[str, float],
+    previous: dict[str, float],
+    gain: float,
+) -> dict[str, float]:
+    """Partially move from prior holdings to the new rank target."""
+
+    if not desired or not previous:
+        return dict(desired)
+    target_notional = float(sum(desired.values()))
+    names = sorted(set(desired) | set(previous))
+    update_gain = float(np.clip(gain, 0.0, 1.0))
+    blended = np.maximum(np.asarray([
+        previous.get(name, 0.0)
+        + update_gain * (desired.get(name, 0.0) - previous.get(name, 0.0))
+        for name in names
+    ], dtype=float), 0.0)
+    total = float(blended.sum())
+    if total <= 1.0e-12:
+        return dict(desired)
+    blended *= target_notional / total
+    return {name: finite(float(value)) for name, value in zip(names, blended) if value > 1.0e-12}
+
+
+
+
 def backtest_cross_section(
     frame: pd.DataFrame,
     score_col: str,
@@ -308,6 +356,7 @@ def backtest_cross_section(
     adaptive_rank_return_slope: bool = False,
     asset_risk_weighted: bool = False,
     risk_col: str | None = None,
+    causal_signal_reliability: bool = False,
 ) -> dict[str, Any]:
     daily: list[dict[str, Any]] = []
     previous_long: dict[str, float] = {}
@@ -318,6 +367,8 @@ def backtest_cross_section(
     pending_rank_return_slopes: list[tuple[int, float]] = []
     previous_scale = 1.0
     previous_effective_rank_slope = finite(rank_return_slope)
+    previous_signal_rank: dict[str, float] = {}
+    previous_signal_gain = 1.0
     eligible_date_index = 0
     for date, group in frame.groupby("trade_date", sort=True):
         columns = ["ts_code", score_col, target_col]
@@ -445,6 +496,11 @@ def backtest_cross_section(
                 str(name): risk_scale * float(value)
                 for name, value in short_base.items()
             }
+            current_signal_rank = (
+                {str(name): float(value) for name, value in centered_rank.items()}
+                if portfolio_construction == "continuous_rank" else {}
+            )
+            signal_reliability_gain = 1.0
             if (
                 transaction_cost_optimized
                 and portfolio_construction == "continuous_rank"
@@ -494,10 +550,36 @@ def backtest_cross_section(
                     name: value for name, value in short_weights.items()
                     if value > 1e-12
                 }
+            elif (
+                causal_signal_reliability
+                and portfolio_construction == "continuous_rank"
+            ):
+                effective_rank_return_slope = finite(rank_return_slope)
+                signal_reliability_gain = causal_rank_innovation_gain(
+                    current_signal_rank, previous_signal_rank
+                )
+                available_names = set(indexed.index.astype(str))
+                tradable_previous_long = {
+                    name: value for name, value in previous_long.items()
+                    if name in available_names
+                }
+                tradable_previous_short = {
+                    name: value for name, value in previous_short.items()
+                    if name in available_names
+                }
+                long_weights = reliability_blended_sleeve(
+                    desired_long, tradable_previous_long, signal_reliability_gain
+                )
+                short_weights = reliability_blended_sleeve(
+                    desired_short, tradable_previous_short, signal_reliability_gain
+                )
             else:
                 effective_rank_return_slope = finite(rank_return_slope)
                 long_weights = desired_long
                 short_weights = desired_short
+            if current_signal_rank:
+                previous_signal_rank = current_signal_rank
+            previous_signal_gain = signal_reliability_gain
             turnover = (
                 _sleeve_turnover(long_weights, previous_long)
                 + _sleeve_turnover(short_weights, previous_short)
@@ -539,6 +621,7 @@ def backtest_cross_section(
             )
             risk_scale = actual_scale
             effective_rank_return_slope = previous_effective_rank_slope
+            signal_reliability_gain = previous_signal_gain
         current_long_weights = previous_long
         current_short_weights = previous_short
         daily.append({
@@ -551,6 +634,7 @@ def backtest_cross_section(
             "is_rebalance": is_rebalance,
             "risk_scale": actual_scale,
             "cost_aware_rank_slope": effective_rank_return_slope,
+            "signal_reliability_gain": signal_reliability_gain,
             "long_effective_names": finite(
                 sum(current_long_weights.values()) ** 2
                 / sum(
@@ -615,11 +699,16 @@ def backtest_cross_section(
         "portfolio_construction": portfolio_construction,
         "transaction_cost_optimized": bool(transaction_cost_optimized),
         "adaptive_rank_return_slope": bool(adaptive_rank_return_slope),
+        "causal_signal_reliability": bool(causal_signal_reliability),
         "rank_return_slope": finite(rank_return_slope),
         "average_cost_aware_rank_slope": finite(np.mean([
             x["cost_aware_rank_slope"]
             for x in performance_rows
         ])),
+        "average_signal_reliability_gain": finite(np.mean([
+            x["signal_reliability_gain"]
+            for x in performance_rows
+        ]), 1.0),
         "risk_return_observation_lag": max(1, horizon) + 1,
         "average_gross_exposure": finite(
             2.0 * np.mean([x["risk_scale"] for x in performance_rows])
@@ -669,7 +758,9 @@ def read_panel(config: dict[str, Any], progress_path: Path | None = None) -> Pan
     horizons = sorted({int(x) for x in config.get("horizons", [5, 10, 20]) if 1 <= int(x) <= 60})
     if not horizons:
         horizons = [5, 10, 20]
-    required_dates = min(1600, max(260, max_months * 22 + sequence + max(horizons) + 30))
+    required_dates_limit = int(config.get("required_dates_limit", 1600))
+    required_dates_limit = min(max(required_dates_limit, 260), 5000)
+    required_dates = min(required_dates_limit, max(260, max_months * 22 + sequence + max(horizons) + 30))
     uri = "file:" + db_path.as_posix() + "?mode=ro"
     conn = sqlite3.connect(uri, uri=True, timeout=60)
     conn.execute("PRAGMA query_only=ON")
@@ -682,16 +773,54 @@ def read_panel(config: dict[str, Any], progress_path: Path | None = None) -> Pan
         raise RuntimeError("insufficient chronological market data")
     start_date, end_date = dates_desc[-1], dates_desc[0]
     chronological_dates = sorted(dates_desc)
-    provisional_train_end = int(len(chronological_dates) * 0.60)
+    split_valid_start_cutoff = str(config.get("split_valid_start_date") or "").replace("-", "")
+    provisional_train_end = int(len(chronological_dates) * float(config.get("split_train_ratio", 0.60)))
+    if split_valid_start_cutoff:
+        for index, trade_date in enumerate(chronological_dates):
+            if str(trade_date) >= split_valid_start_cutoff:
+                provisional_train_end = index
+                break
     embargo = max(horizons) + 1
     universe_index = max(0, min(len(chronological_dates) - 1, provisional_train_end - embargo - 1))
     universe_end = chronological_dates[universe_index]
     universe_start = chronological_dates[max(0, universe_index - 59)]
-    assets = [r[0] for r in conn.execute(
+    liquidity_assets = [r[0] for r in conn.execute(
         "SELECT ts_code FROM stock_ohlcv_daily WHERE trade_date BETWEEN ? AND ? AND amount IS NOT NULL "
         "GROUP BY ts_code HAVING COUNT(*)>=30 ORDER BY AVG(amount) DESC LIMIT ?",
         (universe_start, universe_end, max_assets),
     )]
+    assets = liquidity_assets
+    asset_universe_policy = "liquidity universe frozen at purged train end; validation and test observations excluded"
+    asset_universe_fallback = ""
+    factor_mode = str(config.get("factor_universe_mode") or "").strip().lower()
+    if factor_mode in {"screened_full", "warehouse_screened", "full", "unified", "screened"} or bool(config.get("use_unified_factor_panel")):
+        try:
+            factor_asset_limit = min(800, max(max_assets * 4, max_assets))
+            factor_assets = [r[0] for r in conn.execute(
+                "SELECT ts_code FROM factor_value_daily WHERE trade_date BETWEEN ? AND ? AND factor_value IS NOT NULL "
+                "GROUP BY ts_code HAVING COUNT(*)>=? ORDER BY COUNT(*) DESC LIMIT ?",
+                (
+                    start_date,
+                    universe_end,
+                    int(config.get("factor_asset_min_values", 20)),
+                    factor_asset_limit,
+                ),
+            )]
+            if factor_assets:
+                factor_placeholders = ",".join("?" for _ in factor_assets)
+                scoped_assets = [r[0] for r in conn.execute(
+                    f"SELECT ts_code FROM stock_ohlcv_daily WHERE trade_date BETWEEN ? AND ? AND amount IS NOT NULL "
+                    f"AND ts_code IN ({factor_placeholders}) "
+                    "GROUP BY ts_code HAVING COUNT(*)>=30 ORDER BY AVG(amount) DESC LIMIT ?",
+                    (universe_start, universe_end, *factor_assets, max_assets),
+                )]
+                if len(scoped_assets) >= 30:
+                    assets = scoped_assets
+                    asset_universe_policy = "liquidity universe selected inside materialized factor coverage before validation/test; no test observations used"
+                else:
+                    asset_universe_fallback = f"factor_covered_asset_count_below_minimum: {len(scoped_assets)}"
+        except sqlite3.Error as exc:
+            asset_universe_fallback = f"factor_asset_prefilter_failed: {exc}"
     if len(assets) < 30:
         raise RuntimeError("insufficient liquid assets")
     placeholders = ",".join("?" for _ in assets)
@@ -837,23 +966,84 @@ def read_panel(config: dict[str, Any], progress_path: Path | None = None) -> Pan
     _TRADING_DATE_POSITION = {str(date): index for index, date in enumerate(dates)}
     date_index = {d: i for i, d in enumerate(dates)}
     asset_index = {a: i for i, a in enumerate(assets)}
-    feature_array = np.full((len(dates), len(assets), len(FEATURES)), np.nan, dtype=np.float32)
+    def split_boundary(value: Any, default_index: int) -> int:
+        cutoff = str(value or "").replace("-", "")
+        if not cutoff:
+            return default_index
+        for index, trade_date in enumerate(dates):
+            if str(trade_date) >= cutoff:
+                return index
+        return default_index
+
+    split_train_ratio = float(config.get("split_train_ratio", 0.60))
+    split_valid_ratio = float(config.get("split_valid_ratio", 0.80))
+    split_train_ratio = min(max(split_train_ratio, 0.30), 0.80)
+    split_valid_ratio = min(max(split_valid_ratio, split_train_ratio + 0.05), 0.95)
+    split_train = int(len(dates) * split_train_ratio)
+    split_valid = int(len(dates) * split_valid_ratio)
+    embargo = max(horizons) + 1
+    if config.get("split_test_start_date"):
+        valid_start = split_boundary(config.get("split_valid_start_date"), split_train)
+        test_start = split_boundary(config.get("split_test_start_date"), split_valid)
+        valid_start = min(max(valid_start, sequence + embargo + 1), len(dates) - max(horizons) - embargo - 2)
+        test_start = min(max(test_start, valid_start + embargo + 1), len(dates) - max(horizons) - 1)
+        split = {
+            "train": (sequence, max(sequence + 1, valid_start - embargo)),
+            "valid": (valid_start, max(valid_start + 1, test_start - embargo)),
+            "test": (test_start, len(dates) - max(horizons) - 1),
+        }
+    else:
+        split = {
+            "train": (sequence, max(sequence + 1, split_train - embargo)),
+            "valid": (split_train, max(split_train + 1, split_valid - embargo)),
+            "test": (split_valid, len(dates) - max(horizons) - 1),
+        }
+    feature_names = list(FEATURES)
+    factor_universe_report: dict[str, Any] = {
+        "mode": "core_29",
+        "enabled": False,
+        "feature_count": len(feature_names),
+        "test_usage": "not_applicable",
+    }
+    try:
+        try:
+            from unified_factor_panel import extend_with_screened_factors
+        except ImportError:
+            from model.factor_laboratory.unified_factor_panel import extend_with_screened_factors
+        progress(
+            progress_path,
+            "data",
+            0.17,
+            "merge_materialized_factors_and_screen_on_train_valid",
+        )
+        frame, feature_names, factor_universe_report = extend_with_screened_factors(
+            frame,
+            database_path=db_path,
+            base_features=list(FEATURES),
+            target_col=f"target_{horizons[0]}",
+            date_order=dates,
+            assets=assets,
+            split=split,
+            config=config,
+        )
+    except Exception as exc:
+        factor_universe_report = {
+            "mode": str(config.get("factor_universe_mode") or "core_29"),
+            "enabled": bool(config.get("use_unified_factor_panel") or config.get("factor_universe_mode")),
+            "feature_count": len(feature_names),
+            "message": f"factor_universe_extension_failed: {exc}",
+            "fallback": "core_29",
+            "test_usage": "excluded_from_factor_screening",
+        }
+    feature_array = np.full((len(dates), len(assets), len(feature_names)), np.nan, dtype=np.float32)
     target_array = np.full((len(dates), len(assets), len(horizons)), np.nan, dtype=np.float32)
     eligibility_array = np.zeros((len(dates), len(assets)), dtype=bool)
     di = frame.trade_date.map(date_index).to_numpy()
     ai = frame.ts_code.map(asset_index).to_numpy()
-    feature_array[di, ai] = frame[FEATURES].to_numpy(dtype=np.float32)
+    feature_array[di, ai] = frame[feature_names].to_numpy(dtype=np.float32)
     target_array[di, ai] = frame[[f"target_{h}" for h in horizons]].to_numpy(dtype=np.float32)
     eligibility_array[di, ai] = frame["model_eligible"].to_numpy(dtype=bool)
-    split_train = int(len(dates) * 0.60)
-    split_valid = int(len(dates) * 0.80)
-    embargo = max(horizons) + 1
-    split = {
-        "train": (sequence, max(sequence + 1, split_train - embargo)),
-        "valid": (split_train, max(split_train + 1, split_valid - embargo)),
-        "test": (split_valid, len(dates) - max(horizons) - 1),
-    }
-    minimum_feature_count = max(8, int(math.ceil(len(LEGACY_FEATURES) * 0.60)))
+    minimum_feature_count = max(8, int(math.ceil(min(len(feature_names), len(LEGACY_FEATURES)) * 0.60)))
     valid = (
         np.isfinite(target_array).all(axis=2)
         & (np.isfinite(feature_array).sum(axis=2) >= minimum_feature_count)
@@ -866,16 +1056,19 @@ def read_panel(config: dict[str, Any], progress_path: Path | None = None) -> Pan
         features=feature_array,
         targets=target_array,
         valid=valid,
-        feature_names=list(FEATURES),
+        feature_names=feature_names,
         horizons=horizons,
         split=split,
         source={
             "database": str(db_path), "start_date": start_date, "end_date": end_date,
             "rows": int(len(frame)), "dates": len(dates), "assets": len(assets),
+            "feature_count": len(feature_names),
             "watermark": max(dates), "point_in_time": True,
+            "factor_universe": factor_universe_report,
             "universe_formation_date": universe_end,
             "universe_liquidity_window": [universe_start, universe_end],
-            "universe_policy": "liquidity universe frozen at purged train end; validation and test observations excluded",
+            "universe_policy": asset_universe_policy,
+            "universe_fallback": asset_universe_fallback,
             "execution_lag_trading_days": 1,
             "minimum_feature_count": minimum_feature_count,
             "minimum_listing_history": minimum_history,
@@ -938,6 +1131,46 @@ def neutralize_cross_sectional_scores(frame: pd.DataFrame) -> np.ndarray:
     return output.to_numpy(dtype=float)
 
 
+def residualize_cross_sectional_scores_against_anchor(
+    frame: pd.DataFrame,
+    anchor_col: str = "anchor_score",
+) -> np.ndarray:
+    """Keep only same-date overlay information not explained by the anchor."""
+
+    work = frame.copy()
+    work["score"] = pd.to_numeric(work["score"], errors="coerce").fillna(0.0)
+    anchor_series = work[anchor_col] if anchor_col in work.columns else pd.Series(0.0, index=work.index)
+    work[anchor_col] = pd.to_numeric(anchor_series, errors="coerce")
+    size_series = work["log_mv"] if "log_mv" in work.columns else pd.Series(0.0, index=work.index)
+    work["log_mv"] = pd.to_numeric(size_series, errors="coerce")
+    industry_series = work["industry_name"] if "industry_name" in work.columns else pd.Series("unknown", index=work.index)
+    work["industry_name"] = industry_series.fillna("unknown").astype(str)
+    output = pd.Series(0.0, index=work.index, dtype=float)
+    for _, group in work.groupby("trade_date", sort=False):
+        score = group["score"].astype(float)
+        anchor = group[anchor_col].astype(float)
+        anchor_median = float(anchor.median()) if anchor.notna().any() else 0.0
+        anchor_filled = anchor.fillna(anchor_median)
+        anchor_scale = max(float(anchor_filled.std(ddof=0)), 1e-12)
+        anchor_z = ((anchor_filled - anchor_median) / anchor_scale).to_numpy(dtype=float)
+        size = group["log_mv"].astype(float)
+        size_median = float(size.median()) if size.notna().any() else 0.0
+        size_filled = size.fillna(size_median)
+        size_scale = max(float(size_filled.std(ddof=0)), 1e-12)
+        size_z = ((size_filled - size_median) / size_scale).to_numpy(dtype=float)
+        industry = pd.get_dummies(
+            group["industry_name"], prefix="industry", drop_first=True, dtype=float
+        )
+        design_parts = [np.ones((len(group), 1)), anchor_z[:, None], size_z[:, None]]
+        if not industry.empty:
+            design_parts.append(industry.to_numpy(dtype=float))
+        design = np.column_stack(design_parts)
+        beta = np.linalg.lstsq(design, score.to_numpy(dtype=float), rcond=None)[0]
+        residual = pd.Series(score.to_numpy(dtype=float) - design @ beta, index=group.index)
+        output.loc[group.index] = residual
+    return output.to_numpy(dtype=float)
+
+
 def _rank_targets_by_date(values: np.ndarray, dates: np.ndarray) -> np.ndarray:
     work = pd.DataFrame({"date": dates, "value": values})
     return (
@@ -985,6 +1218,9 @@ def run_lstm(panel: Panel, config: dict[str, Any], progress_path: Path | None) -
     torch, nn = torch_modules()
     torch.set_num_threads(max(1, int(config.get("cpu_threads", 4))))
     device = torch.device("cuda" if torch.cuda.is_available() and config.get("allow_cuda", True) else "cpu")
+    recurrent_cell = str(config.get("recurrent_cell") or config.get("engine") or "lstm").lower()
+    if recurrent_cell not in {"lstm", "gru"}:
+        recurrent_cell = "lstm"
     values, missing, scaler = normalise_panel(panel)
     sequence = int(config.get("sequence_length", 120))
     domain_indices = [[panel.feature_names.index(x) for x in names if x in panel.feature_names] for names in DOMAINS.values()]
@@ -1004,7 +1240,8 @@ def run_lstm(panel: Panel, config: dict[str, Any], progress_path: Path | None) -
             m = missing[date_i - sequence:date_i].transpose(1, 0, 2)
             y = panel.targets[date_i]
             mask = panel.valid[date_i]
-            exposures = values[date_i, :, [panel.feature_names.index("log_mv"), panel.feature_names.index("vol_20"), panel.feature_names.index("ret_20")]]
+            exposure_cols = [panel.feature_names.index("log_mv"), panel.feature_names.index("vol_20"), panel.feature_names.index("ret_20")]
+            exposures = values[date_i][:, exposure_cols]
             return torch.from_numpy(x), torch.from_numpy(m), torch.from_numpy(y), torch.from_numpy(mask), torch.from_numpy(exposures)
 
     class CausalConv(nn.Module):
@@ -1033,9 +1270,14 @@ def run_lstm(panel: Panel, config: dict[str, Any], progress_path: Path | None) -
             self.domain_proj = nn.ModuleList([nn.Sequential(nn.Linear(len(idx) * 2, dim), nn.GELU(), nn.LayerNorm(dim)) for idx in domain_indices])
             self.router = nn.Sequential(nn.Linear(len(panel.feature_names) * 2, dim), nn.GELU(), nn.Linear(dim, len(domain_indices)))
             self.conv = CausalConv(dim)
-            projection = max(16, dim // 2)
-            self.lstm = nn.LSTM(dim, dim, num_layers=int(hp["lstm_layers"]), batch_first=True, dropout=float(hp["dropout"]), proj_size=projection)
-            self.to_dim = nn.Linear(projection, dim)
+            recurrent_layers = int(hp.get("recurrent_layers", hp.get("lstm_layers", 2)))
+            if str(hp.get("recurrent_cell", "lstm")).lower() == "gru":
+                self.recurrent = nn.GRU(dim, dim, num_layers=recurrent_layers, batch_first=True, dropout=float(hp["dropout"]))
+                self.to_dim = nn.Identity()
+            else:
+                projection = max(16, dim // 2)
+                self.recurrent = nn.LSTM(dim, dim, num_layers=recurrent_layers, batch_first=True, dropout=float(hp["dropout"]), proj_size=projection)
+                self.to_dim = nn.Linear(projection, dim)
             layer = nn.TransformerEncoderLayer(dim, int(hp["heads"]), dim * 4, float(hp["dropout"]), batch_first=True, norm_first=True, activation="gelu")
             self.temporal = nn.TransformerEncoder(layer, num_layers=int(hp["attention_layers"]), enable_nested_tensor=False)
             self.regime_gate = nn.Sequential(nn.Linear(dim, dim), nn.GELU(), nn.Linear(dim, int(hp["experts"])))
@@ -1051,7 +1293,7 @@ def run_lstm(panel: Panel, config: dict[str, Any], progress_path: Path | None) -
                 routed.append(proj(torch.cat([x[..., idx], m[..., idx]], dim=-1)))
             h = sum(weights[:, i, None, None] * routed[i] for i in range(len(routed)))
             h = self.conv(h)
-            h, _ = self.lstm(h)
+            h, _ = self.recurrent(h)
             h = self.to_dim(h)
             length = h.shape[1]
             mask = torch.triu(torch.ones(length, length, device=h.device, dtype=torch.bool), diagonal=1)
@@ -1071,19 +1313,75 @@ def run_lstm(panel: Panel, config: dict[str, Any], progress_path: Path | None) -
         corr = (pred * target).mean() / (pred.std(unbiased=False) * target.std(unbiased=False) + 1e-6)
         return 1 - corr
 
+    def augment_training_batch(x_batch, m_batch, hp: dict[str, Any]):
+        """Train-only anti-overfit perturbations; validation/test stay untouched."""
+        min_fraction = float(hp.get("min_sequence_fraction", 1.0))
+        if 0.2 <= min_fraction < 1.0 and x_batch.shape[1] > 20:
+            min_keep = max(20, int(x_batch.shape[1] * min_fraction))
+            keep = random.randint(min_keep, x_batch.shape[1])
+            x_batch = x_batch[:, -keep:]
+            m_batch = m_batch[:, -keep:]
+        feature_dropout = max(0.0, min(0.8, float(hp.get("feature_dropout", 0.0))))
+        if feature_dropout > 0:
+            keep_mask = (torch.rand(x_batch.shape[0], 1, x_batch.shape[2], device=x_batch.device) > feature_dropout).float()
+            x_batch = x_batch * keep_mask
+            m_batch = torch.clamp(m_batch + (1.0 - keep_mask), 0.0, 1.0)
+        input_noise = max(0.0, float(hp.get("input_noise", 0.0)))
+        if input_noise > 0:
+            x_batch = x_batch + torch.randn_like(x_batch) * input_noise
+        return x_batch, m_batch
+
+    def robust_validation_score(valid_scores: list[float], train_scores: list[float], hp: dict[str, Any]):
+        scores = np.asarray([finite(x) for x in valid_scores if np.isfinite(x)], dtype=float)
+        if scores.size == 0:
+            return -1.0, {"valid_rank_ic": -1.0, "valid_weakest_fold_ic": -1.0, "valid_positive_ratio": 0.0}
+        mean_ic = finite(scores.mean())
+        std_ic = finite(scores.std())
+        positive_ratio = finite((scores > 0).mean())
+        fold_count = max(1, min(int(hp.get("selection_folds", 4)), scores.size))
+        fold_means = [finite(chunk.mean()) for chunk in np.array_split(scores, fold_count) if chunk.size]
+        weakest_fold = finite(min(fold_means)) if fold_means else mean_ic
+        fold_gap = 0.0
+        if len(fold_means) >= 2:
+            midpoint = max(1, len(fold_means) // 2)
+            fold_gap = finite(abs(np.mean(fold_means[:midpoint]) - np.mean(fold_means[midpoint:])))
+        train_mean = finite(np.mean(train_scores)) if train_scores else mean_ic
+        train_valid_gap = max(0.0, train_mean - mean_ic)
+        score = (
+            0.45 * mean_ic
+            + 0.35 * weakest_fold
+            + 0.10 * positive_ratio
+            - float(hp.get("validation_std_penalty", 0.20)) * std_ic
+            - float(hp.get("validation_fold_gap_penalty", 0.50)) * fold_gap
+            - float(hp.get("train_valid_gap_penalty", 0.60)) * train_valid_gap
+        )
+        return finite(score), {
+            "valid_rank_ic": mean_ic,
+            "valid_rank_ic_std": std_ic,
+            "valid_weakest_fold_ic": weakest_fold,
+            "valid_positive_ratio": positive_ratio,
+            "valid_fold_gap": fold_gap,
+            "train_rank_ic_mean": train_mean,
+            "train_valid_gap": finite(train_valid_gap),
+        }
+
     def fit_one(hp: dict[str, Any], seed: int, epochs: int, trial_label: str):
         random.seed(seed); np.random.seed(seed); torch.manual_seed(seed)
         model = RoutedLSTM(hp).to(device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=float(hp["learning_rate"]), weight_decay=float(hp["weight_decay"]), betas=(0.9, 0.95))
         train_ds, valid_ds = DateDataset("train"), DateDataset("valid")
         best_state, best_score, history = None, -1e9, []
+        no_improve = 0
+        patience = max(1, int(hp.get("patience", 4)))
+        min_delta = float(hp.get("min_delta", 5e-4))
         prev_score = None
         for epoch in range(max(1, epochs)):
-            model.train(); losses = []
+            model.train(); losses = []; train_scores = []
             for x, m, y, mask, exposures in torch.utils.data.DataLoader(train_ds, batch_size=1, shuffle=False):
                 x, m, y, mask, exposures = x[0].to(device), m[0].to(device), y[0].to(device), mask[0].to(device), exposures[0].to(device)
                 if mask.sum() < 30: continue
-                mu, log_sigma, width, gate, router = model(x[mask], m[mask])
+                train_x, train_m = augment_training_batch(x[mask], m[mask], hp)
+                mu, log_sigma, width, gate, router = model(train_x, train_m)
                 yy = y[mask]
                 huber = torch.nn.functional.smooth_l1_loss(mu, yy)
                 nll = (0.5 * torch.exp(-2 * log_sigma) * (yy - mu).pow(2) + log_sigma).mean()
@@ -1097,10 +1395,13 @@ def run_lstm(panel: Panel, config: dict[str, Any], progress_path: Path | None) -
                 prev_score = current_score.detach()
                 balance = (gate.mean(0) * torch.log(gate.mean(0) + 1e-8)).sum() + (router.mean(0) * torch.log(router.mean(0) + 1e-8)).sum()
                 loss = .34 * ranking + .24 * huber + .14 * nll + .08 * sign + .08 * turnover + .08 * exposure_penalty + .04 * balance
+                train_rank_ic = safe_corr(rankdata(mu[:, 0].detach().cpu().numpy()), rankdata(yy[:, 0].detach().cpu().numpy()))
+                if np.isfinite(train_rank_ic):
+                    train_scores.append(train_rank_ic)
                 optimizer.zero_grad(set_to_none=True); loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), float(hp["grad_clip"]))
                 optimizer.step(); losses.append(finite(loss.item()))
-            valid_scores, valid_targets = [], []
+            valid_scores = []
             model.eval()
             with torch.no_grad():
                 for x, m, y, mask, _ in torch.utils.data.DataLoader(valid_ds, batch_size=1, shuffle=False):
@@ -1108,12 +1409,19 @@ def run_lstm(panel: Panel, config: dict[str, Any], progress_path: Path | None) -
                     if mask.sum() < 30: continue
                     mu = model(x[mask], m[mask])[0].cpu().numpy()
                     score = safe_corr(rankdata(mu[:, 0]), rankdata(y[mask, 0]))
-                    valid_scores.append(score); valid_targets.append(score)
-            validation = finite(np.mean(valid_scores)) if valid_scores else -1.0
-            history.append({"epoch": epoch + 1, "train_loss": finite(np.mean(losses)), "valid_rank_ic": validation})
-            if validation > best_score:
-                best_score = validation
+                    valid_scores.append(score)
+            selection_score, validation_detail = robust_validation_score(valid_scores, train_scores, hp)
+            history.append({"epoch": epoch + 1, "train_loss": finite(np.mean(losses)), "valid_selection_score": selection_score, **validation_detail})
+            if selection_score > best_score + min_delta:
+                best_score = selection_score
+                no_improve = 0
                 best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+            else:
+                no_improve += 1
+                if no_improve >= patience:
+                    history[-1]["early_stop"] = True
+                    history[-1]["patience"] = patience
+                    break
         if best_state: model.load_state_dict(best_state)
         return model, best_score, history
 
@@ -1122,35 +1430,49 @@ def run_lstm(panel: Panel, config: dict[str, Any], progress_path: Path | None) -
     n_trials = max(1, int(search.get("trials", 3)))
     trial_epochs = max(1, int(search.get("trial_epochs", 2)))
     base_hp = {
-        "hidden_dim": int(config.get("hidden_dim", 128)), "lstm_layers": int(config.get("lstm_layers", 2)),
+        "hidden_dim": int(config.get("hidden_dim", 128)),
+        "recurrent_layers": int(config.get("gru_layers", config.get("lstm_layers", 2))),
         "attention_layers": int(config.get("attention_layers", 2)), "heads": int(config.get("heads", 8)),
         "experts": int(config.get("experts", 4)), "dropout": float(config.get("dropout", .20)),
         "learning_rate": float(config.get("learning_rate", 3e-4)), "weight_decay": float(config.get("weight_decay", 1e-4)),
-        "grad_clip": float(config.get("grad_clip", 1.0)),
+        "grad_clip": float(config.get("grad_clip", 1.0)), "recurrent_cell": recurrent_cell,
+        "patience": int(config.get("patience", 4)), "min_delta": float(config.get("min_delta", 5e-4)),
+        "feature_dropout": float(config.get("feature_dropout", .08)),
+        "input_noise": float(config.get("input_noise", .015)),
+        "min_sequence_fraction": float(config.get("min_sequence_fraction", .78)),
+        "selection_folds": int(config.get("selection_folds", 4)),
+        "validation_std_penalty": float(config.get("validation_std_penalty", .20)),
+        "validation_fold_gap_penalty": float(config.get("validation_fold_gap_penalty", .50)),
+        "train_valid_gap_penalty": float(config.get("train_valid_gap_penalty", .60)),
     }
     candidates = []
     for trial in range(n_trials):
         hp = dict(base_hp)
         if trial:
             hp.update({
-                "hidden_dim": rng.choice([64, 96, 128, 160]), "lstm_layers": rng.choice([2, 3]),
+                "hidden_dim": rng.choice([64, 96, 128, 160]), "recurrent_layers": rng.choice([2, 3]),
                 "attention_layers": rng.choice([1, 2, 3]), "heads": rng.choice([4, 8]),
                 "experts": rng.choice([3, 4, 6]), "dropout": rng.choice([.12, .18, .24, .30]),
                 "learning_rate": 10 ** rng.uniform(-4.1, -3.1), "weight_decay": 10 ** rng.uniform(-5.5, -3.3),
+                "feature_dropout": rng.choice([.04, .08, .12, .16]),
+                "input_noise": rng.choice([.005, .010, .015, .020]),
+                "min_sequence_fraction": rng.choice([.72, .78, .84, .90]),
+                "train_valid_gap_penalty": rng.choice([.45, .60, .80]),
             })
             if hp["hidden_dim"] % hp["heads"]: hp["heads"] = 4
-        progress(progress_path, "lstm_search", .20 + .18 * trial / n_trials, f"嵌套净化搜索 {trial + 1}/{n_trials}", trial=trial + 1)
+        progress(progress_path, f"{recurrent_cell}_search", .20 + .18 * trial / n_trials, f"嵌套净化搜索 {trial + 1}/{n_trials}", trial=trial + 1)
         model, score, history = fit_one(hp, int(config.get("seed", 20260720)) + trial, trial_epochs, f"trial-{trial}")
-        candidates.append({"hp": hp, "valid_rank_ic": score, "history": history})
+        best_epoch = max(history, key=lambda item: item.get("valid_selection_score", -1e9)) if history else {}
+        candidates.append({"hp": hp, "valid_selection_score": score, "valid_rank_ic": best_epoch.get("valid_rank_ic", score), "history": history, "best_epoch": best_epoch})
         del model
-    candidates.sort(key=lambda x: x["valid_rank_ic"], reverse=True)
+    candidates.sort(key=lambda x: x["valid_selection_score"], reverse=True)
     best_hp = candidates[0]["hp"]
     seeds = [int(config.get("seed", 20260720)) + i * 97 for i in range(max(1, int(config.get("ensemble_seeds", 3))))]
     final_epochs = max(1, int(config.get("epochs", 8)))
     split_predictions: dict[str, list[np.ndarray]] = {"train": [], "valid": [], "test": []}
     histories = []
     for index, seed in enumerate(seeds):
-        progress(progress_path, "lstm_ensemble", .40 + .32 * index / len(seeds), f"训练深度集成 seed {index + 1}/{len(seeds)}", seed=seed)
+        progress(progress_path, f"{recurrent_cell}_ensemble", .40 + .32 * index / len(seeds), f"训练深度集成 seed {index + 1}/{len(seeds)}", seed=seed)
         model, _, history = fit_one(best_hp, seed, final_epochs, f"seed-{seed}")
         histories.append({"seed": seed, "history": history})
         model.eval()
@@ -1180,21 +1502,53 @@ def run_lstm(panel: Panel, config: dict[str, Any], progress_path: Path | None) -
     trials = n_trials + len(seeds)
     metrics["test"].update(deflated_sharpe_proxy(metrics["test"]["sharpe"], metrics["test"]["observations"], trials))
     gates = gate_results(metrics, trials)
+    recurrent_label = "GRU" if recurrent_cell == "gru" else "LSTM"
+    recurrent_component = "gated_recurrent_unit" if recurrent_cell == "gru" else "projected_lstm"
     return {
-        "engine": "lstm", "engine_version": ENGINE_VERSION, "device": str(device),
+        "engine": recurrent_cell, "engine_version": ENGINE_VERSION, "device": str(device),
         "architecture": {
-            "name": "PIT-Masked Causal Mixture Residual LSTM",
-            "components": ["domain_variable_router", "multi_scale_causal_depthwise_conv", "projected_lstm", "causal_transformer_attention", "regime_mixture_of_experts", "multi_horizon_gaussian_quantile_heads"],
+            "name": f"PIT-Masked Causal Mixture Residual {recurrent_label}",
+            "components": ["domain_variable_router", "multi_scale_causal_depthwise_conv", recurrent_component, "causal_transformer_attention", "regime_mixture_of_experts", "multi_horizon_gaussian_quantile_heads", "train_only_time_feature_perturbation", "weak_fold_ic_early_stopping"],
             "best_hyperparameters": best_hp, "parameter_count_policy": "recorded_at_runtime",
         },
         "search": {"method": "purged_successive_halving", "candidates": candidates, "seeds": seeds, "trial_count": trials},
-        "loss": {"rank": .34, "huber": .24, "heteroscedastic_nll": .14, "sign": .08, "turnover": .08, "exposure": .08, "router_balance": .04},
+        "loss": {"rank": .34, "huber": .24, "heteroscedastic_nll": .14, "sign": .08, "turnover": .08, "exposure": .08, "router_balance": .04, "selection": "mean_valid_ic + weakest_fold_ic + positive_ratio - volatility - train_valid_gap"},
         "metrics": metrics, "predictions": predictions, "gates": gates, "training_history": histories,
         "scaler_hash": hashlib.sha256(np.asarray(scaler).tobytes()).hexdigest(),
     }
 
 
-UNARY_TOKENS = ["NEG", "ABS", "SLOG", "CS_RANK", "TS_Z20", "DELTA5", "DECAY10"]
+
+def run_gru(panel: Panel, config: dict[str, Any], progress_path: Path | None) -> dict[str, Any]:
+    gru_config = dict(config)
+    gru_config["engine"] = "gru"
+    gru_config["recurrent_cell"] = "gru"
+    # GRU is kept as a lighter, faster medium-horizon challenger instead of a
+    # parameter-identical LSTM clone. Explicit user/runtime values still win
+    # through the backend preset, while direct worker invocations get a sane
+    # short-path profile.
+    gru_config.setdefault("sequence_length", 120)
+    gru_config.setdefault("hidden_dim", 96)
+    gru_config.setdefault("gru_layers", 2)
+    gru_config.setdefault("attention_layers", 2)
+    gru_config.setdefault("heads", 4)
+    gru_config.setdefault("experts", 4)
+    gru_config.setdefault("dropout", 0.22)
+    gru_config.setdefault("patience", 5)
+    result = run_lstm(panel, gru_config, progress_path)
+    result.setdefault("model_board", {})
+    result["model_board"].update({
+        "模型定位": "GRU 中短周期路径因子挖掘器",
+        "核心区别": "更新门/重置门替代 LSTM 的输入门/遗忘门/输出门，参数更少，更适合中短期量价和资金路径",
+        "正式状态": "已拥有独立 engine 输出；晋级仍需训练/验证选择与测试一次性报告通过",
+    })
+    return result
+
+
+UNARY_TOKENS = [
+    "NEG", "ABS", "SLOG", "CS_RANK",
+    "TS_Z20", "TS_Z60", "DELTA5", "DELTA20", "DECAY10", "DECAY20",
+]
 BINARY_TOKENS = ["ADD", "SUB", "MUL", "DIV"]
 
 
@@ -1204,12 +1558,16 @@ def cross_rank(frame: pd.DataFrame, values: pd.Series) -> pd.Series:
 
 def time_op(frame: pd.DataFrame, values: pd.Series, op: str) -> pd.Series:
     g = values.groupby(frame["ts_code"])
-    if op == "TS_Z20":
-        mean = g.rolling(20, min_periods=12).mean().reset_index(level=0, drop=True)
-        std = g.rolling(20, min_periods=12).std().reset_index(level=0, drop=True)
+    if op in {"TS_Z20", "TS_Z60"}:
+        window = 20 if op == "TS_Z20" else 60
+        min_periods = 12 if window == 20 else 36
+        mean = g.rolling(window, min_periods=min_periods).mean().reset_index(level=0, drop=True)
+        std = g.rolling(window, min_periods=min_periods).std().reset_index(level=0, drop=True)
         return (values - mean) / std.replace(0, np.nan)
     if op == "DELTA5": return values - g.shift(5)
+    if op == "DELTA20": return values - g.shift(20)
     if op == "DECAY10": return g.rolling(10, min_periods=6).mean().reset_index(level=0, drop=True)
+    if op == "DECAY20": return g.rolling(20, min_periods=12).mean().reset_index(level=0, drop=True)
     raise ValueError(op)
 
 
@@ -1245,6 +1603,31 @@ def formula_complexity(tokens: list[str]) -> float:
     return len(tokens) + 1.5 * sum(x in UNARY_TOKENS for x in tokens) + 2.0 * sum(x in BINARY_TOKENS for x in tokens)
 
 
+def formula_ic_stability(raw_ic: pd.Series) -> dict[str, float]:
+    values = pd.to_numeric(raw_ic, errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+    if values.empty:
+        return {
+            "fold_count": 0.0,
+            "weakest_fold_rank_ic": 0.0,
+            "median_fold_rank_ic": 0.0,
+            "ic_positive_ratio": 0.0,
+            "ic_stability_gap": 1.0,
+        }
+    fold_count = max(1, min(4, len(values)))
+    folds = np.array_split(values.to_numpy(float), fold_count)
+    fold_means = [finite(np.mean(fold)) for fold in folds if len(fold)]
+    weakest = min(fold_means) if fold_means else 0.0
+    median = float(np.median(fold_means)) if fold_means else 0.0
+    gap = max(fold_means) - min(fold_means) if len(fold_means) > 1 else 0.0
+    return {
+        "fold_count": float(len(fold_means)),
+        "weakest_fold_rank_ic": finite(weakest),
+        "median_fold_rank_ic": finite(median),
+        "ic_positive_ratio": finite(float((values > 0).mean())),
+        "ic_stability_gap": finite(gap),
+    }
+
+
 def formula_reward(frame: pd.DataFrame, tokens: list[str], target: str, cost_bps: float, fidelity: float = 1.0) -> tuple[float, dict[str, Any]]:
     try:
         values = evaluate_postfix(frame, tokens)
@@ -1261,6 +1644,7 @@ def formula_reward(frame: pd.DataFrame, tokens: list[str], target: str, cost_bps
     if coverage < .55:
         return -.8 + .2 * coverage, {"coverage": coverage, "invalid": True}
     raw_ic = work.groupby("trade_date").apply(lambda g: safe_corr(rankdata(g.score.to_numpy()), rankdata(g[target].to_numpy())), include_groups=False)
+    stability = formula_ic_stability(raw_ic)
     dates = sorted(work.trade_date.unique())
     cut = dates[len(dates) // 2] if dates else ""
     early = finite(raw_ic[raw_ic.index <= cut].mean()) if len(raw_ic) else 0.0
@@ -1279,8 +1663,27 @@ def formula_reward(frame: pd.DataFrame, tokens: list[str], target: str, cost_bps
     turnover = bt["turnover"]
     redundancy = max(abs(safe_corr(work.score.to_numpy(), work.ret_20.to_numpy())), abs(safe_corr(work.score.to_numpy(), work.value_bp.to_numpy())))
     weakest = min(early, late)
-    reward = 8.0 * weakest + 5.0 * finite(residual_ic) + .20 * bt["sharpe"] - .18 * turnover - .22 * redundancy - .008 * formula_complexity(tokens)
-    detail = {"early_rank_ic": early, "late_rank_ic": late, "residual_rank_ic": finite(residual_ic), "coverage": coverage, "turnover": turnover, "max_correlation": redundancy, "valid_sharpe": bt["sharpe"], "reward": finite(reward), "invalid": False}
+    drawdown_excess = max(0.0, abs(min(0.0, finite(bt.get("max_drawdown")))) - 0.18)
+    reward = (
+        7.5 * weakest
+        + 2.5 * stability["weakest_fold_rank_ic"]
+        + 4.5 * finite(residual_ic)
+        + .18 * bt["sharpe"]
+        + .32 * stability["ic_positive_ratio"]
+        - .20 * turnover
+        - .25 * redundancy
+        - .40 * stability["ic_stability_gap"]
+        - .75 * drawdown_excess
+        - .010 * formula_complexity(tokens)
+    )
+    detail = {
+        "early_rank_ic": early, "late_rank_ic": late,
+        "residual_rank_ic": finite(residual_ic), "coverage": coverage,
+        "turnover": turnover, "max_correlation": redundancy,
+        "valid_sharpe": bt["sharpe"], "max_drawdown": bt.get("max_drawdown"),
+        "reward": finite(reward), "invalid": False,
+        **stability,
+    }
     return finite(reward), detail
 
 
@@ -1435,11 +1838,125 @@ def run_rl_transformer(panel: Panel, config: dict[str, Any], progress_path: Path
         "gates": gate_results(metrics, trials), "test_used_for_search": False,
     }
 
+def purged_expanding_oof_predictions(
+    model: Any,
+    features: np.ndarray,
+    target: np.ndarray,
+    dates: np.ndarray,
+    transform: Any,
+    horizon: int,
+    max_samples: int,
+    folds: int = 4,
+    initial_fraction: float = 0.40,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    """Create purged chronological predictions for development evaluation."""
+
+    from sklearn.base import clone
+
+    x = np.asarray(features)
+    y = np.asarray(target, dtype=float)
+    date_strings = np.asarray(dates).astype(str)
+    if not (len(x) == len(y) == len(date_strings)):
+        raise ValueError("oof_input_length_mismatch")
+    predictions = np.full(len(y), np.nan, dtype=float)
+    unique_dates = np.unique(date_strings)
+    date_positions = np.searchsorted(unique_dates, date_strings)
+    horizon = max(1, int(horizon))
+    folds = max(2, int(folds))
+    initial_date_count = max(
+        horizon + 2,
+        int(math.ceil(len(unique_dates) * float(initial_fraction))),
+    )
+    diagnostics: dict[str, Any] = {
+        "method": "purged_expanding_window_oof",
+        "uses_in_sample_prediction": False,
+        "purge_trading_dates": horizon,
+        "requested_folds": folds,
+        "initial_calibration_date_count": initial_date_count,
+        "total_date_count": int(len(unique_dates)),
+        "folds": [],
+    }
+    if initial_date_count >= len(unique_dates):
+        diagnostics.update({
+            "status": "insufficient_dates",
+            "predicted_date_count": 0,
+            "prediction_coverage": 0.0,
+        })
+        return predictions, diagnostics
+    boundaries = np.unique(
+        np.linspace(initial_date_count, len(unique_dates), folds + 1).astype(int)
+    )
+    for prediction_start, prediction_end in zip(boundaries[:-1], boundaries[1:]):
+        training_end = int(prediction_start) - horizon
+        train_mask = date_positions < training_end
+        prediction_mask = (
+            (date_positions >= int(prediction_start))
+            & (date_positions < int(prediction_end))
+        )
+        fit_x = x[train_mask]
+        fit_y = y[train_mask]
+        if len(fit_x) == 0 or not np.any(prediction_mask):
+            continue
+        if len(fit_x) > max_samples:
+            sample_index = np.linspace(
+                0, len(fit_x) - 1, max_samples
+            ).astype(int)
+            fit_x, fit_y = fit_x[sample_index], fit_y[sample_index]
+        fold_model = clone(model)
+        fold_model.fit(transform(fit_x), fit_y)
+        predictions[prediction_mask] = fold_model.predict(
+            transform(x[prediction_mask])
+        )
+        diagnostics["folds"].append({
+            "training_end": str(unique_dates[training_end - 1]),
+            "prediction_start": str(unique_dates[prediction_start]),
+            "prediction_end": str(unique_dates[prediction_end - 1]),
+            "training_rows": int(len(fit_y)),
+            "prediction_rows": int(np.sum(prediction_mask)),
+        })
+    predicted_date_count = int(
+        len(np.unique(date_strings[np.isfinite(predictions)]))
+    )
+    diagnostics.update({
+        "status": "ready" if predicted_date_count else "insufficient_dates",
+        "predicted_date_count": predicted_date_count,
+        "prediction_coverage": finite(
+            predicted_date_count / max(1, len(unique_dates))
+        ),
+    })
+    return predictions, diagnostics
+
+
+def robust_development_score(candidate: dict[str, Any]) -> float:
+    """Non-compensatory train-OOF/validation score; test is never inspected."""
+
+    train = candidate.get("train") or {}
+    valid = candidate.get("valid") or {}
+    train_sharpe = finite(train.get("sharpe"))
+    valid_sharpe = finite(valid.get("sharpe"))
+    if (
+        train_sharpe <= 0.0
+        or valid_sharpe <= 0.0
+        or finite(train.get("rank_ic")) <= 0.0
+        or finite(valid.get("rank_ic")) <= 0.0
+        or finite(valid.get("hit_rate")) <= 0.50
+    ):
+        return -math.inf
+    return finite(
+        2.0 * train_sharpe * valid_sharpe / (train_sharpe + valid_sharpe)
+    )
+
+
+
+
 
 def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | None) -> dict[str, Any]:
     from sklearn.linear_model import ElasticNet, LinearRegression, Lasso, Ridge
     from sklearn.neural_network import MLPRegressor
-    from adaptive_icir import causal_rolling_icir_scores
+    try:
+        from adaptive_icir import causal_rolling_icir_scores
+    except ImportError:
+        from model.factor_laboratory.adaptive_icir import causal_rolling_icir_scores
     values, _, _ = normalise_panel(panel)
     ranked_values = cross_sectional_rank_features(panel)
     horizon_i = 0
@@ -1454,14 +1971,30 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
         return x[mask], target, y[mask], date[mask], asset[mask]
     base_data = {split: flat(split, values) for split in ("train", "valid", "test")}
     rank_data = {split: flat(split, ranked_values, rank_target=True) for split in ("train", "valid", "test")}
+    domain_timed_feature_indices = [
+        index for index, name in enumerate(panel.feature_names)
+        if str(name).startswith("factor_timing_") or str(name).startswith("factor_domain_")
+    ]
+    adaptive_ranked_values = ranked_values
+    adaptive_feature_scope = "all_features"
+    if domain_timed_feature_indices and bool(config.get("domain_timing_isolate_adaptive_base", True)):
+        adaptive_base_indices = [
+            index for index in range(len(panel.feature_names))
+            if index not in set(domain_timed_feature_indices)
+        ]
+        if adaptive_base_indices:
+            adaptive_ranked_values = ranked_values[:, :, adaptive_base_indices]
+            adaptive_feature_scope = "base_without_domain_timed_features"
     adaptive_score_panel, adaptive_icir_report = causal_rolling_icir_scores(
-        ranked_values,
+        adaptive_ranked_values,
         panel.targets[:, :, horizon_i],
         panel.valid,
         panel.horizons[horizon_i],
         lookback_periods=48,
         min_periods=12,
     )
+    adaptive_icir_report["feature_scope"] = adaptive_feature_scope
+    adaptive_icir_report["domain_timed_feature_count_excluded_from_base"] = len(domain_timed_feature_indices) if adaptive_feature_scope == "base_without_domain_timed_features" else 0
     feature_index = {
         name: index for index, name in enumerate(panel.feature_names)
     }
@@ -1474,7 +2007,9 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
         for members in DOMAINS.values()
     ]
     domain_indices = [indices for indices in domain_indices if indices]
-    legacy_indices = [feature_index[name] for name in LEGACY_FEATURES]
+    core_indices = [feature_index[name] for name in FEATURES if name in feature_index]
+    legacy_indices = [feature_index[name] for name in LEGACY_FEATURES if name in feature_index]
+    external_feature_count = max(0, len(panel.feature_names) - len(core_indices))
 
     def domain_projection(values_: np.ndarray) -> np.ndarray:
         return np.column_stack([
@@ -1484,14 +2019,22 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
 
     max_samples = int(config.get("max_training_samples", 240000))
     models = {
-        "incumbent_ols": {"model": LinearRegression(), "data": base_data, "projection": False, "neutralize": False, "feature_indices": legacy_indices},
-        "ols": {"model": LinearRegression(), "data": base_data, "projection": False, "neutralize": False},
-        "lasso": {"model": Lasso(alpha=float(config.get("lasso_alpha", 2e-5)), max_iter=10000, selection="cyclic"), "data": base_data, "projection": False, "neutralize": False},
-        "domain_ridge": {"model": Ridge(alpha=1.0), "data": base_data, "projection": True, "neutralize": False},
-        "cs_ridge_neutral": {"model": Ridge(alpha=10.0), "data": rank_data, "projection": False, "neutralize": True},
-        "cs_elastic_neutral": {"model": ElasticNet(alpha=1e-4, l1_ratio=0.15, max_iter=10000), "data": rank_data, "projection": False, "neutralize": True},
-        "deep_mlp": {"model": MLPRegressor(hidden_layer_sizes=(256, 128, 64), activation="relu", alpha=1e-4, batch_size=1024, learning_rate_init=3e-4, max_iter=int(config.get("epochs", 20)), early_stopping=True, validation_fraction=.15, n_iter_no_change=5, random_state=int(config.get("seed", 20260720))), "data": base_data, "projection": False, "neutralize": False},
+        "incumbent_ols": {"model": LinearRegression(), "data": base_data, "projection": False, "neutralize": False, "feature_indices": legacy_indices, "feature_scope": "legacy_21"},
+        "ols": {"model": LinearRegression(), "data": base_data, "projection": False, "neutralize": False, "feature_indices": core_indices, "feature_scope": "core_29"},
+        "lasso": {"model": Lasso(alpha=float(config.get("lasso_alpha", 2e-5)), max_iter=10000, selection="cyclic"), "data": base_data, "projection": False, "neutralize": False, "feature_scope": "screened_unified" if external_feature_count else "core_29"},
+        "domain_ridge": {"model": Ridge(alpha=1.0), "data": base_data, "projection": True, "neutralize": False, "feature_scope": "economic_domain_core"},
+        "cs_ridge_neutral": {"model": Ridge(alpha=10.0), "data": rank_data, "projection": False, "neutralize": True, "feature_scope": "screened_unified" if external_feature_count else "core_29"},
+        "cs_elastic_neutral": {"model": ElasticNet(alpha=1e-4, l1_ratio=0.15, max_iter=10000), "data": rank_data, "projection": False, "neutralize": True, "feature_scope": "screened_unified" if external_feature_count else "core_29"},
+        "deep_mlp": {"model": MLPRegressor(hidden_layer_sizes=(256, 128, 64), activation="relu", alpha=1e-4, batch_size=1024, learning_rate_init=3e-4, max_iter=int(config.get("epochs", 20)), early_stopping=True, validation_fraction=.15, n_iter_no_change=5, random_state=int(config.get("seed", 20260720))), "data": base_data, "projection": False, "neutralize": False, "feature_scope": "screened_unified" if external_feature_count else "core_29"},
     }
+    if external_feature_count:
+        models["screened_ols"] = {
+            "model": LinearRegression(),
+            "data": base_data,
+            "projection": False,
+            "neutralize": False,
+            "feature_scope": "screened_unified",
+        }
     result = {}
     prediction = {}
     execution_candidates = {}
@@ -1525,6 +2068,15 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
             "selection_buffer": 0.0,
             "portfolio_construction": "continuous_rank",
         },
+        "continuous_rank_reliability_adjusted_volatility_budget": {
+            "risk_budget": {
+                "name": "robust_fast_slow_volatility_budget",
+                "target_volatility": float(config.get("strategy_target_volatility", 0.18)),
+            },
+            "selection_buffer": 0.0,
+            "portfolio_construction": "continuous_rank",
+            "causal_signal_reliability": True,
+        },
     }
     cost_aware_policy_name = "continuous_rank_cost_aware_volatility_budget"
     cost = float(config.get("cost_bps", 15))
@@ -1534,7 +2086,11 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
     ].drop_duplicates(["trade_date", "ts_code"])
     risk_lookup = lookup[["trade_date", "ts_code", "vol_20"]]
     for i, (name, model_spec) in enumerate(models.items()):
-        progress(progress_path, "strategy", .25 + i * .18, f"训练统一策略模型：{name}")
+        model_progress = .25 + .30 * i / max(1, len(models) - 1)
+        progress(
+            progress_path, "strategy", model_progress,
+            f"训练时序样本外策略模型：{name}",
+        )
         model = model_spec["model"]
         data = model_spec["data"]
         xtr, ytr, realized_train, dtr, atr = data["train"]
@@ -1551,9 +2107,18 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
             transform = domain_projection
         else:
             transform = lambda matrix: matrix
+        train_oof_prediction, oof_diagnostics = (
+            purged_expanding_oof_predictions(
+                model, xtr, ytr, dtr, transform, horizon, max_samples,
+                folds=int(config.get("development_oof_folds", 4)),
+                initial_fraction=float(
+                    config.get("development_initial_fraction", 0.40)
+                ),
+            )
+        )
         model.fit(transform(fit_x), fit_y)
         prediction[name] = {
-            "train": model.predict(transform(xtr)),
+            "train": train_oof_prediction,
             "valid": model.predict(transform(xv)),
             "test": model.predict(transform(xt)),
         }
@@ -1561,10 +2126,16 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
             for split_name, dates, assets in (
                 ("train", dtr, atr), ("valid", dv, av), ("test", dt, at)
             ):
+                missing_score = ~np.isfinite(prediction[name][split_name])
                 meta = pd.DataFrame({"trade_date": dates, "ts_code": assets, "score": prediction[name][split_name]})
                 meta = meta.merge(lookup, how="left", on=["trade_date", "ts_code"], validate="many_to_one")
                 prediction[name][split_name] = neutralize_cross_sectional_scores(meta)
-        result[name] = {}
+                prediction[name][split_name][missing_score] = np.nan
+        result[name] = {
+            "development_evaluation": oof_diagnostics,
+            "feature_scope": model_spec.get("feature_scope", "screened_unified"),
+            "input_feature_count": int(transform(fit_x[:1]).shape[1]) if len(fit_x) else 0,
+        }
         split_inputs = (
             ("train", dtr, atr, realized_train),
             ("valid", dv, av, realized_valid),
@@ -1601,6 +2172,7 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
                     risk_budget=execution_policy["risk_budget"],
                     selection_buffer=execution_policy["selection_buffer"],
                     portfolio_construction=execution_policy["portfolio_construction"],
+                    causal_signal_reliability=bool(execution_policy.get("causal_signal_reliability", False)),
                 )
     adaptive_name = "adaptive_icir_12m_neutral"
     models[adaptive_name] = {"adaptive": True}
@@ -1664,6 +2236,7 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
                     risk_budget=policy["risk_budget"],
                     selection_buffer=policy["selection_buffer"],
                     portfolio_construction=policy["portfolio_construction"],
+                    causal_signal_reliability=bool(policy.get("causal_signal_reliability", False)),
                 )
             )
     adaptive_train_dates, adaptive_train_assets, adaptive_train_realized = (
@@ -1831,16 +2404,212 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
                 risk_budget=policy["risk_budget"],
                 selection_buffer=policy["selection_buffer"],
                 portfolio_construction=policy["portfolio_construction"],
+                causal_signal_reliability=bool(policy.get("causal_signal_reliability", False)),
             )
-    best_id = max(
+    if domain_timed_feature_indices and bool(config.get("enable_domain_timing_overlay_candidates", True)):
+        overlay_name = "domain_timing_overlay"
+        models[overlay_name] = {
+            "domain_timing_overlay": True,
+            "components": [panel.feature_names[index] for index in domain_timed_feature_indices],
+            "method": "equal cross-sectional rank ensemble of accepted domain/timing composite features",
+        }
+        result[overlay_name] = {
+            "method": "accepted domain/timing composite features are ranked, averaged, and industry-size neutralized",
+            "component_features": [panel.feature_names[index] for index in domain_timed_feature_indices],
+            "test_usage": "never_used_for_overlay_construction_or_candidate_selection",
+        }
+        prediction[overlay_name] = {}
+        for split_name, (dates, assets, realized) in adaptive_inputs.items():
+            start, end = panel.split[split_name]
+            raw_target = panel.targets[start:end, :, horizon_i].reshape(-1)
+            valid_mask = np.isfinite(raw_target) & panel.valid[start:end].reshape(-1)
+            domain_matrix = ranked_values[start:end, :, :].reshape(-1, len(panel.feature_names))[valid_mask][:, domain_timed_feature_indices]
+            with np.errstate(invalid="ignore"):
+                overlay_score = np.nanmean(domain_matrix, axis=1)
+            meta = pd.DataFrame({"trade_date": dates, "ts_code": assets, "score": overlay_score})
+            meta = meta.merge(lookup, how="left", on=["trade_date", "ts_code"], validate="many_to_one")
+            neutral_score = neutralize_cross_sectional_scores(meta)
+            prediction[overlay_name][split_name] = neutral_score
+            frame = pd.DataFrame({"trade_date": dates, "ts_code": assets, "score": neutral_score, "target": realized})
+            result[overlay_name][split_name] = backtest_cross_section(frame, "score", "target", cost, horizon)
+        for policy_name, policy in execution_policies.items():
+            candidate_id = f"{overlay_name}::{policy_name}"
+            execution_candidates[candidate_id] = {"model": overlay_name, "execution_policy": policy_name}
+            for split_name, (dates, assets, realized) in adaptive_inputs.items():
+                frame = pd.DataFrame({"trade_date": dates, "ts_code": assets, "score": prediction[overlay_name][split_name], "target": realized})
+                execution_candidates[candidate_id][split_name] = backtest_cross_section(
+                    frame, "score", "target", cost, horizon,
+                    risk_budget=policy["risk_budget"],
+                    selection_buffer=policy["selection_buffer"],
+                    portfolio_construction=policy["portfolio_construction"],
+                    causal_signal_reliability=bool(policy.get("causal_signal_reliability", False)),
+                )
+        if bool(config.get("enable_domain_timing_residual_overlay_candidates", True)):
+            residual_overlay_name = "domain_timing_residual_overlay"
+            models[residual_overlay_name] = {
+                "domain_timing_residual_overlay": True,
+                "components": [overlay_name, hybrid_name],
+                "method": "accepted domain/timing overlay residualized cross-sectionally against the champion anchor, size, and industry",
+            }
+            result[residual_overlay_name] = {
+                "method": "orthogonalized domain/timing residual overlay; keeps only incremental information unexplained by the champion anchor",
+                "components": [overlay_name, hybrid_name],
+                "component_features": [panel.feature_names[index] for index in domain_timed_feature_indices],
+                "test_usage": "never_used_for_residualization_or_candidate_selection",
+            }
+            prediction[residual_overlay_name] = {}
+            for split_name, (dates, assets, realized) in adaptive_inputs.items():
+                meta = pd.DataFrame({
+                    "trade_date": dates,
+                    "ts_code": assets,
+                    "score": prediction[overlay_name][split_name],
+                    "anchor_score": prediction[hybrid_name][split_name],
+                })
+                meta = meta.merge(lookup, how="left", on=["trade_date", "ts_code"], validate="many_to_one")
+                residual_score = residualize_cross_sectional_scores_against_anchor(meta)
+                prediction[residual_overlay_name][split_name] = residual_score
+                frame = pd.DataFrame({"trade_date": dates, "ts_code": assets, "score": residual_score, "target": realized})
+                result[residual_overlay_name][split_name] = backtest_cross_section(frame, "score", "target", cost, horizon)
+            for policy_name, policy in execution_policies.items():
+                candidate_id = f"{residual_overlay_name}::{policy_name}"
+                execution_candidates[candidate_id] = {"model": residual_overlay_name, "execution_policy": policy_name}
+                for split_name, (dates, assets, realized) in adaptive_inputs.items():
+                    frame = pd.DataFrame({"trade_date": dates, "ts_code": assets, "score": prediction[residual_overlay_name][split_name], "target": realized})
+                    execution_candidates[candidate_id][split_name] = backtest_cross_section(
+                        frame, "score", "target", cost, horizon,
+                        risk_budget=policy["risk_budget"],
+                        selection_buffer=policy["selection_buffer"],
+                        portfolio_construction=policy["portfolio_construction"],
+                        causal_signal_reliability=bool(policy.get("causal_signal_reliability", False)),
+                    )
+            for blend_name, overlay_weight in (
+                ("domain_timing_anchor_residual_blend_98_02", 0.02),
+                ("domain_timing_anchor_residual_blend_95_05", 0.05),
+                ("domain_timing_anchor_residual_blend_90_10", 0.10),
+                ("domain_timing_anchor_residual_blend_85_15", 0.15),
+            ):
+                base_weight = 1.0 - overlay_weight
+                models[blend_name] = {
+                    "fixed_ensemble": True,
+                    "components": [hybrid_name, residual_overlay_name],
+                    "weights": {hybrid_name: base_weight, residual_overlay_name: overlay_weight},
+                    "method": "champion-anchored rank blend with orthogonal domain/timing residual overlay",
+                }
+                result[blend_name] = {
+                    "method": "champion-anchored rank blend with domain/timing residual overlay, then industry-size neutralization",
+                    "weights": {hybrid_name: base_weight, residual_overlay_name: overlay_weight},
+                    "test_usage": "never_used_for_blend_weight_or_candidate_selection",
+                }
+                prediction[blend_name] = {}
+                for split_name, (dates, assets, realized) in adaptive_inputs.items():
+                    ranked_base = _rank_targets_by_date(prediction[hybrid_name][split_name], dates)
+                    ranked_overlay = _rank_targets_by_date(prediction[residual_overlay_name][split_name], dates)
+                    combined = base_weight * ranked_base + overlay_weight * ranked_overlay
+                    meta = pd.DataFrame({"trade_date": dates, "ts_code": assets, "score": combined})
+                    meta = meta.merge(lookup, how="left", on=["trade_date", "ts_code"], validate="many_to_one")
+                    neutral_score = neutralize_cross_sectional_scores(meta)
+                    prediction[blend_name][split_name] = neutral_score
+                    frame = pd.DataFrame({"trade_date": dates, "ts_code": assets, "score": neutral_score, "target": realized})
+                    result[blend_name][split_name] = backtest_cross_section(frame, "score", "target", cost, horizon)
+                for policy_name, policy in execution_policies.items():
+                    candidate_id = f"{blend_name}::{policy_name}"
+                    execution_candidates[candidate_id] = {"model": blend_name, "execution_policy": policy_name}
+                    for split_name, (dates, assets, realized) in adaptive_inputs.items():
+                        frame = pd.DataFrame({"trade_date": dates, "ts_code": assets, "score": prediction[blend_name][split_name], "target": realized})
+                        execution_candidates[candidate_id][split_name] = backtest_cross_section(
+                            frame, "score", "target", cost, horizon,
+                            risk_budget=policy["risk_budget"],
+                            selection_buffer=policy["selection_buffer"],
+                            portfolio_construction=policy["portfolio_construction"],
+                            causal_signal_reliability=bool(policy.get("causal_signal_reliability", False)),
+                        )
+            confirm_name = "domain_timing_anchor_residual_confirmed_90_10"
+            models[confirm_name] = {
+                "fixed_ensemble": True,
+                "components": [hybrid_name, residual_overlay_name],
+                "method": "agreement-gated residual overlay; domain residual is added only when it confirms the anchor direction",
+            }
+            result[confirm_name] = {
+                "method": "champion anchor plus 10% domain/timing residual only where residual and anchor ranks have the same sign",
+                "residual_weight": 0.10,
+                "test_usage": "never_used_for_confirmation_gate_or_candidate_selection",
+            }
+            prediction[confirm_name] = {}
+            for split_name, (dates, assets, realized) in adaptive_inputs.items():
+                ranked_base = _rank_targets_by_date(prediction[hybrid_name][split_name], dates)
+                ranked_overlay = _rank_targets_by_date(prediction[residual_overlay_name][split_name], dates)
+                confirmed_overlay = np.where((ranked_base * ranked_overlay) > 0.0, ranked_overlay, 0.0)
+                combined = ranked_base + 0.10 * confirmed_overlay
+                meta = pd.DataFrame({"trade_date": dates, "ts_code": assets, "score": combined})
+                meta = meta.merge(lookup, how="left", on=["trade_date", "ts_code"], validate="many_to_one")
+                neutral_score = neutralize_cross_sectional_scores(meta)
+                prediction[confirm_name][split_name] = neutral_score
+                frame = pd.DataFrame({"trade_date": dates, "ts_code": assets, "score": neutral_score, "target": realized})
+                result[confirm_name][split_name] = backtest_cross_section(frame, "score", "target", cost, horizon)
+            for policy_name, policy in execution_policies.items():
+                candidate_id = f"{confirm_name}::{policy_name}"
+                execution_candidates[candidate_id] = {"model": confirm_name, "execution_policy": policy_name}
+                for split_name, (dates, assets, realized) in adaptive_inputs.items():
+                    frame = pd.DataFrame({"trade_date": dates, "ts_code": assets, "score": prediction[confirm_name][split_name], "target": realized})
+                    execution_candidates[candidate_id][split_name] = backtest_cross_section(
+                        frame, "score", "target", cost, horizon,
+                        risk_budget=policy["risk_budget"],
+                        selection_buffer=policy["selection_buffer"],
+                        portfolio_construction=policy["portfolio_construction"],
+                        causal_signal_reliability=bool(policy.get("causal_signal_reliability", False)),
+                    )
+        for blend_name, overlay_weight in (
+            ("domain_timing_anchor_blend_90_10", 0.10),
+            ("domain_timing_anchor_blend_80_20", 0.20),
+            ("domain_timing_anchor_blend_70_30", 0.30),
+        ):
+            base_weight = 1.0 - overlay_weight
+            models[blend_name] = {
+                "fixed_ensemble": True,
+                "components": [hybrid_name, overlay_name],
+                "weights": {hybrid_name: base_weight, overlay_name: overlay_weight},
+                "method": "predeclared champion-anchored rank blend with accepted domain/timing overlay",
+            }
+            result[blend_name] = {
+                "method": "predeclared champion-anchored rank blend with accepted domain/timing overlay, then industry-size neutralization",
+                "weights": {hybrid_name: base_weight, overlay_name: overlay_weight},
+                "test_usage": "never_used_for_blend_weight_or_candidate_selection",
+            }
+            prediction[blend_name] = {}
+            for split_name, (dates, assets, realized) in adaptive_inputs.items():
+                # Apply the predeclared blend in rank space, then neutralize.
+                ranked_base = _rank_targets_by_date(prediction[hybrid_name][split_name], dates)
+                ranked_overlay = _rank_targets_by_date(prediction[overlay_name][split_name], dates)
+                combined = base_weight * ranked_base + overlay_weight * ranked_overlay
+                meta = pd.DataFrame({"trade_date": dates, "ts_code": assets, "score": combined})
+                meta = meta.merge(lookup, how="left", on=["trade_date", "ts_code"], validate="many_to_one")
+                neutral_score = neutralize_cross_sectional_scores(meta)
+                prediction[blend_name][split_name] = neutral_score
+                frame = pd.DataFrame({"trade_date": dates, "ts_code": assets, "score": neutral_score, "target": realized})
+                result[blend_name][split_name] = backtest_cross_section(frame, "score", "target", cost, horizon)
+            for policy_name, policy in execution_policies.items():
+                candidate_id = f"{blend_name}::{policy_name}"
+                execution_candidates[candidate_id] = {"model": blend_name, "execution_policy": policy_name}
+                for split_name, (dates, assets, realized) in adaptive_inputs.items():
+                    frame = pd.DataFrame({"trade_date": dates, "ts_code": assets, "score": prediction[blend_name][split_name], "target": realized})
+                    execution_candidates[candidate_id][split_name] = backtest_cross_section(
+                        frame, "score", "target", cost, horizon,
+                        risk_budget=policy["risk_budget"],
+                        selection_buffer=policy["selection_buffer"],
+                        portfolio_construction=policy["portfolio_construction"],
+                        causal_signal_reliability=bool(policy.get("causal_signal_reliability", False)),
+                    )
+    selection_turnover_budget = finite(float(config.get("selection_turnover_budget", 0.65)), 0.65)
+
+    def train_valid_turnover_budget_pass(candidate: dict[str, Any]) -> bool:
+        return (
+            finite(candidate["train"].get("turnover"), 999.0) <= selection_turnover_budget
+            and finite(candidate["valid"].get("turnover"), 999.0) <= selection_turnover_budget
+        )
+
+    best_validation_id = max(
         execution_candidates,
         key=lambda candidate_id: execution_candidates[candidate_id]["valid"]["sharpe"],
-    )
-    best_valid = execution_candidates[best_id]["valid"]
-    best_sharpe = finite(best_valid.get("sharpe"))
-    best_observations = max(3, int(best_valid.get("observations") or 0))
-    one_standard_error = math.sqrt(
-        max(1e-9, 1.0 + 0.5 * best_sharpe * best_sharpe) / best_observations
     )
     complexity_order = {
         "incumbent_ols": 0,
@@ -1848,17 +2617,22 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
         "domain_ridge": 2,
         "adaptive_icir_12m_neutral": 2.5,
         "incumbent_ols_adaptive_icir_rank_ensemble": 2.75,
+        "domain_timing_anchor_residual_blend_98_02": 2.77,
+        "domain_timing_anchor_residual_blend_95_05": 2.78,
+        "domain_timing_anchor_residual_blend_90_10": 2.80,
+        "domain_timing_anchor_residual_confirmed_90_10": 2.81,
+        "domain_timing_anchor_residual_blend_85_15": 2.82,
+        "domain_timing_anchor_blend_90_10": 2.84,
+        "domain_timing_anchor_blend_80_20": 2.86,
+        "domain_timing_anchor_blend_70_30": 2.88,
+        "screened_ols": 2.8,
         "lasso": 3,
+        "domain_timing_overlay": 3.2,
+        "domain_timing_residual_overlay": 3.25,
         "cs_ridge_neutral": 4,
         "cs_elastic_neutral": 5,
         "deep_mlp": 6,
     }
-    eligible = [
-        candidate_id
-        for candidate_id, candidate in execution_candidates.items()
-        if finite(candidate["valid"].get("sharpe")) >= best_sharpe - one_standard_error
-        and finite(candidate["train"].get("sharpe")) > -0.25
-    ]
     def candidate_complexity(candidate_id: str) -> tuple[float, str]:
         candidate = execution_candidates[candidate_id]
         policy_penalty = {
@@ -1869,16 +2643,156 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
             "continuous_rank_cost_aware_volatility_budget": 0.45,
             "continuous_rank_adaptive_cost_aware_volatility_budget": 0.50,
             "continuous_rank_inverse_volatility_budget": 0.40,
+            "continuous_rank_reliability_adjusted_volatility_budget": 0.45,
         }.get(candidate["execution_policy"], 0.50)
-        return complexity_order[candidate["model"]] + policy_penalty, candidate_id
+        return complexity_order.get(candidate["model"], 9.0) + policy_penalty, candidate_id
+    qualified = [
+        candidate_id
+        for candidate_id, candidate in execution_candidates.items()
+        if math.isfinite(robust_development_score(candidate))
+    ]
+    turnover_qualified = [
+        candidate_id for candidate_id in qualified
+        if train_valid_turnover_budget_pass(execution_candidates[candidate_id])
+    ]
+    selection_pool = turnover_qualified or qualified
+    if selection_pool:
+        best_validation_id = max(
+            selection_pool,
+            key=lambda candidate_id: execution_candidates[candidate_id]["valid"]["sharpe"],
+        )
+        best_development_id = max(
+            selection_pool,
+            key=lambda candidate_id: robust_development_score(
+                execution_candidates[candidate_id]
+            ),
+        )
+    else:
+        best_development_id = best_validation_id
+    best_development_candidate = execution_candidates[best_development_id]
+    best_development_score = robust_development_score(
+        best_development_candidate
+    )
+    if not math.isfinite(best_development_score):
+        best_development_score = 0.0
+    best_observations = max(3, min(
+        int(best_development_candidate["train"].get("observations") or 0),
+        int(best_development_candidate["valid"].get("observations") or 0),
+    ))
+    one_standard_error = math.sqrt(
+        max(1e-9, 1.0 + 0.5 * best_development_score ** 2)
+        / best_observations
+    )
+    eligible = [
+        candidate_id for candidate_id in selection_pool
+        if robust_development_score(execution_candidates[candidate_id])
+        >= best_development_score - one_standard_error
+    ]
+    prefer_best_development = bool(config.get("selection_prefer_best_development", True))
+    anchor_id = str(config.get("selection_anchor_candidate_id") or "").strip()
+    anchor_pool = set(eligible or selection_pool or [best_development_id])
+    anchor_selected = False
+    anchor_reasons: list[str] = []
+    if bool(config.get("selection_prefer_anchor_when_eligible", False)) and anchor_id:
+        if anchor_id not in execution_candidates:
+            anchor_reasons.append("anchor_candidate_missing")
+        elif anchor_id not in anchor_pool:
+            anchor_reasons.append("anchor_not_within_one_standard_error_or_selection_pool")
+        elif not math.isfinite(robust_development_score(execution_candidates[anchor_id])):
+            anchor_reasons.append("anchor_failed_train_valid_positive_ic_gate")
+        elif turnover_qualified and anchor_id not in turnover_qualified:
+            anchor_reasons.append("anchor_failed_train_valid_turnover_budget")
+        else:
+            selected_id = anchor_id
+            anchor_selected = True
+    if not anchor_selected:
+        if prefer_best_development:
+            selected_id = best_development_id
+        else:
+            selected_id = min(eligible or [best_development_id], key=candidate_complexity)
+    anchor_guard_applied = False
+    anchor_guard_reasons: list[str] = []
+    anchor_guard_improved_candidates: list[dict[str, Any]] = []
+    if bool(config.get("selection_anchor_no_downgrade_guard", True)) and anchor_id:
+        if anchor_id not in execution_candidates:
+            anchor_guard_reasons.append("anchor_guard_anchor_missing")
+        elif anchor_id not in selection_pool:
+            anchor_guard_reasons.append("anchor_guard_anchor_outside_selection_pool")
+        else:
+            anchor_candidate = execution_candidates[anchor_id]
+            anchor_score = robust_development_score(anchor_candidate)
+            min_valid_sharpe_delta = finite(float(config.get("selection_anchor_min_valid_sharpe_delta", 0.02)), 0.02)
+            min_development_delta = finite(float(config.get("selection_anchor_min_development_delta", 0.02)), 0.02)
+            min_valid_rank_ic_delta = finite(float(config.get("selection_anchor_min_valid_rank_ic_delta", 0.0)), 0.0)
+            min_valid_hit_buffer = finite(float(config.get("selection_anchor_min_valid_hit_buffer", -0.02)), -0.02)
+            anchor_valid_sharpe = finite(anchor_candidate["valid"].get("sharpe"))
+            anchor_valid_rank_ic = finite(anchor_candidate["valid"].get("rank_ic"))
+            anchor_valid_hit = finite(anchor_candidate["valid"].get("hit_rate"))
 
-    selected_id = min(eligible or [best_id], key=candidate_complexity)
+            def passes_anchor_guard(candidate_id: str) -> bool:
+                if candidate_id == anchor_id:
+                    return True
+                candidate = execution_candidates[candidate_id]
+                candidate_score = robust_development_score(candidate)
+                return (
+                    math.isfinite(candidate_score)
+                    and math.isfinite(anchor_score)
+                    and candidate_score >= anchor_score + min_development_delta
+                    and finite(candidate["valid"].get("sharpe")) >= anchor_valid_sharpe + min_valid_sharpe_delta
+                    and finite(candidate["valid"].get("rank_ic")) >= anchor_valid_rank_ic + min_valid_rank_ic_delta
+                    and finite(candidate["valid"].get("hit_rate")) >= anchor_valid_hit + min_valid_hit_buffer
+                )
+
+            anchor_guard_pool = [
+                candidate_id for candidate_id in selection_pool
+                if candidate_id != anchor_id and passes_anchor_guard(candidate_id)
+            ]
+            anchor_guard_improved_candidates = sorted(
+                (
+                    {
+                        "candidate": candidate_id,
+                        "development_score": robust_development_score(execution_candidates[candidate_id]),
+                        "valid_sharpe": finite(execution_candidates[candidate_id]["valid"].get("sharpe")),
+                        "valid_rank_ic": finite(execution_candidates[candidate_id]["valid"].get("rank_ic")),
+                        "valid_hit_rate": finite(execution_candidates[candidate_id]["valid"].get("hit_rate")),
+                    }
+                    for candidate_id in anchor_guard_pool
+                ),
+                key=lambda row: (row["development_score"], row["valid_sharpe"], row["valid_rank_ic"]),
+                reverse=True,
+            )[:8]
+            if anchor_guard_pool:
+                guard_best_score = max(
+                    robust_development_score(execution_candidates[candidate_id])
+                    for candidate_id in anchor_guard_pool
+                )
+                guard_eligible = [
+                    candidate_id for candidate_id in anchor_guard_pool
+                    if robust_development_score(execution_candidates[candidate_id])
+                    >= guard_best_score - one_standard_error
+                ]
+                if bool(config.get("selection_anchor_guard_prefer_simplest_within_one_se", True)):
+                    selected_id = min(guard_eligible or anchor_guard_pool, key=candidate_complexity)
+                    anchor_guard_reasons.append("selected_simplest_anchor_guard_candidate_within_one_standard_error")
+                else:
+                    selected_id = max(
+                        anchor_guard_pool,
+                        key=lambda candidate_id: robust_development_score(execution_candidates[candidate_id]),
+                    )
+                    anchor_guard_reasons.append("selected_best_anchor_guard_candidate")
+                anchor_guard_reasons.append("selected_candidate_passed_anchor_train_valid_guard")
+            elif selected_id != anchor_id:
+                selected_id = anchor_id
+                anchor_selected = True
+                anchor_guard_applied = True
+                anchor_guard_reasons.append("fallback_to_anchor_no_train_valid_dominant_candidate")
     selected_candidate = execution_candidates[selected_id]
     selected = selected_candidate["model"]
     selected_policy = selected_candidate["execution_policy"]
     positive_ic_candidates = sorted(
         (
             {
+                "development_score": robust_development_score(candidate),
                 "candidate": candidate_id,
                 "train_sharpe": finite(candidate["train"].get("sharpe")),
                 "valid_sharpe": finite(candidate["valid"].get("sharpe")),
@@ -1889,9 +2803,9 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
             for candidate_id, candidate in execution_candidates.items()
             if finite(candidate["train"].get("rank_ic")) > 0.0
             and finite(candidate["valid"].get("rank_ic")) > 0.0
-            and finite(candidate["train"].get("sharpe")) > -0.25
+            and math.isfinite(robust_development_score(candidate))
         ),
-        key=lambda row: (row["valid_sharpe"], row["valid_rank_ic"]),
+        key=lambda row: (row["development_score"], row["valid_rank_ic"]),
         reverse=True,
     )
     selection_checks = {
@@ -1900,10 +2814,23 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
         "train_rank_ic_positive": finite(selected_candidate["train"].get("rank_ic")) > 0.0,
         "valid_rank_ic_positive": finite(selected_candidate["valid"].get("rank_ic")) > 0.0,
         "valid_ic_hit_rate_above_half": finite(selected_candidate["valid"].get("hit_rate")) > 0.50,
+        "train_turnover_within_budget": finite(selected_candidate["train"].get("turnover"), 999.0) <= selection_turnover_budget,
+        "valid_turnover_within_budget": finite(selected_candidate["valid"].get("turnover"), 999.0) <= selection_turnover_budget,
     }
     selection_quality = {
         "status": "passed" if all(selection_checks.values()) else "conditional",
         "checks": selection_checks,
+        "selection_turnover_budget": selection_turnover_budget,
+        "turnover_constrained_candidate_count": len(turnover_qualified),
+        "turnover_constraint_fallback": not bool(turnover_qualified),
+        "prefer_best_development": prefer_best_development,
+        "one_standard_error_eligible_candidates": len(eligible),
+        "anchor_candidate_id": anchor_id,
+        "anchor_selected": anchor_selected,
+        "anchor_reasons": anchor_reasons,
+        "anchor_guard_applied": anchor_guard_applied,
+        "anchor_guard_reasons": anchor_guard_reasons,
+        "anchor_guard_improved_candidates": anchor_guard_improved_candidates,
         "positive_train_valid_ic_candidates": positive_ic_candidates[:5],
         "decision_basis": "train_and_validation_only",
         "test_usage": "report_only",
@@ -1912,10 +2839,13 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
     result["ensemble"] = {
         "weights": weights,
         "selection_rule": (
-            "joint model and causal execution-policy validation one-standard-error rule "
-            "with lowest-complexity tie break"
+            "purged train-OOF and validation positive-IC harmonic stability, "
+            "train-validation turnover-budget prefilter, then best robust "
+            "development score; one-standard-error remains an audit reference"
         ),
-        "best_validation_candidate": best_id,
+        "best_validation_candidate": best_validation_id,
+        "best_development_candidate": best_development_id,
+        "best_development_score": best_development_score,
         "selected_model": selected,
         "selected_execution_policy": selected_policy,
         "one_standard_error": one_standard_error,
@@ -1941,12 +2871,23 @@ def run_strategy(panel: Panel, config: dict[str, Any], progress_path: Path | Non
         "selection": {
             "selected_model": selected,
             "selected_execution_policy": selected_policy,
-            "best_validation_candidate": best_id,
+            "best_validation_candidate": best_validation_id,
+            "best_development_candidate": best_development_id,
+            "best_development_score": best_development_score,
             "one_standard_error": one_standard_error,
+            "selection_turnover_budget": selection_turnover_budget,
+            "turnover_constrained_candidate_count": len(turnover_qualified),
+            "turnover_constraint_fallback": not bool(turnover_qualified),
+            "prefer_best_development": prefer_best_development,
+            "one_standard_error_eligible_candidates": len(eligible),
+            "anchor_candidate_id": anchor_id,
+            "anchor_selected": anchor_selected,
+            "anchor_reasons": anchor_reasons,
             "complexity_order": complexity_order,
             "adaptive_icir": adaptive_icir_report,
             "selection_quality": selection_quality,
             "test_usage": "report_only",
+            "candidate_count": trials,
         },
         "test_used_for_selection": False,
     }
@@ -1989,6 +2930,7 @@ def run(config: dict[str, Any], progress_path: Path | None = None) -> dict[str, 
     panel = read_panel(config, progress_path)
     engine = str(config.get("engine", "lstm"))
     if engine == "lstm": payload = run_lstm(panel, config, progress_path)
+    elif engine == "gru": payload = run_gru(panel, config, progress_path)
     elif engine == "rl_transformer": payload = run_rl_transformer(panel, config, progress_path)
     elif engine == "strategy": payload = run_strategy(panel, config, progress_path)
     elif engine == "joint_test": payload = run_joint_test(panel, config, progress_path)

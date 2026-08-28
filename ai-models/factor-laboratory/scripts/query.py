@@ -18,6 +18,9 @@ if not os.environ.get("QUANT_AGENT_SNAPSHOT_ROOT"):
 factor_manifest = PACKAGE_ROOT / "source" / "champion_manifest.json"
 if factor_manifest.is_file():
     os.environ.setdefault("QUANT_AGENT_FACTOR_MANIFEST", str(factor_manifest))
+professional_framework = PACKAGE_ROOT / "source" / "professional_framework.json"
+if professional_framework.is_file():
+    os.environ.setdefault("QUANT_AGENT_FACTOR_PROFESSIONAL_FRAMEWORK", str(professional_framework))
 pattern_root = PACKAGE_ROOT / "references" / "kline-patterns"
 if pattern_root.is_dir():
     os.environ.setdefault("QUANT_AGENT_KLINE_PATTERN_ROOT", str(pattern_root))

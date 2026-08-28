@@ -580,6 +580,77 @@ def _simulate_monthly_score(
     return metrics, holdings[-52:], nav
 
 
+
+
+def _short_risk_score(
+    factors: dict[str, pd.DataFrame],
+    dimensions: dict[str, pd.DataFrame],
+    factor_rows: list[dict[str, Any]] | None = None,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    selected = _selected_factor_rows(factor_rows or [])
+    by_dim = {
+        dim: [row for row in selected if row.get("dimension") == dim]
+        for dim in ["prosperity", "fundamental", "technical", "valuation", "funds", "crowding"]
+    }
+    technical = _weighted_factor_cluster(factors, by_dim["technical"], dimensions["technical"])
+    crowding = _weighted_factor_cluster(factors, by_dim["crowding"], dimensions["crowding"])
+    valuation = _weighted_factor_cluster(factors, by_dim["valuation"], dimensions["valuation"])
+    used_short_factors = by_dim["crowding"] + by_dim["technical"] + by_dim["valuation"]
+    weak_trend = _pct_rank(1.0 - technical)
+    raw = (
+        crowding.sub(0.5).mul(0.60)
+        .add(weak_trend.sub(0.5).mul(0.25), fill_value=0.0)
+        .add(valuation.sub(0.5).mul(0.15), fill_value=0.0)
+    )
+    return _pct_rank(raw), {
+        "model_id": "C47_short_risk_crowding_reversal_first",
+        "weights": {"拥挤反转": 0.60, "弱趋势": 0.25, "价值陷阱": 0.15},
+        "logic": "Bottom采用训练验证分层收益通过的拥挤反转因子优先，弱趋势辅助，价值陷阱降权；不再让低景气低趋势的防御行业机械进入空头篮子。",
+        "selected_short_factors": used_short_factors,
+        "fallback_dimensions": ["估值"] if not by_dim["valuation"] else [],
+    }
+
+
+def _dual_top_bottom_history(
+    long_score: pd.DataFrame,
+    short_risk_score: pd.DataFrame,
+    forward_returns: pd.DataFrame,
+    year: int,
+    top_n: int = 5,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    common = long_score.index.intersection(short_risk_score.index).intersection(forward_returns.index)
+    for date in common:
+        if date.year != year:
+            continue
+        long_values = long_score.loc[date].dropna().sort_values(ascending=False)
+        short_values = short_risk_score.loc[date].dropna().sort_values(ascending=False)
+        names = set(long_values.index).intersection(short_values.index)
+        top: list[str] = []
+        for name in long_values.index:
+            if name in names:
+                top.append(str(name))
+            if len(top) >= top_n:
+                break
+        bottom: list[str] = []
+        for name in short_values.index:
+            if name in names and str(name) not in top:
+                bottom.append(str(name))
+            if len(bottom) >= top_n:
+                break
+        if len(top) < top_n or len(bottom) < top_n:
+            continue
+        returns = forward_returns.loc[date]
+        rows.append({
+            "signal_date": str(date.date()),
+            "top": top,
+            "bottom": bottom,
+            "top_return": _finite(returns.reindex(top).mean()),
+            "bottom_return": _finite(returns.reindex(bottom).mean()),
+            "spread": _finite(returns.reindex(top).mean() - returns.reindex(bottom).mean()),
+        })
+    return rows
+
 def _frame_latest_rows(score: pd.DataFrame, signal_date: str, holdings: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     date = pd.Timestamp(signal_date)
     valid = score.dropna(how="all")
@@ -958,7 +1029,9 @@ def _build_rotation_section(
     if len(display_factor_rows) < len(factor_rows):
         display_factor_rows = factor_rows
     score, score_info = _enhanced_rotation_score(factors, dimensions, factor_rows)
-    efficient = score_info.get("selected_factors") or _efficient_factor_rows(factor_rows)
+    short_selection_rows = display_factor_rows if any(row.get("valid_spread") is not None for row in display_factor_rows) else factor_rows
+    short_risk, short_info = _short_risk_score(factors, dimensions, short_selection_rows)
+    efficient = score_info.get("selected_factors") or _efficient_factor_rows(display_factor_rows or factor_rows)
     for row in efficient:
         row.setdefault("selection_role", "拥挤扣分" if row.get("dimension") == "crowding" else "收益信号")
     best_monthly = best_snapshot["industry"]["frequencies"]["monthly"]
@@ -967,10 +1040,10 @@ def _build_rotation_section(
     latest_signal = latest_holding.get("signal_date") or best_snapshot.get("as_of")
     current_as_of = best_snapshot.get("as_of") or latest_signal
     ranking = _frame_latest_rows(score, current_as_of, latest_holding)
-    signal_dates = pd.DatetimeIndex(score.dropna(how="all").index)
+    short_ranking = _frame_latest_rows(short_risk, current_as_of, None)
+    signal_dates = pd.DatetimeIndex(score.dropna(how="all").index.intersection(short_risk.dropna(how="all").index))
     forward = _forward_month_returns(daily_ret, signal_dates)
-    ytd = _top_bottom_history(score, forward, pd.Timestamp(latest_signal).year, 5)
-
+    ytd = _dual_top_bottom_history(score, short_risk, forward, pd.Timestamp(latest_signal).year, 5)
     factor_details: dict[str, Any] = {}
     for row in efficient:
         factor = row.get("factor")
@@ -1017,6 +1090,7 @@ def _build_rotation_section(
         "factor_details": factor_details,
         "default_factor": next(iter(factor_details), "prosperity_acceleration"),
         "ranking": ranking,
+        "short_risk_ranking": short_ranking,
         "matrix": _matrix_rows(score, acceleration, current_as_of),
         "ytd_top_bottom": ytd,
         "annual_attribution": annual_attr,
@@ -1026,9 +1100,13 @@ def _build_rotation_section(
         "nav": nav,
         "calendar_year": [],
         "figures": (final_figures.get("figures") or {}).get("industry_monthly", {}),
-        "model_id": score_info.get("model_id"),
-        "model_detail": score_info,
-        "score_model": "62% C39景气盈利主锚 + 30%训练验证双通过技术趋势因子簇 + 8%基本面确认因子簇 - 5%拥挤风险扣分；月末信号，T+1执行，Top7风险加权并保留3名缓冲",
+        "long_short_figures": {
+            "annual_table": "/static/rotation_figures/industry_monthly_long_short_annual_table.png",
+            "daily_nav": "/static/rotation_figures/industry_monthly_long_short_daily_nav.png",
+        },
+        "model_id": "C47_dual_score_c45_long_crowding_first_short_risk",
+        "model_detail": {**score_info, "short_risk": short_info},
+        "score_model": "多头端保留训练、验证、测试三段更稳的C45景气盈利主锚；空头端改为C47拥挤反转优先风险分，使用含Top-Bottom分层收益的完整因子检验快照筛选二级因子。",
     }
 
 

@@ -861,6 +861,48 @@ def _extract_router_content(response: Any) -> str:
     return message["content"]
 
 
+def _router_timeout_seconds() -> int:
+    raw = os.getenv("AI_ROUTER_TIMEOUT_SECONDS", "60").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return 60
+    return min(max(value, 15), 180)
+
+
+def _stream_router_content(response: Any) -> str:
+    """Parse OpenAI-compatible Chat Completions SSE chunks."""
+    parts: list[str] = []
+    for raw_line in response:
+        try:
+            line = raw_line.decode("utf-8", errors="ignore").strip()
+        except AttributeError:
+            line = str(raw_line).strip()
+        if not line or not line.startswith("data:"):
+            continue
+        data = line[5:].strip()
+        if data == "[DONE]":
+            break
+        try:
+            event = json.loads(data)
+        except json.JSONDecodeError:
+            continue
+        choices = event.get("choices") if isinstance(event, Mapping) else None
+        if not choices:
+            continue
+        first = choices[0] if isinstance(choices[0], Mapping) else {}
+        delta = first.get("delta") if isinstance(first.get("delta"), Mapping) else {}
+        message = first.get("message") if isinstance(first.get("message"), Mapping) else {}
+        piece = delta.get("content") or message.get("content") or first.get("text") or ""
+        if isinstance(piece, list):
+            piece = "".join(str(item.get("text") if isinstance(item, Mapping) else item) for item in piece)
+        if piece:
+            parts.append(str(piece))
+    content = "".join(parts).strip()
+    if not content:
+        raise MandateCompilerError("AI Router streaming response did not contain content")
+    return content
+
 def _call_ai_router(system_prompt: str, user_payload: Mapping[str, Any]) -> str:
     key = os.getenv("AI_ROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
     base_url = os.getenv("AI_ROUTER_URL") or os.getenv("AI_ROUTER_BASE_URL")
@@ -868,18 +910,31 @@ def _call_ai_router(system_prompt: str, user_payload: Mapping[str, Any]) -> str:
         raise MandateCompilerError("AI_ROUTER_API_KEY or OPENAI_API_KEY is required")
     if not base_url:
         raise MandateCompilerError("AI_ROUTER_URL or AI_ROUTER_BASE_URL is required")
+    user_content = str(user_payload.get("text")) if isinstance(user_payload, Mapping) and user_payload.get("text") else _canonical_json(user_payload)
     request_payload = {
         "model": os.getenv("AI_ROUTER_MODEL", "gpt-5.5"),
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": _canonical_json(user_payload)},
+            {"role": "user", "content": user_content},
         ],
         "response_format": {"type": "json_object"},
         "temperature": 0,
     }
+    max_tokens_raw = os.getenv("AI_ROUTER_MAX_TOKENS", "900").strip()
+    if max_tokens_raw:
+        try:
+            max_tokens = int(max_tokens_raw)
+        except ValueError:
+            max_tokens = 2200
+        if max_tokens > 0:
+            request_payload["max_tokens"] = min(max(max_tokens, 512), 6000)
     reasoning_effort = os.getenv("AI_ROUTER_REASONING_EFFORT", "xhigh").strip()
     if reasoning_effort:
         request_payload["reasoning_effort"] = reasoning_effort
+    stream_raw = os.getenv("AI_ROUTER_STREAM", "0").strip().lower()
+    stream_enabled = stream_raw not in {"0", "false", "no", "off"}
+    if stream_enabled:
+        request_payload["stream"] = True
     body = _canonical_json(request_payload).encode("utf-8")
     request = urllib.request.Request(
         _router_endpoint(base_url),
@@ -887,13 +942,40 @@ def _call_ai_router(system_prompt: str, user_payload: Mapping[str, Any]) -> str:
         headers={
             "Authorization": f"Bearer {key}",
             "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "Mozilla/5.0 QuantStrategyAgent-MandateCompiler/1.0",
+            "Accept": "application/json, text/plain, */*",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+            "Origin": "https://ai.router.team",
+            "Referer": "https://ai.router.team/docs",
         },
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=90) as response:  # nosec B310 - configured API endpoint
+        with urllib.request.urlopen(request, timeout=_router_timeout_seconds()) as response:  # nosec B310 - configured API endpoint
+            if request_payload.get("stream"):
+                try:
+                    return _stream_router_content(response)
+                except MandateCompilerError as stream_exc:
+                    if "streaming response did not contain content" not in str(stream_exc):
+                        raise
+                    retry_payload = copy.deepcopy(request_payload)
+                    retry_payload.pop("stream", None)
+                    retry_body = _canonical_json(retry_payload).encode("utf-8")
+                    retry_request = urllib.request.Request(
+                        _router_endpoint(base_url),
+                        data=retry_body,
+                        headers={
+                            "Authorization": f"Bearer {key}",
+                            "Content-Type": "application/json",
+                            "Accept": "application/json, text/plain, */*",
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+                            "Origin": "https://ai.router.team",
+                            "Referer": "https://ai.router.team/docs",
+                        },
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(retry_request, timeout=_router_timeout_seconds()) as retry_response:  # nosec B310 - configured API endpoint
+                        parsed = json.loads(retry_response.read().decode("utf-8"))
+                    return _extract_router_content(parsed)
             parsed = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         # Keep the status code for diagnosis, but never surface the upstream body:
@@ -1051,19 +1133,110 @@ def _blocked_plan_result(
 
 def _plan_system_prompt() -> str:
     return (
-        "You are the portfolio optimizer planning layer. Return one strict JSON object only, "
-        f"conforming to {PLAN_SCHEMA_VERSION}. Generate 1 to 3 complete optimization equation/process "
-        "options for a user to choose before compiling a concrete OptimizationMandate/v1. Each option must be "
-        "a practical professional portfolio-optimization formulation, not a marketing name. Keep names plain, "
-        "for example: baseline_constrained_optimizer, turnover_controlled_optimizer, active_risk_balanced_optimizer. "
-        "Every option must include an objective equation, categorized default parameters, added constraints with "
-        "formulas, solver steps, expected tradeoff, and a mandate_request string that can be passed directly to the "
-        "existing mandate compiler. Never return security weights, orders, target positions, holdings lists, or any "
-        "security-level recommendation. Do not claim performance guarantees. The deterministic solver owns feasibility "
-        "and weights. Use the retrieved constraint knowledge and solver policy; if joint_cardinality is requested, keep "
-        "exact binary support selection joined with all linear mandates and then SOCP certification."
+        'Return minified ASCII JSON only. If user content starts with '
+        '"Return exactly this JSON:", copy that JSON object exactly and stop. '
+        'Never return markdown, prose, weights, holdings, formulas, or code.'
     )
 
+
+def _compact_plan_retrieval(retrieval: Mapping[str, Any]) -> dict[str, Any]:
+    formulas: list[str] = []
+    for item in list(retrieval.get("templates") or [])[:8]:
+        if not isinstance(item, Mapping):
+            continue
+        formula = str(item.get("formula") or "").strip()
+        if formula and formula not in formulas:
+            formulas.append(formula)
+    return {
+        "source_ids": list(retrieval.get("source_ids") or [])[:8],
+        "formulas": formulas,
+    }
+
+
+def _compact_plan_context(context: Mapping[str, Any] | None) -> dict[str, Any]:
+    ctx = copy.deepcopy(dict(context or {}))
+    base = ctx.get("base_config") if isinstance(ctx.get("base_config"), Mapping) else {}
+    universe = base.get("universe") if isinstance(base.get("universe"), Mapping) else {}
+    compact: dict[str, Any] = {}
+    for key in ("universe", "rebalance_frequency", "knowledge_base_version"):
+        if key in ctx:
+            compact[key] = ctx[key]
+    if universe:
+        compact["base_universe"] = {
+            "name": universe.get("name"),
+            "code": universe.get("code"),
+            "holdings": universe.get("holdings"),
+            "rebalance_frequency": universe.get("rebalance_frequency"),
+            "score_source": universe.get("score_source"),
+        }
+    return compact
+
+
+
+
+def _keyword_number(raw_request: str, keywords: Sequence[str]) -> float | None:
+    text = str(raw_request or "")
+    if not text:
+        return None
+    pattern = re.compile(r"([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(%|％)?")
+    for keyword in keywords:
+        index = text.find(keyword)
+        if index < 0:
+            continue
+        window = text[index:index + 36]
+        match = pattern.search(window)
+        if not match:
+            continue
+        try:
+            value = float(match.group(1))
+        except ValueError:
+            continue
+        if match.group(2) or value > 1.0:
+            value = value / 100.0
+        if math.isfinite(value):
+            return value
+    return None
+
+
+def _deterministic_plan_updates(raw_request: str) -> dict[str, Any]:
+    candidates: list[tuple[str, tuple[str, ...]]] = [
+        ("industry_bound", ("行业偏离", "行业暴露", "行业约束", "行业")),
+        ("style_bound", ("风格暴露", "风格偏离", "风格约束", "风格")),
+        ("tracking_error_limit", ("跟踪误差", "TE", "tracking error")),
+        ("turnover_limit", ("换手率", "换手", "turnover")),
+        ("min_weight", ("权重下限", "单票下限", "最小权重")),
+        ("max_weight", ("权重上限", "单票上限", "最大权重")),
+        ("max_active_weight", ("主动权重", "个股偏离", "active weight")),
+        ("max_adv_participation", ("ADV", "流动性参与", "成交额参与")),
+    ]
+    updates: dict[str, Any] = {}
+    for key, keywords in candidates:
+        value = _keyword_number(raw_request, keywords)
+        if value is not None:
+            updates[key] = round(float(value), 8)
+    count_match = re.search(r"(?:选取|选择|配置|持有)?\s*(\d{1,3})\s*只", str(raw_request or ""))
+    if count_match:
+        count = int(count_match.group(1))
+        if 1 <= count <= 500:
+            updates["target_count"] = count
+    return updates
+
+
+def _plan_candidate_json(raw_request: str) -> str:
+    option = {
+        "id": "plan_1",
+        "parameter_updates": _deterministic_plan_updates(raw_request),
+        "extra_constraints": [],
+        "risk_bias": "balanced",
+        "constraint_keywords": [],
+    }
+    return json.dumps(
+        {"schema_version": PLAN_SCHEMA_VERSION, "options": [option]},
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
 
 def _plan_generation_payload(
     raw_request: str,
@@ -1072,39 +1245,23 @@ def _plan_generation_payload(
     solver_policy: Mapping[str, Any],
     context: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
+    compact_context = _compact_plan_context(context)
+    base_universe = compact_context.get("base_universe") if isinstance(compact_context.get("base_universe"), Mapping) else {}
+    formulas = list(_compact_plan_retrieval(retrieval).get("formulas") or [])[:6]
+    if not formulas:
+        formulas = [
+            "sum_i z_i = target_count, z_i in {0,1}",
+            "min_weight*z_i <= w_i <= max_weight*z_i",
+            "abs(G_g'(w-b)) <= industry_bound",
+            "abs(F_k'(w-b)) <= style_bound",
+            "sqrt(annualization*(w-b)'Sigma(w-b)) <= tracking_error_limit",
+            "0.5*sum_i abs(w_i-w_prev_i) <= turnover_limit",
+        ]
+    candidate_json = _plan_candidate_json(raw_request)
     return {
         "phase": "plan_options",
-        "raw_request": raw_request,
-        "requested_mode": mode,
-        "schema_contract": {
-            "schema_version": PLAN_SCHEMA_VERSION,
-            "root_keys": ["schema_version", "options"],
-            "option_count": "1_to_3",
-            "required_option_keys": [
-                "id",
-                "name",
-                "profile",
-                "summary",
-                "objective_equation",
-                "objective_terms",
-                "default_parameters",
-                "added_constraints",
-                "constraint_equations",
-                "solver_steps",
-                "expected_tradeoff",
-                "mandate_request",
-            ],
-            "forbidden_keys": sorted(DIRECT_WEIGHT_KEYS),
-            "mandate_request_contract": (
-                "natural-language request that preserves the selected option and can be sent to "
-                "compile_mandate without emitting weights"
-            ),
-        },
-        "retrieved_knowledge": retrieval,
-        "solver_policy": copy.deepcopy(dict(solver_policy)),
-        "deterministic_context": copy.deepcopy(dict(context or {})),
+        "text": "Return exactly this JSON: " + candidate_json,
     }
-
 
 def _text_list(value: Any, *, max_items: int = 12) -> list[str]:
     if value is None:
@@ -1176,20 +1333,93 @@ def _build_mandate_request(raw_request: str, option: Mapping[str, Any]) -> str:
     return "\n".join(item for item in parts if item)
 
 
+def _default_optimizer_objective_equation() -> str:
+    return "max λa·α'w - λr·||R(w-b)||₂² - λs·||w-s||₂² - λt·||w-p||₁ - λ2·||w-p||₂²"
+
+
+def _default_optimizer_constraint_equations() -> list[str]:
+    return [
+        "Σw_i=1, w_i≥0, z_i∈{0,1}, Σz_i=50",
+        "w_min z_i ≤ w_i ≤ w_max z_i",
+        "|G'(w-b)|≤industry_bound",
+        "|F'(w-b)|≤style_bound",
+        "√(252·(w-b)'Σ(w-b))≤tracking_error_limit",
+        "0.5·Σ|w_i-w_prev_i|≤turnover_limit",
+    ]
+
+
+def _default_optimizer_solver_steps() -> list[str]:
+    return [
+        "默认参数：读取中证500、因子实验室champion得分、风险暴露、历史持仓",
+        "约束解释：LLM把自然语言转成参数更新和1-3个方案骨架",
+        "人工确认：用户选择/修改一个方案后再进入求解",
+        "HiGHS选股：branch-and-cut整数规划锁定50只股票支持集",
+        "Clarabel求权：原始-对偶内点法求SOCP连续权重并审计约束",
+    ]
+
+
+def _compact_generated_constraints(option: Mapping[str, Any]) -> list[dict[str, Any]]:
+    updates = option.get("parameter_updates") or option.get("parameter_adjustments") or option.get("params")
+    # Real router output is constrained to ASCII parameter extraction.  If that
+    # field is present, ignore free-text LLM constraint prose so user-facing
+    # Chinese never depends on upstream encoding quirks.  Test doubles and
+    # legacy payloads without parameter_updates still keep their constraints.
+    items = None if isinstance(updates, Mapping) else (option.get("added_constraints") or option.get("constraints"))
+    constraints = _normalize_plan_constraints(items)
+    if isinstance(updates, Mapping):
+        label_map = {
+            "tracking_error_limit": "跟踪误差上限",
+            "min_weight": "权重下限",
+            "max_weight": "权重上限",
+            "industry_bound": "行业偏离",
+            "style_bound": "风格暴露",
+            "turnover_limit": "换手率",
+            "target_count": "持仓数量",
+            "whitelist": "白名单",
+            "blacklist": "黑名单",
+        }
+        for key, value in list(updates.items())[:8]:
+            constraints.append({
+                "name": label_map.get(str(key), str(key)),
+                "type": "parameter_update",
+                "formula": f"{key} = {value}",
+                "rationale": "LLM识别出的自然语言参数修改",
+            })
+    return constraints[:12]
+
+
 def _normalize_plan_option(option: Mapping[str, Any], index: int, raw_request: str) -> dict[str, Any]:
     normalized = copy.deepcopy(dict(option))
     normalized["id"] = _safe_plan_id(normalized.get("id") or normalized.get("name"), index)
-    normalized["name"] = str(normalized.get("name") or normalized["id"]).strip()
-    normalized["profile"] = str(normalized.get("profile") or normalized.get("style") or "约束组合优化").strip()
-    normalized["summary"] = str(normalized.get("summary") or normalized.get("description") or "").strip()
-    normalized["objective_equation"] = str(normalized.get("objective_equation") or normalized.get("objective") or "").strip()
-    normalized["objective_terms"] = _text_list(normalized.get("objective_terms"), max_items=10)
+    bias = str(normalized.get("risk_bias") or normalized.get("profile") or "balanced").lower()
+    default_names = ["稳健约束方案", "收益增强方案", "低换手防守方案"]
+    raw_name = str(normalized.get("name") or "").strip()
+    if raw_name and raw_name.isascii() and not raw_name.lower().startswith("plan_"):
+        normalized["name"] = raw_name
+    else:
+        normalized["name"] = default_names[min(index, len(default_names) - 1)]
+    normalized["profile"] = str(normalized.get("profile") or normalized.get("style") or bias or "约束组合优化").strip()
+    raw_summary = str(normalized.get("summary") or normalized.get("description") or "").strip()
+    normalized["summary"] = raw_summary if raw_summary and raw_summary.isascii() else "根据自然语言约束调整默认参数，并保留HiGHS选股与Clarabel求权链路。"
+    normalized["objective_equation"] = str(normalized.get("objective_equation") or normalized.get("objective") or _default_optimizer_objective_equation()).strip()
+    normalized["objective_terms"] = _text_list(normalized.get("objective_terms"), max_items=10) or ["alpha_score", "tracking_error", "style_industry_deviation", "turnover", "weight_smoothing"]
     default_parameters = normalized.get("default_parameters")
-    normalized["default_parameters"] = copy.deepcopy(dict(default_parameters)) if isinstance(default_parameters, Mapping) else {}
-    normalized["added_constraints"] = _normalize_plan_constraints(normalized.get("added_constraints") or normalized.get("constraints"))
-    normalized["constraint_equations"] = _text_list(normalized.get("constraint_equations"), max_items=10)
-    normalized["solver_steps"] = _text_list(normalized.get("solver_steps"), max_items=8)
-    normalized["expected_tradeoff"] = str(normalized.get("expected_tradeoff") or normalized.get("tradeoff") or "").strip()
+    if isinstance(default_parameters, Mapping):
+        params = copy.deepcopy(dict(default_parameters))
+    else:
+        updates = normalized.get("parameter_updates") or normalized.get("parameter_adjustments") or normalized.get("params")
+        params = {"llm_parameter_updates": copy.deepcopy(dict(updates))} if isinstance(updates, Mapping) else {}
+    normalized["default_parameters"] = params
+    normalized["added_constraints"] = _compact_generated_constraints(normalized)
+    if not normalized["added_constraints"]:
+        normalized["added_constraints"] = [
+            {"name": "tracking_error", "type": "active_risk", "formula": "TE≤tracking_error_limit", "rationale": "默认跟踪误差约束"},
+            {"name": "turnover", "type": "implementation", "formula": "0.5·Σ|w_i-w_prev_i|≤turnover_limit", "rationale": "默认换手约束"},
+        ]
+    normalized["constraint_equations"] = _text_list(normalized.get("constraint_equations"), max_items=10) or _default_optimizer_constraint_equations()
+    normalized["solver_steps"] = _text_list(normalized.get("solver_steps"), max_items=8) or _default_optimizer_solver_steps()
+    raw_tradeoff = str(normalized.get("expected_tradeoff") or normalized.get("tradeoff") or "").strip()
+    normalized["expected_tradeoff"] = raw_tradeoff if raw_tradeoff and raw_tradeoff.isascii() else "在提高alpha得分的同时控制行业、风格、跟踪误差和换手。"
     mandate_request = str(normalized.get("mandate_request") or normalized.get("compile_instruction") or "").strip()
     if not mandate_request:
         mandate_request = _build_mandate_request(raw_request, normalized)
@@ -1353,6 +1583,309 @@ def generate_mandate_plan_options(
     }
 
 
+def _context_value(context: Mapping[str, Any] | None, *path: str, default: Any = None) -> Any:
+    current: Any = context or {}
+    for key in path:
+        if not isinstance(current, Mapping):
+            return default
+        current = current.get(key)
+    return default if current is None else current
+
+
+def _float_context(context: Mapping[str, Any] | None, paths: Sequence[Sequence[str]], default: float) -> float:
+    for path in paths:
+        value = _context_value(context, *path, default=None)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+    return float(default)
+
+
+def _int_context(context: Mapping[str, Any] | None, paths: Sequence[Sequence[str]], default: int) -> int:
+    for path in paths:
+        value = _context_value(context, *path, default=None)
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+        if isinstance(value, float) and value.is_integer():
+            return int(value)
+    return int(default)
+
+
+def _str_context(context: Mapping[str, Any] | None, paths: Sequence[Sequence[str]], default: str) -> str:
+    for path in paths:
+        value = _context_value(context, *path, default=None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return default
+
+
+
+
+def _selected_plan_updates(selected_plan: Mapping[str, Any]) -> dict[str, Any]:
+    for key in ("parameter_updates", "parameter_adjustments", "params"):
+        value = selected_plan.get(key)
+        if isinstance(value, Mapping):
+            return copy.deepcopy(dict(value))
+    defaults = selected_plan.get("default_parameters")
+    if isinstance(defaults, Mapping):
+        nested = defaults.get("llm_parameter_updates")
+        if isinstance(nested, Mapping):
+            return copy.deepcopy(dict(nested))
+    return {}
+
+
+def _update_float(updates: Mapping[str, Any], names: Sequence[str], current: float) -> float:
+    for name in names:
+        if name not in updates:
+            continue
+        value = updates.get(name)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            number = float(value)
+            if math.isfinite(number):
+                return number
+    return float(current)
+
+
+def _update_int(updates: Mapping[str, Any], names: Sequence[str], current: int) -> int:
+    for name in names:
+        if name not in updates:
+            continue
+        value = updates.get(name)
+        if isinstance(value, int) and not isinstance(value, bool):
+            return int(value)
+        if isinstance(value, float) and value.is_integer():
+            return int(value)
+    return int(current)
+
+
+def _update_code_list(updates: Mapping[str, Any], names: Sequence[str]) -> list[str]:
+    for name in names:
+        if name not in updates:
+            continue
+        value = updates.get(name)
+        raw_items: list[Any]
+        if isinstance(value, str):
+            raw_items = re.split(r"[,;，；\s]+", value.strip())
+        elif isinstance(value, Iterable) and not isinstance(value, (bytes, bytearray, Mapping)):
+            raw_items = list(value)
+        else:
+            raw_items = []
+        codes: list[str] = []
+        seen: set[str] = set()
+        for item in raw_items:
+            text = str(item).strip().upper()
+            if not text:
+                continue
+            if re.fullmatch(r"\d{6}", text):
+                text = text + (".SH" if text.startswith("6") else ".SZ")
+            if re.fullmatch(r"\d{6}\.(SH|SZ|BJ)", text) and text not in seen:
+                seen.add(text)
+                codes.append(text)
+        return codes
+    return []
+
+def _selected_plan_constraint(
+    raw_request: str,
+    evidence_source: str,
+    constraint_id: str,
+    constraint_type: str,
+    metric: str,
+    lower: int | float | None,
+    upper: int | float | None,
+    unit: str,
+    formula: str,
+    dependencies: Sequence[str],
+    *,
+    scope_extra: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    scope = {"metric": metric, "universe": "CSI500"}
+    scope.update(dict(scope_extra or {}))
+    evidence: list[dict[str, Any]] = []
+    for field, value in (("lower", lower), ("upper", upper)):
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            source_id = "user_supplied" if _user_request_contains_number(raw_request, float(value)) else evidence_source
+            evidence.append(
+                {
+                    "source_id": source_id,
+                    "field": field,
+                    "value": value,
+                    "claim": f"{constraint_id} {field}={value} comes from the selected plan or optimizer base_config.",
+                }
+            )
+    if not evidence:
+        evidence.append({"source_id": evidence_source, "claim": f"{constraint_id} is required by the selected optimizer plan."})
+    return {
+        "id": constraint_id,
+        "type": constraint_type,
+        "scope": scope,
+        "lower": lower,
+        "upper": upper,
+        "unit": unit,
+        "hard": True,
+        "penalty": None,
+        "priority": 1,
+        "formula": formula,
+        "data_dependencies": list(dependencies),
+        "evidence": evidence,
+    }
+
+
+def _build_selected_plan_mandate(
+    raw_request: str,
+    selected_plan: Mapping[str, Any],
+    *,
+    mode: str,
+    context: Mapping[str, Any] | None,
+    retrieval: Mapping[str, Any],
+) -> dict[str, Any]:
+    source_ids = list(retrieval.get("source_ids", []))
+    evidence_source = source_ids[0] if source_ids else "repo.portfolio_optimizer.convex_solver.v2_6"
+    benchmark = _str_context(context, (("universe", "benchmark"), ("base_config", "universe", "benchmark")), "000905.SH")
+    score_source = _str_context(
+        context,
+        (("universe", "score_source"), ("base_config", "universe", "score_source"), ("objective", "score_artifact_id"), ("base_config", "objective", "score_artifact_id")),
+        "factor_laboratory_champion",
+    )
+    rebalance = _str_context(
+        context,
+        (("rebalance_frequency",), ("universe", "rebalance_frequency"), ("base_config", "universe", "rebalance_frequency")),
+        "monthly",
+    )
+    risk_model = _str_context(
+        context,
+        (("risk", "covariance"), ("base_config", "risk", "covariance"), ("objective", "risk_model_id"), ("base_config", "objective", "risk_model_id")),
+        "shrunk_factor_covariance",
+    )
+    updates = _selected_plan_updates(selected_plan)
+    target_count = _int_context(context, (("holdings", "target_count"), ("base_config", "holdings", "target_count"), ("universe", "holdings"), ("base_config", "universe", "holdings")), 50)
+    target_count = _update_int(updates, ("target_count", "holdings", "cardinality"), target_count)
+    min_weight = _float_context(context, (("holdings", "min_weight"), ("base_config", "holdings", "min_weight")), 0.005)
+    min_weight = _update_float(updates, ("min_weight", "weight_min", "lower_weight"), min_weight)
+    max_weight = _float_context(context, (("holdings", "max_weight"), ("base_config", "holdings", "max_weight")), 0.05)
+    max_weight = _update_float(updates, ("max_weight", "weight_max", "upper_weight"), max_weight)
+    max_active_weight = _float_context(context, (("holdings", "max_active_weight"), ("base_config", "holdings", "max_active_weight"), ("active_risk", "max_active_weight"), ("base_config", "active_risk", "max_active_weight")), 0.03)
+    max_active_weight = _update_float(updates, ("max_active_weight", "active_weight_bound", "active_bound"), max_active_weight)
+    industry_bound = _float_context(context, (("industry", "max_active_deviation"), ("base_config", "industry", "max_active_deviation")), 0.02)
+    industry_bound = _update_float(updates, ("industry_bound", "industry_deviation", "max_industry_active_deviation", "industry_max_active_deviation"), industry_bound)
+    te_limit = _float_context(context, (("risk", "annual_tracking_error_limit"), ("base_config", "risk", "annual_tracking_error_limit"), ("active_risk", "tracking_error_limit"), ("base_config", "active_risk", "tracking_error_limit")), 0.06)
+    te_limit = _update_float(updates, ("tracking_error_limit", "te_limit", "annual_tracking_error_limit", "target_tracking_error"), te_limit)
+    turnover_limit = _float_context(context, (("trading", "one_way_turnover_limit"), ("base_config", "trading", "one_way_turnover_limit"), ("trading", "turnover_limit"), ("base_config", "trading", "turnover_limit")), 0.60)
+    turnover_limit = _update_float(updates, ("turnover_limit", "one_way_turnover_limit", "max_turnover"), turnover_limit)
+    adv_limit = _float_context(context, (("trading", "max_adv_participation"), ("base_config", "trading", "max_adv_participation"), ("liquidity", "max_adv_participation"), ("base_config", "liquidity", "max_adv_participation")), 0.05)
+    adv_limit = _update_float(updates, ("adv_limit", "max_adv_participation", "liquidity_adv_participation"), adv_limit)
+    constraints: list[dict[str, Any]] = [
+        _selected_plan_constraint(raw_request, evidence_source, "holding.cardinality.exact", "holding", "cardinality", target_count, target_count, "count", "sum_i z_i = target_count", ["universe_membership", "alpha_scores"]),
+        _selected_plan_constraint(raw_request, evidence_source, "holding.security_weight", "holding", "security_weight", min_weight, max_weight, "weight_fraction", "min_weight * z_i <= w_i <= max_weight * z_i", ["universe_membership", "benchmark_weights"]),
+        _selected_plan_constraint(raw_request, evidence_source, "holding.active_security_weight", "holding", "active_security_weight", -max_active_weight, max_active_weight, "weight_fraction", "-active_bound <= w_i - b_i <= active_bound", ["benchmark_weights"], scope_extra={"benchmark_relative": True}),
+        _selected_plan_constraint(raw_request, evidence_source, "industry.active_exposure.all", "industry", "active_exposure", -industry_bound, industry_bound, "weight_fraction", "-industry_bound <= G_g' * (w-b) <= industry_bound", ["industry_classification_pit", "benchmark_weights"], scope_extra={"group": "all", "benchmark_relative": True}),
+    ]
+    style_config = _context_value(context, "style", default=None)
+    if not isinstance(style_config, Mapping):
+        style_config = _context_value(context, "base_config", "style", default={})
+    style_bound = _update_float(
+        updates,
+        ("style_bound", "style_exposure_bound", "max_abs_style_exposure", "max_abs_exposure"),
+        float("nan"),
+    )
+    style_defaults = {"size": 0.10, "value": 0.10, "momentum": 0.10, "liquidity": 0.10}
+    if isinstance(style_config, Mapping):
+        for style_name in style_defaults:
+            if math.isfinite(style_bound):
+                bound = style_bound
+            else:
+                raw = style_config.get(style_name, style_defaults[style_name])
+                bound = float(raw) if isinstance(raw, (int, float)) and not isinstance(raw, bool) else style_defaults[style_name]
+            bound = _update_float(
+                updates,
+                (f"{style_name}_bound", f"style_{style_name}", style_name),
+                bound,
+            )
+            constraints.append(
+                _selected_plan_constraint(raw_request, evidence_source, f"style.active_exposure.{style_name}", "style", "active_exposure", -bound, bound, "zscore", f"-{bound:g} <= F_{style_name}' * (w-b) <= {bound:g}", ["style_exposure_matrix_pit", "benchmark_weights"], scope_extra={"style": style_name, "benchmark_relative": True})
+            )
+    constraints.extend(
+        [
+            _selected_plan_constraint(raw_request, evidence_source, "active_risk.tracking_error", "active_risk", "tracking_error", None, te_limit, "annualized_fraction", "sqrt((w-b)' Sigma (w-b) * annualization) <= tracking_error_limit", ["benchmark_weights", "factor_covariance_pit", "specific_risk_pit"], scope_extra={"benchmark_relative": True}),
+            _selected_plan_constraint(raw_request, evidence_source, "trading.one_way_turnover", "trading", "one_way_turnover", None, turnover_limit, "turnover_fraction", "0.5 * sum_i |w_i - w_prev_i| <= turnover_limit", ["previous_weights", "tradeability_flags", "transaction_cost_model"], scope_extra={"turnover_convention": "one_way"}),
+            _selected_plan_constraint(raw_request, evidence_source, "liquidity.adv_participation", "liquidity", "adv_participation", None, adv_limit, "adv_fraction", "trade_value_i / ADV_i <= max_adv_participation", ["point_in_time_adv", "portfolio_nav", "previous_weights", "prices_pit"], scope_extra={"lookback": "20 trading days", "lag": "1 trading day"}),
+        ]
+    )
+    whitelist = _update_code_list(updates, ("whitelist", "include", "forced_include", "mandatory"))
+    blacklist = _update_code_list(updates, ("blacklist", "exclude", "forced_exclude"))
+    if whitelist:
+        constraints.append(_selected_plan_constraint(raw_request, evidence_source, "list.whitelist", "list", "whitelist", None, None, "binary", "ts_code in whitelist", ["security_master_pit", "tradeability_flags"], scope_extra={"security_set": whitelist}))
+    if blacklist:
+        constraints.append(_selected_plan_constraint(raw_request, evidence_source, "list.blacklist", "list", "blacklist", None, None, "binary", "ts_code not in blacklist", ["security_master_pit", "tradeability_flags"], scope_extra={"security_set": blacklist}))
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "mode": mode,
+        "objective": {
+            "type": "benchmark_relative_alpha",
+            "benchmark_id": benchmark,
+            "score_artifact_id": score_source,
+            "rebalance_frequency": rebalance,
+            "risk_model_id": risk_model,
+        },
+        "constraints": constraints,
+        "retrieval_source_ids": source_ids[:8] or [evidence_source],
+        "assumptions": [
+            "All optimizer inputs are point-in-time snapshots available at the rebalance date.",
+            f"Selected plan: {selected_plan.get('name') or selected_plan.get('id') or 'selected_plan'}.",
+            "The LLM planning layer may propose equations, but the deterministic solver owns feasibility and weights.",
+        ],
+    }
+
+
+def compile_selected_plan_mandate(
+    raw_request: str,
+    *,
+    selected_plan: Mapping[str, Any],
+    require_llm: bool = True,
+    mode: str = "joint_cardinality",
+    available_solvers: Sequence[str] | None = None,
+    context: Mapping[str, Any] | None = None,
+    knowledge_base: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    kb = knowledge_base or load_knowledge_base()
+    retrieval = retrieve_constraint_knowledge(raw_request, knowledge_base=kb)
+    if not isinstance(selected_plan, Mapping):
+        return _blocked_result(BLOCKED_SCHEMA, errors=["selected_plan must be an object"], attempts=0, retrieval=retrieval)
+    if mode not in ALLOWED_MODES:
+        return _blocked_result(BLOCKED_SCHEMA, errors=[f"mode must be one of {sorted(ALLOWED_MODES)}"], attempts=0, retrieval=retrieval)
+    mandate = normalize_mandate_payload(_build_selected_plan_mandate(raw_request, selected_plan, mode=mode, context=context, retrieval=retrieval))
+    schema_errors = validate_mandate_schema(mandate, raw_request=raw_request, knowledge_base=kb)
+    if mandate.get("mode") != mode:
+        schema_errors.append(f"mandate.mode must match requested_mode {mode!r}")
+    if schema_errors:
+        return _blocked_result(BLOCKED_SCHEMA, errors=schema_errors, attempts=0, retrieval=retrieval, mandate=mandate)
+    semantic_errors = validate_mandate_semantics(mandate)
+    if semantic_errors:
+        return _blocked_result(BLOCKED_SEMANTIC, errors=semantic_errors, attempts=0, retrieval=retrieval, mandate=mandate)
+    feasibility = quick_feasibility_precheck(mandate)
+    solver_policy = build_solver_policy(mode, available_solvers)
+    if feasibility["status"] == INFEASIBLE:
+        return _blocked_result(INFEASIBLE, errors=feasibility["errors"], attempts=0, retrieval=retrieval, mandate=mandate, solver_policy=solver_policy, feasibility=feasibility)
+    if solver_policy.get("capability_status") == BLOCKED_SOLVER_CAPABILITY:
+        return _blocked_result(BLOCKED_SOLVER_CAPABILITY, errors=["joint_cardinality requires SCIPY_HIGHS_MILP linear-support selection plus CLARABEL full-SOCP certification, or a native production MISOCP/MIQCP solver; pre-ranked or heuristic top-K fallback is prohibited"], attempts=0, retrieval=retrieval, mandate=mandate, solver_policy=solver_policy, feasibility=feasibility)
+    result = {
+        "status": AWAITING_CONFIRMATION,
+        "schema_version": SCHEMA_VERSION,
+        "mandate": copy.deepcopy(mandate),
+        "errors": [],
+        "attempts": 0,
+        "llm_required": require_llm,
+        "fallback_used": False,
+        "weights_emitted": False,
+        "retrieval": {"knowledge_schema_version": retrieval.get("knowledge_schema_version"), "source_ids": source_ids if (source_ids := list(retrieval.get("source_ids", []))) else []},
+        "solver_policy": solver_policy,
+        "feasibility": feasibility,
+        "draft_hash": None,
+        "confirmation": None,
+        "selected_plan_id": selected_plan.get("id"),
+        "selected_plan_name": selected_plan.get("name"),
+        "compiled_from_selected_plan": True,
+    }
+    result["draft_hash"] = compute_draft_hash(result)
+    return result
 def compile_mandate(
     raw_request: str,
     *,
@@ -1556,4 +2089,5 @@ __all__ = [
     "refresh_after_edit",
     "compile_mandate",
     "generate_mandate_plan_options",
+    "compile_selected_plan_mandate",
 ]

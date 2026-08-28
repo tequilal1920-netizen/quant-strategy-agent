@@ -55,3 +55,12 @@ python ai-models/asset-allocation/scripts/query.py backtest
 python ai-models/asset-allocation/source/test_asset_allocation_engine.py -v
 python board/quant_strategy_agent/qa/test_canonical_app.py
 ```
+
+## v5.2.2 service contract
+
+- The policy anchor is fixed at 60% equity, 15% bond, 10% gold and 15% non-gold commodity in the internal order `equity,bond,gold,commodity`.
+- Profiles map only to dynamic allocations: `balanced -> allocations.recommended`, `equity_preferred -> allocations.benchmark_relative`, and `conservative -> allocations.absolute_no_benchmark`.
+- `equal_weight_25` is never a profile, optimizer input, BL prior, active-weight anchor or active-return reference. It is only the comparison line on the main NAV chart.
+- The user-approved Sharpe mandate is a service authorization gate. D3, PIT, PSR, future holdout, excess-return and information-ratio evidence remains visible in a separate statistical-evidence gate.
+- Candidate selection continues to use training and validation data only. Retrospective test data remains report-only and cannot be used to tune or rank candidates.
+- A service authorization is not a guarantee of future Sharpe, return or excess return.

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import math
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -296,6 +297,33 @@ def _build_one(key: str, calendar: list[dict[str, Any]], nav_rows: list[dict[str
     }
 
 
+def _attach_style_long_short_figures(key: str, strategy: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
+    figures = strategy.get("long_short_figures") or {}
+    annual_src = Path(str(figures.get("annual_table") or ""))
+    nav_src = Path(str(figures.get("daily_nav") or ""))
+    if not annual_src.exists() or not nav_src.exists():
+        return row
+    annual_name = f"{key}_long_short_annual_table.png"
+    nav_name = f"{key}_long_short_daily_nav.png"
+    for board_root in BOARD_ROOTS:
+        figure_dir = board_root / "static" / "rotation_figures"
+        figure_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(annual_src, figure_dir / annual_name)
+        shutil.copyfile(nav_src, figure_dir / nav_name)
+    row["long_short"] = {
+        "label": f"{STRATEGY_LABELS[key]}多空",
+        "benchmark_label": "Bottom篮子",
+        "annual_table": f"/static/rotation_figures/{annual_name}",
+        "daily_nav": f"/static/rotation_figures/{nav_name}",
+        "calendar_year": strategy.get("long_short_calendar_year", []),
+        "metrics": strategy.get("long_short_metrics", {}),
+        "chart_frequency": "daily",
+        "relative_strength_axis": "right",
+        "style_contract": row.get("style_contract", {}),
+    }
+    return row
+
+
 def build() -> dict[str, Any]:
     rotation = _read_json(SOURCE_DATA_DIR / "rotation_snapshot.json")
     style = _read_json(SOURCE_DATA_DIR / "style_six_dimension_monthly.json")
@@ -339,6 +367,7 @@ def build() -> dict[str, Any]:
         row["selected_candidate"] = strategy.get("selected_candidate")
         row["research_selected_candidate"] = strategy.get("research_selected_candidate")
         row["report_veto"] = strategy.get("report_veto")
+        row = _attach_style_long_short_figures(key, strategy, row)
         figures[key] = row
     payload = {
         "schema_version": "1.1",

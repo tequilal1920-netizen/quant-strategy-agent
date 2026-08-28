@@ -23,16 +23,20 @@
 
 ## 模型二：LLM 记忆多周期
 
-核心源码：`model/kline_memory_learning/run_multiscale_expert_challenger.py`。
+核心源码：`model/kline_memory_learning/single_stock_analyzer.py` 与 `model/kline_memory_learning/cohort_wyckoff_learning.py`。
 
 流程如下：
 
-1. 形态专家：按日线趋势、放量突破、趋势回撤、缩量蓄势、周线形态等专家生成初始观点。
-2. 状态记忆：保留历史判断、触发环境、失败样本、分支条件和修正次数。
-3. 同类学习：把股票按技术结构和市场状态分组，在相似模式内学习信号寿命。
-4. 监督排序：用训练期标签学习形态权重，验证期筛选候选。
-5. 多空诊断：输出净值、回撤、换手、RankIC、胜率和当前最新股票判断。
+1. Wyckoff 形态识别：从单股复权 OHLCV 逐 K 线识别 Spring、Upthrust、SOS、SOW、LPS、LPSY、买入/卖出高潮、吸筹和派发等价量结构。
+2. Predictor：当前形态只检索最多五条最相关情境记忆，不读取六类技术因子横截面分数。
+3. Critic：形态成熟后用后续持有窗收益验证原判断是否兑现，记录成功、失败、最大顺逆向波动和失效条件。
+4. Reflector：新增记忆按 `add/skip/replace/branch` 处理；同情境更优则替换，语义重复则跳过，失败条件不同则分支，单档案最多 120 条、单分支最多 3 次精炼。
+5. Evolver：在严格跨股共识、个股与同类平衡、行业情境分支之间做候选进化，再交给本地规则引擎、回测门和治理门决定是否接受。
+6. 输出：个股历史买卖点、策略与原股价净值、记忆进化过程、当前技术信号、当前五档仓位和中文学习记录。
 
+即时批量绘图入口：`model/kline_memory_learning/run_wyckoff_memory_batch.py`。该脚本用于用户指定少量个股的快速可复现输出，复用同一 Wyckoff 事件库和情境记忆合并规则，生成每股“买卖点净值图”和“记忆进化图”。当前优化版包含 `FullHistoryContextMemoryEvolver` 与 `five_state_path_memory_evolver`：前者在全历史成熟情境上选择持有窗和冷却期候选，后者把成熟后的趋势/回撤情境压缩为 0%、25%、50%、75%、100% 五档仓位路径，并用换手惩罚控制买卖点频率，以提升历史收益、Sharpe、回撤和年度超额胜率；该模式是全历史研究回放，不等同严格样本外生产验证。
+
+补充研究入口：`model/kline_memory_learning/run_single_stock_turning_point_research.py` 与 `run_single_stock_turning_point_batch.py` 只属于全历史拐点教师研究，用于收益捕捉草案和图形参考，不等同于上述 LLM/Wyckoff 记忆学习框架，回答时不得把它与模型二正式逻辑混为一谈。
 ## 模型三：全历史低频技术拟合
 
 新增源码入口同样在 `run_multiscale_expert_challenger.py`，核心信号来自 `technical_signal_model.py`。

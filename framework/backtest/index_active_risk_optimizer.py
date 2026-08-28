@@ -24,6 +24,8 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 
+from framework.backtest.robust_covariance import robust_covariance
+
 
 @dataclass(frozen=True)
 class ActiveRiskConfig:
@@ -39,6 +41,10 @@ class ActiveRiskConfig:
     use_causal_alpha_reliability: bool = False
     reliability_lookback: int = 60
     reliability_prior_strength: float = 24.0
+    covariance_half_life: float = 12.0
+    covariance_newey_west_lags: int = 1
+    covariance_diagonal_shrinkage: float = 0.35
+    covariance_regime_lookback: int = 12
 
 
 STYLE_COLUMNS = (
@@ -83,6 +89,54 @@ def add_causal_risk_features(
     )
     ordered = ordered.drop(columns=["_prior_realized_return"])
     return ordered.sort_index()
+
+
+def _annual_active_covariance(
+    matured_returns: list[dict[str, float]],
+    codes: list[str],
+    annual_volatility: np.ndarray,
+    config: ActiveRiskConfig,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    """Estimate covariance from labels that matured before the signal date."""
+    fallback = np.diag(np.maximum(annual_volatility, 1.0e-4) ** 2)
+    if len(matured_returns) < config.volatility_min_periods:
+        return fallback, {
+            "method": "annualized_diagonal_fallback",
+            "observations": len(matured_returns),
+            "causal": True,
+        }
+    frame = pd.DataFrame(matured_returns[-config.volatility_lookback :])
+    matrix = frame.reindex(columns=codes).astype(float)
+    matrix = matrix.sub(matrix.mean(axis=1), axis=0).fillna(0.0)
+    covariance, covariance_diagnostics = robust_covariance(
+        matrix.to_numpy(dtype=float),
+        annualization=12.0,
+        half_life=config.covariance_half_life,
+        newey_west_lags=config.covariance_newey_west_lags,
+        diagonal_shrinkage=config.covariance_diagonal_shrinkage,
+        regime_lookback=config.covariance_regime_lookback,
+        regime_half_life=max(config.covariance_half_life / 2.0, 2.0),
+        relative_eigenvalue_floor=1.0e-7,
+        return_diagnostics=True,
+    )
+    if covariance.shape != fallback.shape or not np.isfinite(covariance).all():
+        return fallback, {
+            "method": "annualized_diagonal_fallback",
+            "observations": len(matured_returns),
+            "causal": True,
+        }
+    return covariance, {
+        "method": "ewma_newey_west_shrunk_psd",
+        "observations": int(matrix.shape[0]),
+        "causal": True,
+        **covariance_diagnostics,
+    }
+
+
+def _tracking_error(active: np.ndarray, annual_covariance: np.ndarray) -> float:
+    active = np.asarray(active, dtype=float)
+    variance = float(active @ annual_covariance @ active)
+    return math.sqrt(max(variance, 0.0))
 
 
 def _bounded_simplex_projection(
@@ -164,6 +218,7 @@ def optimize_weights(
     previous_weights: dict[str, float] | None = None,
     config: ActiveRiskConfig | None = None,
     active_risk_multiplier: float = 1.0,
+    annual_covariance: np.ndarray | None = None,
 ) -> tuple[dict[str, float], dict[str, Any]]:
     """Freeze benchmark-relative target weights before next returns are read."""
     config = config or ActiveRiskConfig()
@@ -203,11 +258,16 @@ def optimize_weights(
         config.residual_ridge,
     )
     direction -= base * float(direction.sum())
-    diagonal_te = math.sqrt(max(12.0 * float(np.sum((direction * volatility) ** 2)), 0.0))
-    if diagonal_te > 1.0e-12:
+    covariance = (
+        np.asarray(annual_covariance, dtype=float)
+        if annual_covariance is not None
+        else np.diag(volatility**2)
+    )
+    pre_scale_te = _tracking_error(direction, covariance)
+    if pre_scale_te > 1.0e-12:
         direction *= (
             config.target_tracking_error * float(np.clip(active_risk_multiplier, -1.0, 1.0))
-        ) / diagonal_te
+        ) / pre_scale_te
     active_lower = -base
     active_upper = np.full(len(g), config.max_active_weight, dtype=float)
     active = np.clip(direction, active_lower, active_upper)
@@ -249,10 +309,12 @@ def optimize_weights(
         for industry in industries.unique()
     ]
     turnover = 0.5 * float(np.abs(weights - previous).sum())
-    estimated_te = math.sqrt(max(12.0 * float(np.sum((active * volatility) ** 2)), 0.0))
+    estimated_te = _tracking_error(active, covariance)
     diagnostics = {
         "status": "ready",
         "estimated_tracking_error": estimated_te,
+        "pre_scale_tracking_error": pre_scale_te,
+        "tracking_error_annualization": "covariance_is_already_annualized",
         "one_way_turnover": turnover,
         "active_share": 0.5 * float(np.abs(active).sum()),
         "max_active_weight": float(np.max(np.abs(active))),
@@ -308,6 +370,7 @@ def backtest_active_risk_optimizer(
     diagnostics: list[dict[str, Any]] = []
     previous_weights: dict[str, float] = {}
     realized_alpha_ic: list[float] = []
+    matured_returns: list[dict[str, float]] = []
     nav = 1.0
     for date, raw in enriched.groupby("trade_date", sort=True):
         g = (
@@ -326,8 +389,17 @@ def backtest_active_risk_optimizer(
             if config.use_causal_alpha_reliability
             else 1.0
         )
+        codes = g["ts_code"].astype(str).tolist()
+        volatility = pd.to_numeric(
+            g["active_risk_volatility"], errors="coerce"
+        ).fillna(config.volatility_floor).clip(
+            config.volatility_floor, config.volatility_cap
+        ).to_numpy(dtype=float)
+        covariance, risk_model = _annual_active_covariance(
+            matured_returns, codes, volatility, config
+        )
         weights, evidence = optimize_weights(
-            g, score_column, previous_weights, config, reliability
+            g, score_column, previous_weights, config, reliability, covariance
         )
         if not weights:
             continue
@@ -363,6 +435,7 @@ def backtest_active_risk_optimizer(
             "cost_rate": cost_rate,
             "two_way_turnover": two_way_turnover,
             "transaction_cost": two_way_turnover * cost_rate,
+            "risk_model": risk_model,
         }
         diagnostics.append(evidence)
         meta = g.set_index(g["ts_code"].astype(str))
@@ -382,6 +455,7 @@ def backtest_active_risk_optimizer(
         current_ic = g[score_column].rank().corr(g["label_next_ret"].rank())
         if pd.notna(current_ic):
             realized_alpha_ic.append(float(current_ic))
+        matured_returns.append(realized)
         previous_weights = weights
     summary = {
         "model": "benchmark_relative_active_risk_optimizer",

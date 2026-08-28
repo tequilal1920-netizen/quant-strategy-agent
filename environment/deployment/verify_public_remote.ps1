@@ -3,8 +3,9 @@ param(
   [string]$AppRoot,
   [Parameter(Mandatory = $true)]
   [string]$BaseUrl,
-  [string]$ExpectedVersion = "2026.07.23-research-workspace-r16.3",
-  [string]$ExpectedKlineModel = "9.0-cohort-wyckoff-evolution"
+  [string]$ExpectedVersion = "2026.07.26-active-risk-shadow-r20.2",
+  [string]$ExpectedKlineModel = "9.0-cohort-wyckoff-evolution",
+  [string]$ExpectedFactorEngine = "factor-lab/3.2-inverse-volatility-rank-execution"
 )
 
 $ErrorActionPreference = "Stop"
@@ -72,7 +73,8 @@ $Checks = @(
   @{ Name = "kline_dates"; Url = "/api/kline/dates?code=000001.SZ"; MaxBytes = 200000 },
   @{ Name = "kline_history"; Url = "/api/kline/history?limit=3"; MaxBytes = 500000 },
   @{ Name = "factor_status"; Url = "/api/factor/status"; MaxBytes = 20000 },
-  @{ Name = "factor_history"; Url = "/api/factor/history"; MaxBytes = 500000 }
+  @{ Name = "factor_history"; Url = "/api/factor/history"; MaxBytes = 500000 },
+  @{ Name = "model_governance"; Url = "/api/model-governance"; MaxBytes = 100000 }
 )
 $Results = @()
 foreach ($Check in $Checks) {
@@ -106,9 +108,41 @@ if (-not $KlineSessionPayload.authenticated) {
   throw "Public K-line authenticated session validation failed."
 }
 
+$FactorHealthPayload = Invoke-RestMethod -Uri ($BaseUrl + "/api/factor-lab/health") -WebSession $Session -TimeoutSec 20
+if (
+  $FactorHealthPayload.engine_version -ne $ExpectedFactorEngine -or
+  $FactorHealthPayload.champion.status -ne "ok" -or
+  $FactorHealthPayload.champion.selection_basis -ne "train_and_validation_only" -or
+  $FactorHealthPayload.champion.test_usage -ne "report_only" -or
+  $FactorHealthPayload.champion.gate_summary.passed -ne 9 -or
+  $FactorHealthPayload.champion.gate_summary.total -ne 10 -or
+  $FactorHealthPayload.champion.gate_summary.all_passed
+) {
+  throw "Public factor champion contract validation failed."
+}
+$GovernancePayload = Invoke-RestMethod -Uri ($BaseUrl + "/api/model-governance") -WebSession $Session -TimeoutSec 20
+if (
+  $GovernancePayload.status -ne "ok" -or
+  $GovernancePayload.release -ne $ExpectedVersion -or
+  $GovernancePayload.summary.model_count -ne 9 -or
+  $GovernancePayload.models.index_enhancement.engine -ne "index-enhancement/1.2-active-risk-shadow-audit" -or
+  $GovernancePayload.models.index_enhancement.gate -ne "review" -or
+  $GovernancePayload.models.index_enhancement.splits.test.sharpe -ge 0 -or
+  $GovernancePayload.models.kline_memory.gate -ne "observe_only" -or
+  $GovernancePayload.models.kline_memory.robustness.cross_sectional_audit.candidate_count -ne 12 -or
+  $GovernancePayload.models.kline_memory.robustness.cross_sectional_audit.eligible_count -ne 0 -or
+  $GovernancePayload.models.kline_memory.robustness.cross_sectional_audit.selection_uses_test -or
+  $GovernancePayload.models.index_enhancement.robustness.post_test_shadow.model -ne "index_active_risk_optimizer_v12" -or
+  $GovernancePayload.models.index_enhancement.robustness.post_test_shadow.promotion_eligible -or
+  $GovernancePayload.models.index_enhancement.robustness.post_test_shadow.selection_uses_test -or
+  $GovernancePayload.models.factor_laboratory.splits.validation.sharpe -le 1
+) {
+  throw "Public model governance contract validation failed."
+}
 [pscustomobject]@{
   Status = "passed"
   Version = $Health.version
+  FactorEngine = $FactorHealthPayload.engine_version
   KlineModel = $KlineHealthPayload.model_version
   KlineAuthenticated = $KlineSessionPayload.authenticated
   LoginMilliseconds = $LoginWatch.ElapsedMilliseconds

@@ -40,6 +40,10 @@ DEFAULT_REASONING_EFFORT = os.environ.get("FACTOR_MINING_REASONING_EFFORT", "xhi
 VENDOR_FINANCE_API = DEFAULT_PROJECT_ROOT / "environment" / "vendor" / "finance_api"
 if VENDOR_FINANCE_API.exists() and str(VENDOR_FINANCE_API) not in sys.path:
     sys.path.insert(0, str(VENDOR_FINANCE_API))
+try:
+    from environment.data_sources.factor_lab_vendor_data import audit_vendor_data_layer
+except Exception:  # noqa: BLE001
+    audit_vendor_data_layer = None
 
 SPLITS = {
     "train": ("20120101", "20201231"),
@@ -49,6 +53,7 @@ SPLITS = {
 }
 LABEL_HORIZON_PERIODS = 1
 MIN_MEMBER_COUNTS = {
+    "CSI500_ENH": 450,
     "CSI800_ENH": 600,
     "CSI2000_ENH": 1600,
 }
@@ -608,9 +613,15 @@ def fetch_panel(conn, universe, date, next_date, fin, fin_dates):
         left join stock_valuation_daily v on v.ts_code=o.ts_code and v.trade_date=o.trade_date
         left join stock_moneyflow_daily m on m.ts_code=o.ts_code and m.trade_date=o.trade_date
         left join sw_l1_industry_daily ind
-          on ind.ts_code=o.ts_code
-         and ind.start_date<=?
-         and (ind.end_date is null or ind.end_date>=?)
+          on ind.rowid=(
+            select i.rowid
+            from sw_l1_industry_daily i
+            where i.ts_code=o.ts_code
+              and i.start_date<=?
+              and (i.end_date is null or i.end_date>?)
+            order by i.start_date desc, coalesce(i.end_date, '99991231') asc, i.rowid desc
+            limit 1
+          )
         where o.qfq_close>0
         """,
         (date, d1, d5, d20, d60, d120, d252, date, next_date, date, next_date, date, date),
@@ -1428,6 +1439,7 @@ def generate_llm_api_candidate_batch(method_cards, memory, budget, diversity_slo
         },
         "method_cards": method_cards[:8],
         "memory": memory,
+        "trajectory_process_contract": llm_factor_mining_process_contract(memory, []),
         "constraints": {
             "no_future_return_or_label": True,
             "train_valid_test_protocol": SPLITS,
@@ -1449,6 +1461,10 @@ def generate_llm_api_candidate_batch(method_cards, memory, budget, diversity_slo
                     "weights": [1.0],
                 },
                 "windows": [20, 60, 120],
+                "repair_hypothesis": "what previous failure/memory pattern this design fixes, or why it is a fresh trajectory",
+                "validation_acceptance_criteria": "specific train-validation metrics that would make it useful",
+                "expected_low_correlation_source": "why it should be low-correlation versus existing frontier factors",
+                "expected_failure_mode": "most likely reason this candidate could fail",
                 "anti_overfit_plan": "how it should survive sample-out checks",
             }]
         },
@@ -1457,6 +1473,7 @@ def generate_llm_api_candidate_batch(method_cards, memory, budget, diversity_slo
         "You are an institutional A-share AI factor mining agent. Create auditable factor hypotheses, not report replication. "
         "Use only the provided point-in-time feature space and allowed DSL operators. Never use future returns, labels, test metrics, or hidden target leakage. "
         "Prefer economically motivated nonlinear interactions, regime-aware representations, and robust anti-overfit plans. "
+        "For every candidate include a repair_hypothesis, validation_acceptance_criteria, expected_low_correlation_source, and expected_failure_mode. "
         "Return exactly the requested number of candidates as strict JSON. Each candidate must contain one nested DSL object; "
         "do not emit top-level weights or risk_penalty fields."
     )
@@ -1485,6 +1502,13 @@ def generate_llm_api_candidate_batch(method_cards, memory, budget, diversity_slo
         if not dsl:
             invalid_reasons.append(f"candidate_{idx + 1}_invalid_dsl")
             continue
+        quality_gate = llm_candidate_quality_gate(item, dsl, max_complexity=32)
+        if not quality_gate["passed"]:
+            invalid_reasons.append(
+                f"candidate_{idx + 1}_metadata_quality_gate_failed:"
+                + ",".join(quality_gate["issues"][:4])
+            )
+            continue
         candidate = make_candidate(
             chinese_name=item.get("chinese_name", "GPT factor hypothesis"),
             channel="llm_hypothesis_generation",
@@ -1499,10 +1523,16 @@ def generate_llm_api_candidate_batch(method_cards, memory, budget, diversity_slo
                 "reasoning_effort": DEFAULT_REASONING_EFFORT,
                 "api_status": status,
                 "api_output_adapter": adapter,
+                "metadata_quality_gate": quality_gate,
                 "anti_overfit_plan": item.get(
                     "anti_overfit_plan",
                     "walk-forward + purged k-fold + dual-residual incrementality + regime posterior",
                 ),
+                "repair_hypothesis": item.get("repair_hypothesis"),
+                "validation_acceptance_criteria": item.get("validation_acceptance_criteria"),
+                "expected_low_correlation_source": item.get("expected_low_correlation_source"),
+                "expected_failure_mode": item.get("expected_failure_mode"),
+                "trajectory_schema": LLM_FACTOR_TRAJECTORY_SCHEMA,
                 "generation_mode": "methodology_only_no_report_factor_replication",
                 "information_truncation_policy": "no test metrics, no reported factor formula or reported performance",
                 "test_metrics_used": False,
@@ -1602,6 +1632,98 @@ def dsl_complexity(node):
     for child in node.get("children", []) or []:
         score += dsl_complexity(child)
     return score
+
+
+LLM_CANDIDATE_REASONING_FIELDS = [
+    "hypothesis",
+    "repair_hypothesis",
+    "validation_acceptance_criteria",
+    "expected_low_correlation_source",
+    "expected_failure_mode",
+    "anti_overfit_plan",
+]
+
+
+def _compact_quality_text(value):
+    if value is None:
+        return ""
+    if isinstance(value, dict):
+        value = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    elif isinstance(value, (list, tuple, set)):
+        value = " ".join(str(x) for x in value)
+    return " ".join(str(value).strip().split())
+
+
+def _contains_any(text, needles):
+    lower = str(text or "").lower()
+    return any(str(needle).lower() in lower for needle in needles)
+
+
+def llm_candidate_quality_gate(item, dsl, max_complexity=32):
+    """Reject thin LLM factor ideas before they enter expensive validation."""
+    item = item if isinstance(item, dict) else {}
+    audit = {
+        "schema": "llm_candidate_quality_gate/1.0",
+        "passed": True,
+        "issues": [],
+        "required_reasoning_fields": list(LLM_CANDIDATE_REASONING_FIELDS),
+        "field_lengths": {},
+        "dsl_complexity": dsl_complexity(dsl),
+        "features": sorted(set(extract_features(dsl))),
+        "test_metrics_used": False,
+    }
+    for field in LLM_CANDIDATE_REASONING_FIELDS:
+        text = _compact_quality_text(item.get(field))
+        audit["field_lengths"][field] = len(text)
+        if len(text) < 12:
+            audit["issues"].append(f"{field}_too_thin")
+    joined_reasoning = " ".join(_compact_quality_text(item.get(field)) for field in LLM_CANDIDATE_REASONING_FIELDS)
+    lower_joined = joined_reasoning.lower()
+    if lower_joined in {"", "good factor", "effective factor", "????", "alpha factor"}:
+        audit["issues"].append("generic_factor_description")
+    if not audit["features"]:
+        audit["issues"].append("no_point_in_time_feature_used")
+    unknown_features = [feature for feature in audit["features"] if feature not in AI_FEATURES]
+    if unknown_features:
+        audit["issues"].append("unknown_feature:" + ",".join(unknown_features[:6]))
+    if audit["dsl_complexity"] > int(max_complexity):
+        audit["issues"].append(f"dsl_complexity_above_{int(max_complexity)}")
+    validation_text = _compact_quality_text(item.get("validation_acceptance_criteria"))
+    if not _contains_any(validation_text, [
+        "ic", "rankic", "icir", "residual", "incremental", "valid", "validation",
+        "walk", "purged", "cscv", "pbo", "turnover", "cost", "regime", "coverage",
+        "??", "??", "??", "??", "??", "??", "??", "??",
+    ]):
+        audit["issues"].append("validation_acceptance_criteria_missing_metric")
+    low_corr_text = _compact_quality_text(item.get("expected_low_correlation_source"))
+    if not _contains_any(low_corr_text, [
+        "corr", "correlation", "orthogonal", "residual", "different", "independent",
+        "diverse", "frontier", "???", "??", "??", "??", "??", "??",
+    ]):
+        audit["issues"].append("expected_low_correlation_source_not_specific")
+    anti_overfit_text = _compact_quality_text(item.get("anti_overfit_plan"))
+    if not _contains_any(anti_overfit_text, [
+        "walk", "purged", "k-fold", "kfold", "cscv", "pbo", "dsr", "deflated",
+        "embargo", "validation", "oos", "out-of-sample", "holdout",
+        "???", "??", "??", "??", "??",
+    ]):
+        audit["issues"].append("anti_overfit_plan_missing_oos_guard")
+    failure_text = _compact_quality_text(item.get("expected_failure_mode"))
+    if not _contains_any(failure_text, [
+        "fail", "risk", "regime", "crowd", "turnover", "coverage", "liquidity",
+        "noise", "reversal", "stress", "??", "??", "??", "??", "??",
+        "??", "??", "??", "??", "??",
+    ]):
+        audit["issues"].append("expected_failure_mode_not_specific")
+    audit["passed"] = not audit["issues"]
+    audit["quality_score"] = round(
+        1.0
+        - min(1.0, len(audit["issues"]) / 8.0)
+        + min(0.10, len(audit["features"]) * 0.01)
+        - max(0.0, audit["dsl_complexity"] - max_complexity) * 0.01,
+        4,
+    )
+    return audit
 
 
 def dsl_token_set(node):
@@ -1775,12 +1897,18 @@ def audit_external_data_sources(conn, db_path):
             latest[table] = {"min_date": row[0], "max_date": row[1]}
         except Exception as exc:
             latest[table] = {"error": str(exc)}
+    vendor_layer = (
+        audit_vendor_data_layer(DEFAULT_PROJECT_ROOT)
+        if audit_vendor_data_layer is not None
+        else {"status": "unavailable", "reason": "factor_lab_vendor_data_module_unavailable"}
+    )
     return {
         "primary_database": {
             "path": str(db_path),
             "status": "used",
             "coverage": latest,
         },
+        "authoritative_vendor_layer": vendor_layer,
         "public_python_packages": {
             "akshare": package_available("akshare"),
             "baostock": package_available("baostock"),
@@ -1795,9 +1923,11 @@ def audit_external_data_sources(conn, db_path):
             "wind_sql": env_present("WIND_SQL_UID") and env_present("WIND_SQL_PWD"),
         },
         "quota_policy": {
-            "ifind": "disabled unless FACTOR_MINING_ENABLE_PAID_PROBES=1; use only sampled metadata checks",
-            "wind_sql": "disabled unless FACTOR_MINING_ENABLE_PAID_PROBES=1; never bulk extract",
-            "csmar_cnki_ppm": "browser-only research source through SHH remote machine; no passwords stored",
+            "wind_sql": "默认优先级最高，但只允许环境变量凭据 + 小样本探针；批量刷新必须显式开启并先写本地缓存",
+            "ifind": "默认关闭高频调用；额度有限时只做缺口核验、字段元数据和小样本日期窗口",
+            "ricequant": "许可证只从本机环境读取；推荐落地 SQLite/Parquet 缓存后再供模型训练",
+            "tushare_akshare_baostock": "公共/半公共补充源，适合缺口修复与交叉校验，不替代权威主源",
+            "csmar_cnki_ppm": "浏览器/远程会话研究源；不在代码、日志或结果中保存密码/cookie",
         },
         "remote_browser_policy": {
             "skill_path": "skill/llm-factor-mining",
@@ -6848,6 +6978,9 @@ def build_memory_update(leaderboard):
         "search_failure_counts": dict(search_failures),
         "final_reporting_failure_counts_not_persisted": dict(final_reporting_failures),
         "channel_controller": build_search_channel_controller(leaderboard),
+        "hall_of_fame": [row.get("factor") for row in sorted(leaderboard, key=_trajectory_score, reverse=True)[:10]],
+        "pareto_front": [row.get("factor") for row in _pareto_front_rows(leaderboard, limit=12)],
+        "repair_blueprints": [compact_failure_repair_plan(row) for row in sorted(search_rejected, key=leaderboard_search_key, reverse=True)[:8]],
         "next_search_actions": next_actions,
         "test_fields_in_search_memory": False,
     }
@@ -6915,6 +7048,264 @@ def quality_diversity_research_directive(leaderboard):
         "against the frozen baseline while remaining robust across train-defined market states."
     )
 
+
+
+LLM_FACTOR_TRAJECTORY_SCHEMA = "llm_factor_trajectory/1.0"
+
+
+def compact_failure_repair_plan(row):
+    """Map search failure diagnostics into concrete LLM mutation objectives."""
+
+    diagnosis = row.get("search_diagnosis") if isinstance(row, dict) else {}
+    if not isinstance(diagnosis, dict):
+        diagnosis = {}
+    failure = str(
+        diagnosis.get("failure_type")
+        or row.get("search_diagnosis_code")
+        or "unknown"
+    )
+    blueprint = {
+        "failure_type": failure,
+        "repair_objective": "improve train-validation evidence without using test metrics",
+        "operator_bias": ["rank", "zscore", "neutralize_size_industry", "ts_zscore"],
+        "feature_bias": [],
+        "validation_focus": ["valid_rank_ic", "purged_kfold", "walk_forward", "low_redundancy"],
+        "must_preserve": ["point_in_time_fields", "one_period_label_embargo", "strict_json_dsl"],
+        "must_avoid": ["future_return", "test_metric_feedback", "scalar_only_parameter_tweak"],
+        "test_metrics_used": False,
+    }
+    if failure == "incremental_information_shortage":
+        blueprint.update({
+            "repair_objective": "add information orthogonal to the frozen baseline and raise dual-residual incremental IC",
+            "operator_bias": ["graph_concept_residual", "industry_rank", "ts_delta", "soft_gate"],
+            "feature_bias": ["moneyflow", "event_text_proxy", "fundamental_visible"],
+            "validation_focus": ["valid_incremental_residual_rank_ic", "posterior_joint_positive_probability", "purged_kfold"],
+        })
+    elif failure == "synergy_contribution_shortage":
+        blueprint.update({
+            "repair_objective": "increase downstream marginal contribution when combined with existing frontier factors",
+            "operator_bias": ["soft_gate", "sub", "div", "regime_mixture_expert"],
+            "feature_bias": ["valuation", "quality", "liquidity", "moneyflow"],
+            "validation_focus": ["valid_downstream_marginal_rank_ic_gain", "weight_diversification", "low_correlation"],
+        })
+    elif failure == "regime_concentration":
+        blueprint.update({
+            "repair_objective": "reduce dependence on a single train-defined regime and improve worst-regime lower confidence bound",
+            "operator_bias": ["soft_gate", "ts_zscore", "deep_contrastive_regime", "industry_rank"],
+            "feature_bias": ["price_volume", "event_text_proxy", "moneyflow"],
+            "validation_focus": ["valid_regime_positive_breadth", "valid_worst_regime_lower_90", "walk_forward"],
+        })
+    elif failure in {"search_pbo_overfit_risk", "search_cscv_overfit_risk", "posterior_validation_signal_uncertain"}:
+        blueprint.update({
+            "repair_objective": "simplify unstable structure and improve repeated out-of-sample posterior confidence",
+            "operator_bias": ["rank", "winsorize", "ts_mean", "ts_std", "add"],
+            "feature_bias": ["price_volume", "valuation", "fundamental_visible"],
+            "validation_focus": ["deflated_sharpe_confidence", "PBO_proxy", "CSCV_PBO", "positive_fold_ratio"],
+            "must_avoid": blueprint["must_avoid"] + ["deep_nested_formula_without_economic_reason"],
+        })
+    elif failure == "novelty_shortage":
+        blueprint.update({
+            "repair_objective": "move to an underexplored feature/operator island with lower Spearman and AST similarity",
+            "operator_bias": ["graph_concept_residual", "soft_gate", "mul", "div", "ts_delta"],
+            "feature_bias": ["event_text_proxy", "kline_context", "moneyflow", "fundamental_visible"],
+            "validation_focus": ["search_max_abs_corr_to_other_factor", "max_ast_similarity_prior", "dual_residual_incrementality"],
+        })
+    return blueprint
+
+
+def llm_factor_mining_process_contract(memory=None, leaderboard=None):
+    """Explicit process contract aligned with trajectory-style LLM factor mining."""
+
+    memory = memory or {}
+    leaderboard = leaderboard or []
+    return {
+        "schema": LLM_FACTOR_TRAJECTORY_SCHEMA,
+        "process": [
+            "1_hypothesis_from_method_cards_and_memory",
+            "2_task_decomposition_into_fields_operators_and_validation_targets",
+            "3_strict_dsl_generation_or_repair",
+            "4_static_leakage_complexity_coverage_audit",
+            "5_factor_execution_and_neutralized_exposure_build",
+            "6_quick_screen_on_embargoed_train_validation",
+            "7_full_rankic_icir_group_return_cost_backtest",
+            "8_walk_forward_purged_kfold_cscv_dsr_pbo_checks",
+            "9_low_correlation_pareto_and_hall_of_fame_selection",
+            "10_failure_attribution_and_diagnosis_conditioned_mutation",
+            "11_memory_trace_writeback_without_test_feedback",
+        ],
+        "memory_summary": {
+            "scope": memory.get("memory_scope"),
+            "records_loaded": int(memory.get("memory_records", 0) or 0),
+            "accepted_patterns_loaded": len(memory.get("accepted_patterns", []) or []),
+            "failed_patterns_loaded": len(memory.get("failed_patterns", []) or []),
+            "test_fields_loaded": bool(memory.get("test_fields_loaded", False)),
+        },
+        "current_frontier_summary": {
+            "evaluated": len(leaderboard or []),
+            "search_passed": sum(1 for row in leaderboard or [] if row.get("search_stage_pass")),
+            "reliable": sum(1 for row in leaderboard or [] if row.get("search_reliability_pass")),
+            "test_metrics_used_for_search": False,
+        },
+        "required_candidate_fields": [
+            "hypothesis",
+            "dsl",
+            "repair_hypothesis",
+            "validation_acceptance_criteria",
+            "expected_low_correlation_source",
+            "expected_failure_mode",
+            "anti_overfit_plan",
+        ],
+    }
+
+
+def _trajectory_score(row):
+    return (
+        safe_float(row.get("posterior_search_utility"), safe_float(row.get("search_risk_adjusted_selection_score"), 0.0))
+        + 0.20 * safe_float(row.get("posterior_joint_positive_probability"), 0.5)
+        + 0.15 * safe_float(row.get("valid_incremental_residual_rank_ic"), 0.0)
+        + 0.15 * safe_float(row.get("valid_downstream_marginal_rank_ic_gain"), 0.0)
+        - 0.20 * safe_float(row.get("search_pbo_proxy"), 0.5)
+        - 0.10 * safe_float(row.get("search_max_abs_corr_to_other_factor"), 1.0)
+    )
+
+
+def _pareto_front_rows(rows, limit=12):
+    metrics = [
+        ("search_risk_adjusted_selection_score", 1.0),
+        ("posterior_joint_positive_probability", 1.0),
+        ("valid_incremental_residual_rank_ic", 1.0),
+        ("valid_downstream_marginal_rank_ic_gain", 1.0),
+        ("search_pbo_proxy", -1.0),
+        ("search_max_abs_corr_to_other_factor", -1.0),
+    ]
+    prepared = []
+    for row in rows or []:
+        if row.get("evaluation_failed"):
+            continue
+        vector = tuple(direction * safe_float(row.get(name), 0.0) for name, direction in metrics)
+        prepared.append((row, vector))
+    front = []
+    for row, vector in prepared:
+        dominated = False
+        for other, other_vector in prepared:
+            if other is row:
+                continue
+            if all(o >= v for o, v in zip(other_vector, vector)) and any(o > v for o, v in zip(other_vector, vector)):
+                dominated = True
+                break
+        if not dominated:
+            front.append(row)
+    front.sort(key=_trajectory_score, reverse=True)
+    return front[:limit]
+
+
+def build_search_trajectory_event(
+    iteration,
+    current,
+    parent_rows,
+    generated_mutations,
+    leaderboard,
+    search_controller,
+    llm_feedback_audit,
+    mcts_expansion_audit,
+    synergy_expansion_audit,
+    strict_target_reached,
+):
+    hall = sorted(leaderboard or [], key=_trajectory_score, reverse=True)[:10]
+    pareto = _pareto_front_rows(leaderboard or [], limit=10)
+    failures = defaultdict(int)
+    for row in leaderboard or []:
+        failures[str(row.get("search_diagnosis_code") or "unknown")] += 1
+    return {
+        "schema": LLM_FACTOR_TRAJECTORY_SCHEMA,
+        "iteration": int(iteration),
+        "objective": "maximize train-validation robust incremental factor evidence under novelty and anti-overfit gates",
+        "evaluated_candidates": [
+            {
+                "factor": cand.get("factor_name"),
+                "channel": cand.get("channel"),
+                "family": cand.get("family"),
+                "quality_diversity_island": cand.get("quality_diversity_island") or candidate_static_island(cand),
+                "hypothesis": str(cand.get("hypothesis") or "")[:360],
+            }
+            for cand in current or []
+        ],
+        "parent_selection": [
+            {
+                "factor": row.get("factor"),
+                "channel": row.get("channel"),
+                "score": safe_float(row.get("search_risk_adjusted_selection_score"), 0.0),
+                "diagnosis": row.get("search_diagnosis_code"),
+                "repair_blueprint": compact_failure_repair_plan(row),
+            }
+            for row in parent_rows or []
+        ],
+        "generated_children": [
+            {
+                "factor": cand.get("factor_name"),
+                "channel": cand.get("channel"),
+                "family": cand.get("family"),
+                "parent_factors": [
+                    event.get("parent_factor") or event.get("mcts_parent")
+                    for event in cand.get("lineage") or []
+                    if isinstance(event, dict) and (event.get("parent_factor") or event.get("mcts_parent"))
+                ],
+                "hypothesis": str(cand.get("hypothesis") or "")[:360],
+            }
+            for cand in generated_mutations or []
+        ],
+        "hall_of_fame": [
+            {
+                "factor": row.get("factor"),
+                "channel": row.get("channel"),
+                "accepted": bool(row.get("accepted")),
+                "search_reliability_pass": bool(row.get("search_reliability_pass")),
+                "trajectory_score": _trajectory_score(row),
+                "rank_ic_train_valid": [row.get("train_rank_ic"), row.get("valid_rank_ic")],
+                "pbo": row.get("search_pbo_proxy"),
+                "max_corr": row.get("search_max_abs_corr_to_other_factor"),
+            }
+            for row in hall
+        ],
+        "pareto_front": [
+            {
+                "factor": row.get("factor"),
+                "channel": row.get("channel"),
+                "score": row.get("search_risk_adjusted_selection_score"),
+                "posterior_probability": row.get("posterior_joint_positive_probability"),
+                "incremental_ic": row.get("valid_incremental_residual_rank_ic"),
+                "downstream_gain": row.get("valid_downstream_marginal_rank_ic_gain"),
+                "pbo": row.get("search_pbo_proxy"),
+                "max_corr": row.get("search_max_abs_corr_to_other_factor"),
+            }
+            for row in pareto
+        ],
+        "failure_counts": dict(failures),
+        "channel_controller": search_controller,
+        "llm_feedback_audit": llm_feedback_audit,
+        "mcts_expansion_audit": mcts_expansion_audit,
+        "synergy_expansion_audit": synergy_expansion_audit,
+        "strict_target_reached": bool(strict_target_reached),
+        "test_metrics_used": False,
+    }
+
+
+def build_run_trajectory_audit(iteration_log, leaderboard, memory_update):
+    trajectory_events = [
+        item.get("search_trajectory") for item in iteration_log or []
+        if isinstance(item.get("search_trajectory"), dict)
+    ]
+    return {
+        "schema": LLM_FACTOR_TRAJECTORY_SCHEMA,
+        "rounds": len(trajectory_events),
+        "test_metrics_used_for_search": False,
+        "hall_of_fame": (trajectory_events[-1].get("hall_of_fame") if trajectory_events else []),
+        "pareto_front": (trajectory_events[-1].get("pareto_front") if trajectory_events else []),
+        "dominant_failures": (trajectory_events[-1].get("failure_counts") if trajectory_events else {}),
+        "next_search_actions": (memory_update or {}).get("next_search_actions", []),
+        "memory_policy": (memory_update or {}).get("memory_policy"),
+        "process_contract": llm_factor_mining_process_contract({}, leaderboard),
+    }
 
 def generate_llm_fresh_hypothesis(method_cards, memory, leaderboard, all_candidates, iteration, budget=1):
     if budget <= 0:
@@ -6991,6 +7382,7 @@ def generate_llm_feedback_mutations(parent_rows, evaluated, memory, iteration, b
             "valid_worst_regime_lower_90": row.get("valid_worst_regime_lower_90"),
             "posterior_joint_positive_probability": row.get("posterior_joint_positive_probability"),
             "posterior_search_utility": row.get("posterior_search_utility"),
+            "repair_blueprint": compact_failure_repair_plan(row),
         })
     if not parent_payload:
         return [], {"status": "skipped", "reason": "no_valid_parent_payload"}
@@ -7003,6 +7395,7 @@ def generate_llm_feedback_mutations(parent_rows, evaluated, memory, iteration, b
         "feature_semantics": AI_FEATURE_SEMANTICS,
         "research_directive": "repair the diagnosed train-validation failure without using test evidence",
         "allowed_dsl_ops": sorted(ALLOWED_AI_DSL_OPS),
+        "trajectory_process_contract": llm_factor_mining_process_contract(memory, parent_rows),
         "dsl_grammar": {
             "feature": {"op": "feature", "name": "one data_space field"},
             "unary": {"op": "rank|industry_rank|zscore|clip01|neg|graph_concept_residual", "child": "one DSL node"},
@@ -7032,6 +7425,10 @@ def generate_llm_feedback_mutations(parent_rows, evaluated, memory, iteration, b
                 "data_scope": "fields used",
                 "windows": [20, 60, 120],
                 "mutation_reason": "specific diagnosis-to-program change",
+                "repair_hypothesis": "how this child repairs the parent failure blueprint",
+                "validation_acceptance_criteria": "specific train-validation metrics that must improve",
+                "expected_low_correlation_source": "what makes the child non-redundant",
+                "expected_failure_mode": "most likely remaining weakness",
                 "anti_overfit_plan": "train-validation-only rationale",
             }]
         },
@@ -7040,6 +7437,7 @@ def generate_llm_feedback_mutations(parent_rows, evaluated, memory, iteration, b
         "You are the feedback mutation component of an institutional A-share factor-mining agent. "
         "Use only the supplied train/validation diagnostics and search-memory fields. Test metrics do not exist for this task. "
         "Produce a semantically changed, auditable DSL program that directly addresses the diagnosed failure without merely changing a scalar threshold. "
+        "Every child must name the repair hypothesis, validation acceptance criteria, low-correlation source, and expected failure mode. "
         "Follow the supplied DSL grammar and return strict JSON only."
     )
     parsed, status = call_ai_router_json(system_prompt, payload, retries=1)
@@ -7067,8 +7465,12 @@ def generate_llm_feedback_mutations(parent_rows, evaluated, memory, iteration, b
         if not dsl:
             validation_issues.append(f"candidate_{idx + 1}_invalid_dsl")
             continue
-        if dsl_complexity(dsl) > 28:
-            validation_issues.append(f"candidate_{idx + 1}_complexity_above_28")
+        quality_gate = llm_candidate_quality_gate(item, dsl, max_complexity=28)
+        if not quality_gate["passed"]:
+            validation_issues.append(
+                f"candidate_{idx + 1}_metadata_quality_gate_failed:"
+                + ",".join(quality_gate["issues"][:4])
+            )
             continue
         parent = evaluated[parent_factor]
         out.append(make_candidate(
@@ -7087,7 +7489,14 @@ def generate_llm_feedback_mutations(parent_rows, evaluated, memory, iteration, b
                 "reasoning_effort": DEFAULT_REASONING_EFFORT,
                 "api_status": status,
                 "mutation_reason": item.get("mutation_reason"),
+                "repair_hypothesis": item.get("repair_hypothesis"),
+                "validation_acceptance_criteria": item.get("validation_acceptance_criteria"),
+                "expected_low_correlation_source": item.get("expected_low_correlation_source"),
+                "expected_failure_mode": item.get("expected_failure_mode"),
+                "metadata_quality_gate": quality_gate,
+                "repair_blueprint": parent_map.get(parent_factor, {}).get("repair_blueprint"),
                 "anti_overfit_plan": item.get("anti_overfit_plan"),
+                "trajectory_schema": LLM_FACTOR_TRAJECTORY_SCHEMA,
                 "evidence_scope": "embargoed_train_validation_search_only",
                 "test_metrics_used": False,
             }],
@@ -7686,7 +8095,11 @@ def build_candidate_pool(panel, method_cards, memory, budget_per_channel=5, llm_
     candidates = []
     if llm_candidates is None:
         llm_candidates = generate_llm_hypotheses(method_cards, memory, min(4, budget_per_channel))
-    deep_candidates = generate_deep_representation_candidates(min(9, max(6, budget_per_channel + 3)))
+    include_deep_representation = os.environ.get("FACTOR_MINING_INCLUDE_DEEP_REPRESENTATION", "0") == "1"
+    deep_candidates = (
+        generate_deep_representation_candidates(min(9, max(6, budget_per_channel + 3)))
+        if include_deep_representation else []
+    )
     raw_causal_candidates = generate_raw_causal_grammar_candidates(min(6, max(4, budget_per_channel + 1)))
     orthogonal_seed_candidates = generate_nested_orthogonal_complement_seed_candidates(1)
     mcts_candidates = generate_mcts_candidates(memory, budget_per_channel)
@@ -8617,6 +9030,18 @@ def mine(
             )),
             "channel_controller": search_controller,
             "best": search_ranked[:5],
+            "search_trajectory": build_search_trajectory_event(
+                it + 1,
+                current,
+                parent_rows,
+                generated_mutations,
+                leaderboard,
+                search_controller,
+                llm_feedback_audit,
+                mcts_expansion_audit,
+                synergy_expansion_audit,
+                strict_target_reached,
+            ),
         })
 
         if strict_target_reached:
@@ -8647,7 +9072,7 @@ def mine(
     reliability_head = leaderboard[0] if leaderboard else {}
     payload = {
         "status": "ready",
-        "model_version": "v27_strict_champion_challenge",
+        "model_version": "v28_trajectory_intelligent_factor_mining",
         "run_id": run_id,
         "universe": universe,
         "database": str(db),
@@ -8709,6 +9134,8 @@ def mine(
             "failure_counts": memory.get("failure_counts", {}),
         },
         "memory_update": memory_update,
+        "trajectory_audit": build_run_trajectory_audit(iteration_log, leaderboard, memory_update),
+        "trajectory_schema": LLM_FACTOR_TRAJECTORY_SCHEMA,
         "search_controller": search_controller,
         "validation_policy": {
             "search_sample": "train_plus_validation_with_one_period_test_boundary_embargo",
@@ -8810,6 +9237,7 @@ def mine(
             "initial_generation_failure_blocks_formal_run": os.environ.get("FACTOR_REQUIRE_GPT", "0") == "1",
             "feedback_failure_blocks_formal_run": False,
             "feedback_failure_policy": "strict_reject_and_audit_then_continue_other_search_channels",
+            "four_model_scope": "LSTM, GRU, RL+Transformer, LLM evolution; AutoEncoder/deep_representation is disabled by default unless FACTOR_MINING_INCLUDE_DEEP_REPRESENTATION=1",
             "secret_policy": "keys are read from server environment only and are never written to browser or result outputs",
         },
     }

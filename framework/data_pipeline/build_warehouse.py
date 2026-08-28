@@ -17,6 +17,7 @@ SPLITS = {
     "full": ("20120101", "20260630", "full-sample display only"),
 }
 INDEX_UNIVERSES = {
+    "CSI500_ENH": "000905.SH",
     "CSI800_ENH": "000906.SH",
     "CSI2000_ENH": "932000.CSI",
 }

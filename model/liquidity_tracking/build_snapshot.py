@@ -31,7 +31,7 @@ SOURCE_REGISTRY: dict[str, dict[str, Any]] = {
         "primary": "iFinD THS_DS/THS_DataPool 小单净额；Wind ASHAREMONEYFLOW 交叉核验",
         "fields": ["trade_dt", "value_diff_small_trader", "value_diff_small_trader_act"],
         "frequency": "日频，收盘后",
-        "fallback": "Wind ASHAREMONEYFLOW；免费源仅用于方向核验，不替代金额口径",
+        "fallback": "Wind ASHAREMONEYFLOW",
         "quality": "同一交易日全A聚合；万元转亿元；不前向填充",
     },
     "wind_accounts": {
@@ -71,7 +71,7 @@ SOURCE_REGISTRY: dict[str, dict[str, Any]] = {
         "primary": "ASHAREMARGINTRADESUM / ASHAREMARGINTRADE / ASHAREMARGINSUBJECT",
         "fields": ["trade_dt", "s_marsum_tradingbalance", "s_marsum_purchwithborrowmoney", "s_marsum_repaymenttobroker", "s_margin_conversionrate"],
         "frequency": "日频，网页按周聚合",
-        "fallback": "iFinD date_sequence；Tushare margin/margin_detail；交易所公开数据",
+        "fallback": "iFinD date_sequence；Tushare margin/margin_detail；交易所授权或公开披露数据",
         "quality": "沪深交易所分别求和；融资净买入=买入额-偿还额；元转亿元",
     },
     "wind_primary": {

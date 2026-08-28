@@ -7,7 +7,9 @@ import pandas as pd
 
 from framework.backtest.index_active_risk_optimizer import (
     ActiveRiskConfig,
+    _annual_active_covariance,
     _causal_alpha_reliability,
+    _tracking_error,
     add_causal_risk_features,
     optimize_weights,
 )
@@ -107,6 +109,36 @@ class ActiveRiskOptimizerTests(unittest.TestCase):
             first.loc[17, "active_risk_volatility"],
             second.loc[17, "active_risk_volatility"],
         )
+
+    def test_tracking_error_does_not_double_annualize_volatility(self) -> None:
+        active = np.asarray([0.10, -0.10], dtype=float)
+        annual_covariance = np.diag([0.20**2, 0.20**2])
+        expected = float(np.sqrt(0.10**2 * 0.20**2 * 2.0))
+        self.assertAlmostEqual(
+            _tracking_error(active, annual_covariance), expected, places=12
+        )
+
+    def test_causal_covariance_is_psd_and_uses_only_matured_rows(self) -> None:
+        matured = []
+        for index in range(24):
+            common = 0.01 * np.sin(index / 3.0)
+            matured.append({
+                "A": common + 0.002 * np.cos(index),
+                "B": common - 0.002 * np.cos(index),
+                "C": -0.5 * common,
+            })
+        config = ActiveRiskConfig(
+            volatility_lookback=24,
+            volatility_min_periods=12,
+        )
+        covariance, diagnostics = _annual_active_covariance(
+            matured, ["A", "B", "C"], np.asarray([0.20, 0.20, 0.20]), config
+        )
+        self.assertEqual(diagnostics["method"], "ewma_newey_west_shrunk_psd")
+        self.assertTrue(diagnostics["causal"])
+        self.assertTrue(np.isfinite(covariance).all())
+        self.assertGreaterEqual(float(np.linalg.eigvalsh(covariance).min()), -1.0e-12)
+        self.assertGreater(covariance[0, 1], covariance[0, 2])
 
 
 if __name__ == "__main__":

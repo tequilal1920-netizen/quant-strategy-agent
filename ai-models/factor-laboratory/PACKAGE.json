@@ -1,53 +1,55 @@
 {
-    "schema_version":  "quant-agent-ai-package/1.0",
-    "title":  "因子实验室",
-    "slug":  "factor-laboratory",
-    "github_folder_url":  "https://github.com/tequilal1920-netizen/quant-strategy-agent/tree/agent/industry-style-r16-6/ai-models/factor-laboratory",
-    "github_branch":  "agent/industry-style-r16-6",
-    "skill_entry":  "SKILL.md",
-    "query_entry":  "scripts/query.py",
-    "model_source":  "source",
-    "bundled_components":  [
-                               "components/llm_factor_mining",
-                               "components/index_enhancement"
-                           ],
-    "bundled_runtime":  "runtime/agent_runtime",
-    "operations":  [
-                       "champion",
-                       "index",
-                       "models"
-                   ],
-    "question_examples":  [
-                              "当前因子冠军是什么，训练验证测试效果如何",
-                              "中证800指数增强当前模型和治理状态是什么"
-                          ],
-    "standalone_with_environment":  true,
-    "shared_repository_dependencies":  [
-                                           "澶栭儴妯″瀷蹇収鐩綍",
-                                           "鐮旂┒鏁版嵁搴撲笌鍥犲瓙鐘舵€佸簱",
-                                           "杩滅▼妯″瀷鏈嶅姟鍙婂叾鍑嵁"
-                                       ],
-    "required_environment":  [
-                                 "QUANT_AGENT_SNAPSHOT_ROOT",
-                                 "RESEARCH_WAREHOUSE_DB",
-                                 "FACTOR_STATE_DB",
-                                 "QUANT_AGENT_OUTPUT_ROOT"
-                             ],
-    "remote_model_environment":  [
-                                     "QUANT_AGENT_BASE_URL",
-                                     "QUANT_AGENT_USER",
-                                     "QUANT_AGENT_PASSWORD"
-                                 ],
-    "deployment":  {
-                       "remote_root":  "F:\\apps\\quant_strategy_agent_github_runtime",
-                       "local_service":  "http://127.0.0.1:8091",
-                       "authenticated_service":  "http://127.0.0.1:8076/quant-agent-vnext"
-                   },
-    "inventory":  {
-                      "skill_files":  6,
-                      "source_files":  10,
-                      "component_files":  13,
-                      "runtime_files":  8,
-                      "total_files":  38
-                  }
+  "schema_version": "quant-agent-ai-package/1.0",
+  "title": "因子实验室",
+  "slug": "factor-laboratory",
+  "github_folder_url": "https://github.com/tequilal1920-netizen/quant-strategy-agent/tree/agent/industry-style-r16-6/ai-models/factor-laboratory",
+  "github_branch": "agent/industry-style-r16-6",
+  "skill_entry": "SKILL.md",
+  "query_entry": "scripts/query.py",
+  "model_source": "source",
+  "bundled_components": [
+    "components/llm_factor_mining",
+    "components/index_enhancement"
+  ],
+  "bundled_runtime": "runtime/agent_runtime",
+  "operations": [
+    "champion",
+    "index",
+    "models"
+  ],
+  "question_examples": [
+    "当前因子冠军是什么，训练验证测试效果如何",
+    "高夏普增强档候选是什么，和默认稳健冠军差异在哪里",
+    "因子实验室 r36.2 分域择时层如何做行业、市值、风格和监督学习分域",
+    "我的因子库里哪些因子构造过于简陋，需要如何升级数据底稿"
+  ],
+  "standalone_with_environment": true,
+  "shared_repository_dependencies": [
+    "database/research_warehouse.db",
+    "board/quant_strategy_agent_vnext/data",
+    "model/factor_laboratory/champion_manifest.json"
+  ],
+  "required_environment": [
+    "QUANT_AGENT_SNAPSHOT_ROOT",
+    "RESEARCH_WAREHOUSE_DB",
+    "FACTOR_STATE_DB",
+    "QUANT_AGENT_OUTPUT_ROOT"
+  ],
+  "remote_model_environment": [
+    "QUANT_AGENT_BASE_URL",
+    "QUANT_AGENT_USER",
+    "QUANT_AGENT_PASSWORD"
+  ],
+  "deployment": {
+    "remote_root": "F:\\apps\\quant_strategy_agent_github_runtime",
+    "local_service": "http://127.0.0.1:8091",
+    "authenticated_service": "http://127.0.0.1:8076/quant-agent-vnext"
+  },
+  "inventory": {
+    "skill_files": 7,
+    "source_files": 14,
+    "component_files": 13,
+    "runtime_files": 8,
+    "total_files": 42
+  }
 }

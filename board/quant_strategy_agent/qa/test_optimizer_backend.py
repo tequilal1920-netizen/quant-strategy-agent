@@ -1127,9 +1127,72 @@ def test_selected_plan_can_be_compiled_by_existing_interpret_api(tmp_path):
     assert interpreted.status_code == 200
     payload = interpreted.get_json()
     assert payload["status"] == "AWAITING_CONFIRMATION"
-    assert len(payload["constraints"]) == 2
-    assert llm.calls[-1]["phase"] == "initial"
-    assert option["mandate_request"] in llm.calls[-1]["raw_request"]
+    assert payload["compiled_from_selected_plan"] is True
+    assert len(payload["constraints"]) >= 8
+    assert {item["_constraint_payload"]["type"] for item in payload["constraints"]} >= {
+        "holding",
+        "industry",
+        "style",
+        "active_risk",
+        "trading",
+        "liquidity",
+    }
+    assert len(llm.calls) == 1
+    assert llm.calls[-1]["phase"] == "plan_options"
+
+
+def test_selected_plan_parameter_updates_flow_into_mandate(tmp_path):
+    llm = PlanThenMandateLLM(optimizer_plan_options_payload(), valid_llm_payload())
+    app, _ = make_app(tmp_path, llm_client=llm)
+    client = app.test_client()
+    option = {
+        "id": "plan_parameter_updates",
+        "name": "plan_parameter_updates",
+        "parameter_updates": {
+            "target_count": 50,
+            "min_weight": 0.004,
+            "max_weight": 0.040,
+            "max_active_weight": 0.025,
+            "industry_bound": 0.015,
+            "style_bound": 0.10,
+            "tracking_error_limit": 0.055,
+            "turnover_limit": 0.30,
+            "max_adv_participation": 0.04,
+            "whitelist": ["000001.SZ", "600000"],
+            "blacklist": "000002.SZ,000003.SZ",
+        },
+    }
+
+    interpreted = client.post(
+        "/api/optimizer/constraints/interpret",
+        json={
+            "mode": "joint_cardinality",
+            "instruction": RAW_REQUEST,
+            "selected_plan": option,
+            "base_config": ui_base_config(),
+            "universe": "000905.SH",
+        },
+    )
+
+    assert interpreted.status_code == 200
+    payload = interpreted.get_json()
+    assert payload["status"] == "AWAITING_CONFIRMATION"
+    constraints = {
+        item["_constraint_payload"]["id"]: item["_constraint_payload"]
+        for item in payload["constraints"]
+    }
+    assert constraints["holding.security_weight"]["lower"] == pytest.approx(0.004)
+    assert constraints["holding.security_weight"]["upper"] == pytest.approx(0.040)
+    assert constraints["holding.active_security_weight"]["upper"] == pytest.approx(0.025)
+    assert constraints["industry.active_exposure.all"]["upper"] == pytest.approx(0.015)
+    for style_name in ("size", "value", "momentum", "liquidity"):
+        assert constraints[f"style.active_exposure.{style_name}"]["upper"] == pytest.approx(0.10)
+    assert constraints["active_risk.tracking_error"]["upper"] == pytest.approx(0.055)
+    assert constraints["trading.one_way_turnover"]["upper"] == pytest.approx(0.30)
+    assert constraints["liquidity.adv_participation"]["upper"] == pytest.approx(0.04)
+    assert constraints["list.whitelist"]["scope"]["security_set"] == ["000001.SZ", "600000.SH"]
+    assert constraints["list.blacklist"]["scope"]["security_set"] == ["000002.SZ", "000003.SZ"]
+    assert len(llm.calls) == 0
 
 
 def test_plan_options_api_blocks_llm_weight_fields(tmp_path):

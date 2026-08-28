@@ -6,7 +6,8 @@ param(
   [string]$Python = "",
   [string]$FactorPython = "",
   [int]$Port = 18072,
-  [string]$ExpectedVersion = "2026.07.23-research-workspace-r16.3"
+  [string]$ExpectedVersion = "2026.07.26-active-risk-shadow-r20.2",
+  [string]$ExpectedFactorEngine = "factor-lab/3.2-inverse-volatility-rank-execution"
 )
 
 $ErrorActionPreference = "Stop"
@@ -82,7 +83,8 @@ try {
     @{ Name = "board"; Url = "/api/board/snapshot" },
     @{ Name = "allocation"; Url = "/api/allocation/snapshot" },
     @{ Name = "rotation"; Url = "/api/rotation/snapshot" },
-    @{ Name = "factor_lab"; Url = "/api/factor-lab/health" }
+    @{ Name = "factor_lab"; Url = "/api/factor-lab/health" },
+    @{ Name = "model_governance"; Url = "/api/model-governance" }
   )
   $Results = @()
   foreach ($Check in $Checks) {
@@ -101,9 +103,41 @@ try {
     }
   }
 
+  $FactorHealth = Invoke-RestMethod -Uri ("http://127.0.0.1:{0}/api/factor-lab/health" -f $Port) -WebSession $Session -TimeoutSec 20
+  if (
+    $FactorHealth.engine_version -ne $ExpectedFactorEngine -or
+    $FactorHealth.champion.status -ne "ok" -or
+    $FactorHealth.champion.selection_basis -ne "train_and_validation_only" -or
+    $FactorHealth.champion.test_usage -ne "report_only" -or
+    $FactorHealth.champion.gate_summary.passed -ne 9 -or
+    $FactorHealth.champion.gate_summary.total -ne 10 -or
+    $FactorHealth.champion.gate_summary.all_passed
+  ) {
+    throw "Factor champion contract validation failed."
+  }
+  $Governance = Invoke-RestMethod -Uri ("http://127.0.0.1:{0}/api/model-governance" -f $Port) -WebSession $Session -TimeoutSec 20
+  if (
+    $Governance.status -ne "ok" -or
+    $Governance.release -ne $ExpectedVersion -or
+    $Governance.summary.model_count -ne 9 -or
+    $Governance.models.index_enhancement.engine -ne "index-enhancement/1.2-active-risk-shadow-audit" -or
+    $Governance.models.index_enhancement.gate -ne "review" -or
+    $Governance.models.index_enhancement.splits.test.sharpe -ge 0 -or
+    $Governance.models.kline_memory.gate -ne "observe_only" -or
+    $Governance.models.kline_memory.robustness.cross_sectional_audit.candidate_count -ne 12 -or
+    $Governance.models.kline_memory.robustness.cross_sectional_audit.eligible_count -ne 0 -or
+    $Governance.models.kline_memory.robustness.cross_sectional_audit.selection_uses_test -or
+    $Governance.models.index_enhancement.robustness.post_test_shadow.model -ne "index_active_risk_optimizer_v12" -or
+    $Governance.models.index_enhancement.robustness.post_test_shadow.promotion_eligible -or
+    $Governance.models.index_enhancement.robustness.post_test_shadow.selection_uses_test
+  ) {
+    throw "Model governance contract validation failed."
+  }
+
   [pscustomobject]@{
     Status = "passed"
     Version = $Health.version
+    FactorEngine = $FactorHealth.engine_version
     LoginStatus = $Login.StatusCode
     Results = $Results
     StdErrBytes = (Get-Item -LiteralPath $ErrLog).Length

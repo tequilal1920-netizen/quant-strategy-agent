@@ -1498,15 +1498,17 @@ def refresh_edb(
         return {"refreshed": [], "errors": {}}
     refreshed: list[str] = []
     errors: dict[str, str] = {}
+    wind_error: str | None = None
     try:
         client = WindEDBClient()
     except Exception as error:
-        return {
-            "refreshed": [],
-            "errors": {"wind_edb": f"{type(error).__name__}: {error}"},
-        }
+        client = None
+        wind_error = f"{type(error).__name__}: {error}"
+        errors["wind_edb"] = wind_error
     for series_id, (indicator_id, scale) in active.items():
         try:
+            if client is None:
+                raise SourceUnavailableError(wind_error or "Wind EDB is unavailable")
             values = {
                 when: value * scale
                 for when, value in client.series(indicator_id, start, end).items()
@@ -1522,6 +1524,25 @@ def refresh_edb(
             refreshed.append(series_id)
         except Exception as error:
             errors[series_id] = f"{type(error).__name__}: {error}"
+    if "retail.participating_investors" in active and "retail.participating_investors" not in refreshed:
+        try:
+            ifind_client = IFindEDBClient()
+            values = {
+                when: value * 0.0001
+                for when, value in ifind_client.series("S004085260", start, end).items()
+            }
+            item = CONTRACT_BY_ID["retail.participating_investors"]
+            cache.replace_series(
+                "retail.participating_investors",
+                values,
+                "iFinD EDB",
+                "S004085260",
+                run_id,
+            )
+            refreshed.append("retail.participating_investors")
+            errors.pop("retail.participating_investors", None)
+        except Exception as error:
+            errors["retail.participating_investors.ifind"] = f"{type(error).__name__}: {error}"
     return {"refreshed": refreshed, "errors": errors}
 
 
@@ -1550,8 +1571,22 @@ def command_refresh(args: argparse.Namespace) -> int:
     cache = LiquidityCache(args.cache)
     run_id = cache.start_run()
     selected = parse_selected(args.series)
+
+    def guarded(name: str, fn: Any) -> dict[str, Any]:
+        try:
+            return fn()
+        except Exception as exc:
+            if not args.allow_incomplete:
+                raise
+            return {
+                "refreshed": [],
+                "errors": {"error": f"{type(exc).__name__}: {exc}"},
+            }
+
     details: dict[str, Any] = {
-        "wind_sql": refresh_wind_sql(cache, run_id, args.start, selected),
+        "wind_sql": guarded(
+            "wind_sql", lambda: refresh_wind_sql(cache, run_id, args.start, selected)
+        ),
     }
     from specialized_refresh import (
         refresh_etf,
@@ -1559,33 +1594,42 @@ def command_refresh(args: argparse.Namespace) -> int:
         refresh_private_indices,
     )
 
-    details["wind_etf"] = refresh_etf(
-        cache,
-        run_id,
-        args.start,
-        selected,
-        WindOpenQueryClient,
-        CONTRACT_BY_ID,
-        iso_date,
-        finite_float,
+    details["wind_etf"] = guarded(
+        "wind_etf",
+        lambda: refresh_etf(
+            cache,
+            run_id,
+            args.start,
+            selected,
+            WindOpenQueryClient,
+            CONTRACT_BY_ID,
+            iso_date,
+            finite_float,
+        ),
     )
-    details["wind_margin_industry"] = refresh_margin_industry(
-        cache,
-        run_id,
-        selected,
-        WindOpenQueryClient,
-        CONTRACT_BY_ID,
-        iso_date,
-        finite_float,
+    details["wind_margin_industry"] = guarded(
+        "wind_margin_industry",
+        lambda: refresh_margin_industry(
+            cache,
+            run_id,
+            selected,
+            WindOpenQueryClient,
+            CONTRACT_BY_ID,
+            iso_date,
+            finite_float,
+        ),
     )
-    details["wind_private_indices"] = refresh_private_indices(
-        cache,
-        run_id,
-        args.start,
-        selected,
-        WindOpenQueryClient,
-        CONTRACT_BY_ID,
-        finite_float,
+    details["wind_private_indices"] = guarded(
+        "wind_private_indices",
+        lambda: refresh_private_indices(
+            cache,
+            run_id,
+            args.start,
+            selected,
+            WindOpenQueryClient,
+            CONTRACT_BY_ID,
+            finite_float,
+        ),
     )
     from official_refresh import (
         refresh_amac_private_aum,
@@ -1593,31 +1637,40 @@ def command_refresh(args: argparse.Namespace) -> int:
         refresh_csdata_margin_monthly,
     )
 
-    details["amac_private"] = refresh_amac_private_aum(
-        cache,
-        run_id,
-        selected,
-        CONTRACT_BY_ID,
-        finite_float,
+    details["amac_private"] = guarded(
+        "amac_private",
+        lambda: refresh_amac_private_aum(
+            cache,
+            run_id,
+            selected,
+            CONTRACT_BY_ID,
+            finite_float,
+        ),
     )
-    details["csdata_margin"] = refresh_csdata_margin_monthly(
-        cache,
-        run_id,
-        args.start,
-        selected,
-        CONTRACT_BY_ID,
-        finite_float,
+    details["csdata_margin"] = guarded(
+        "csdata_margin",
+        lambda: refresh_csdata_margin_monthly(
+            cache,
+            run_id,
+            args.start,
+            selected,
+            CONTRACT_BY_ID,
+            finite_float,
+        ),
     )
-    details["crefi_position"] = refresh_crefi_position(
-        cache,
-        run_id,
-        args.start,
-        selected,
-        CONTRACT_BY_ID,
+    details["crefi_position"] = guarded(
+        "crefi_position",
+        lambda: refresh_crefi_position(
+            cache,
+            run_id,
+            args.start,
+            selected,
+            CONTRACT_BY_ID,
+        ),
     )
     if not args.skip_edb:
-        details["wind_edb"] = refresh_edb(
-            cache, run_id, args.start, args.end, selected
+        details["wind_edb"] = guarded(
+            "wind_edb", lambda: refresh_edb(cache, run_id, args.start, args.end, selected)
         )
     audit = cache.audit()
     details["audit"] = {
@@ -1630,7 +1683,6 @@ def command_refresh(args: argparse.Namespace) -> int:
     cache.finish_run(run_id, status, details)
     print(json.dumps({"run_id": run_id, "status": status, **details}, ensure_ascii=False, indent=2))
     return 0 if status == "passed" or args.allow_incomplete else 2
-
 
 def command_audit(args: argparse.Namespace) -> int:
     payload = LiquidityCache(args.cache).audit()

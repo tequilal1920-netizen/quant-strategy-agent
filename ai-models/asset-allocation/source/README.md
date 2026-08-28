@@ -40,3 +40,35 @@ node --check .\board\quant_strategy_agent\static\js\app.js
 ## v4.4 统计晋级口径
 
 - 正式晋级必须同时通过训练和验证主动证据、CSCV-PBO及95%去偏夏普概率。候选权重和测试期报告可以保留，但测试期高夏普不能修复未通过的统计门。
+
+## v5.2.2 refresh and runtime boundary
+
+Use the formal builder for every refresh:
+
+```powershell
+python .\model\asset_allocation\build_snapshot_v522.py --database .\database\research_warehouse.db --output .\board\quant_strategy_agent_vnext\data\asset_allocation_snapshot.candidate.json
+```
+
+The refresh script validates the candidate before replacement. It requires schema `5.2.2`, service status `ready`, quality status `passed`, the explicit Sharpe-only authorization, recommended mode `benchmark_relative`, the exact 60/15/10/15 internal policy anchor, and an `equal_weight_25` object whose role is NAV-display-only. A failed candidate never replaces the current snapshot.
+
+The runtime preserves legacy snapshots. For schema `5.2.2`, it reports the policy/display benchmark separation, service authorization separately from statistical warnings, all five cycle admission and missing-factor records, and `model_evidence_catalog` when supplied.
+
+## v6.3 真实因子链路口径（2026-08-16）
+
+v6.3 只保留用户指定的两个周期模型和三个配置模型：
+
+1. 周期跟踪只保留「美林时钟」和「普林格周期」。美林使用增长、通胀两轴；普林格使用货币、信用、增长、市场确认四轴，并按六阶段输出资产偏好。每个轴从真实可计算的宏观和四资产市场序列中生成滚动 zscore、1/3/6/12 月变化、HP 滤波、傅里叶低频、分位数和 6 月斜率等候选特征，只用训练窗检验 IC、方向命中率和覆盖率后入模。
+2. 资产只保留股票、债券、黄金、商品四类，基准为四资产等权 25%。当前研究面板来自 v553：权益 H00300、债券 H11006、黄金 AU9999、非贵金属商品自融资指数；该面板仍为 D2 研究级，不标生产 D3。
+3. 配置模型只保留三类：
+   - 周期观点 BL：美林和普林格合成四资产排序，生成股票-债券、黄金-债券、商品-债券三条相对观点，构造 Q/Omega 后进入 Black-Litterman 后验，再做 TE、主动偏离、换手和成本约束求解。
+   - 风险平价：独立使用四资产稳健协方差求 ERC，作为低波高夏普风险均衡模型，不读取周期或宏观观点。
+   - 宏观因子调整：增长、通胀、利率、信用、汇率、流动性六类筛选因子真实进入 alpha，并以风险平价为风险锚进行约束优化。
+4. 推荐模型只用训练期 2018-2019 与验证期 2020-2021 的 Sharpe、超额、IR 和稳定性确定；2022 以后全部为 report-only，不允许反向调参。
+5. 真实性边界：v6.3 已完成 D2 实算因子 → 周期阶段 → 资产映射 → BL/宏观调控 → 回测闭环；但宏观 release_time、available_time、vintage/revision、Wind/iFinD/RQ 跨源 hash 尚未闭环，production_admitted_macro_factor_count 必须保持 0。
+
+日常构建：
+
+```powershell
+python .\model\asset_allocation\build_snapshot_v63_real_chain_four_asset_cycle_bl_rp_macro.py --output .\board\quant_strategy_agent_vnext\data\asset_allocation_snapshot.json
+python -m pytest .\model\asset_allocation\test_asset_allocation_v63_real_chain.py -q
+```

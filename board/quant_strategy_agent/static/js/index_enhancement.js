@@ -148,6 +148,14 @@
     {name:'动态参数',rows:[['状态数','3–6','4'],['状态置信度','0.6–0.8','0.7'],['收缩强度','0.2–0.9','0.6'],['拥挤惩罚','0–3','1']]}
   ];}
   function sleeveScores(tests){const defs={价值:/value|ep|bp|pe|pb|yield/i,质量:/quality|roe|profit|cash|accrual/i,动量:/momentum|mom|return|trend/i,低波:/vol|beta|risk/i,红利:/dividend|yield|dv/i,规模:/size|cap|mv/i,成长:/growth|yoy|revenue/i};return Object.entries(defs).map(([name,re])=>{const hit=tests.filter(x=>re.test(x.factor)&&num(x.rank_ic)!==null),score=hit.length?mean(hit.map(x=>Math.abs(x.rank_ic)))*1500:0;return {name,score:Math.min(100,score),count:hit.length,pass:hit.filter(x=>x.pass).length};});}
+  function smartExposureMatrix(snapshot){
+    const smart=obj(snapshot.smartbeta),candidates=[obj(snapshot.realized_exposure_matrix)[STATE.universe],obj(snapshot.smartbeta_exposure_matrix)[STATE.universe],obj(smart.exposure_matrix)[STATE.universe],smart.exposure_matrix];
+    for(const candidate of candidates){
+      const item=obj(candidate),axes=arr(item.axes||item.columns),rows=arr(item.rows||item.sleeves),values=arr(item.values||item.z);
+      if(axes.length&&rows.length&&rows.length===values.length&&values.every(line=>Array.isArray(line)&&line.length===axes.length&&line.every(value=>num(value)!==null)))return {axes,rows:rows.map(row=>typeof row==='string'?row:(row.name||row.label||row.code)),values,asOf:item.as_of||item.date};
+    }
+    return null;
+  }
   async function smartbetaPage(snapshot){ensureModel(snapshot);const tests=arr(obj(snapshot.factor_tests)[STATE.universe]),allScores=sleeveScores(tests),scores=allScores.slice().sort((a,b)=>STATE.smartSort==='pass'?(b.pass-a.pass)||(b.score-a.score):STATE.smartSort==='count'?(b.count-a.count)||(b.score-a.score):(b.score-a.score)).slice(0,STATE.smartCount),rows=leaderboard(snapshot,12),nav=cid('s-nav'),front=cid('s-front'),score=cid('s-score'),radar=cid('s-radar'),pass=cid('s-pass'),heat=cid('s-heat'),sharpe=cid('s-sharpe');
     const proxy=rows.slice().sort((a,b)=>(b.information_ratio||-99)-(a.information_ratio||-99)).slice(0,4).map(x=>x.model);
     const smartOpts={model:false,controls:[{id:'ix-smart-sort',label:'因子排序',options:[{value:'score',label:'证据分数'},{value:'pass',label:'通过数量'},{value:'count',label:'因子数量'}],value:STATE.smartSort},{id:'ix-smart-count',label:'因子显示',options:[5,7].map(v=>({value:v,label:`前${v}类`})),value:STATE.smartCount}]};
@@ -159,8 +167,9 @@
     plot(score,[{type:'bar',x:scores.map(x=>x.name),y:scores.map(x=>x.score),text:scores.map(x=>`${fmt(x.score,1)} / ${x.count}项`),textposition:'auto',marker:{color:COLORS}}],{showlegend:false,yaxis:{range:[0,100],gridcolor:'#edf0f3'}});
     plot(radar,[{type:'scatterpolar',r:scores.map(x=>x.score).concat([scores[0].score]),theta:scores.map(x=>x.name).concat([scores[0].name]),fill:'toself',line:{color:'#c00000'},fillcolor:'rgba(192,0,0,.12)'}],{polar:{radialaxis:{range:[0,100],gridcolor:'#e5e7eb'}},showlegend:false,margin:{l:45,r:45,t:20,b:30}});
     plot(pass,[{type:'bar',x:scores.map(x=>x.name),y:scores.map(x=>x.pass),name:'通过',marker:{color:'#00b050'}},{type:'bar',x:scores.map(x=>x.name),y:scores.map(x=>x.count-x.pass),name:'未通过',marker:{color:'#c00000'}}],{barmode:'stack'});
-    const axes=['行业','风格','个股','TE','换手','容量'];const z=scores.map((x,i)=>axes.map((_,j)=>Math.round((Math.sin((i+1)*(j+2))*.25+(i===j?0.55:0))*100)/100));
-    plot(heat,[{type:'heatmap',x:axes,y:scores.map(x=>x.name),z,colorscale:[[0,'#2f75b5'],[.5,'#fff'],[1,'#c00000']],zmid:0,colorbar:{thickness:10}}],{height:420,margin:{l:70,r:35,t:12,b:45},yaxis:{autorange:'reversed',showgrid:false}});
+    const matrix=smartExposureMatrix(snapshot),heatNode=$(heat);
+    if(matrix)plot(heat,[{type:'heatmap',x:matrix.axes,y:matrix.rows,z:matrix.values,colorscale:[[0,'#2f75b5'],[.5,'#fff'],[1,'#c00000']],zmid:0,colorbar:{thickness:10},hovertemplate:'%{y}<br>%{x}: %{z:.3f}<extra></extra>'}],{height:420,margin:{l:70,r:35,t:12,b:45},yaxis:{autorange:'reversed',showgrid:false}});
+    else if(heatNode)heatNode.innerHTML='<div class="ix-data-blocked"><strong>真实暴露数据缺失</strong><span>快照未返回SmartBeta求解后的行业、风格、个股、TE、换手和容量暴露矩阵；该图已阻断，不生成模拟值。</span></div>';
   }
 
   function riskParams(){return [

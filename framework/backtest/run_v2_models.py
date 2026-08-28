@@ -63,6 +63,7 @@ STOCK_MODELS = {
     "portfolio_hierarchical_optimizer_v11": {"score": "hierarchical_alpha_v11", "n": 22, "industry_cap": 0.30, "regime": "adaptive_equity_risk", "weight_mode": "risk_budget"},
 }
 SPECIAL_STOCK_MODELS = {
+    "CSI500_ENH": {},
     "CSI800_ENH": {
         "csi800_walkforward_ic_agent_v10": {
             "score": "walkforward_ic_alpha_v10",
@@ -164,11 +165,28 @@ INDEX_ACTIVE_RISK_MODELS = {
             reliability_prior_strength=24.0,
         ),
     },
+    "index_active_risk_covariance_v14": {
+        "score": "walkforward_ic_alpha_v10",
+        "config": ActiveRiskConfig(
+            target_tracking_error=0.045,
+            max_active_weight=0.008,
+            max_total_weight=0.05,
+            turnover_penalty=3.0,
+            residual_ridge=1.0e-4,
+            volatility_lookback=36,
+            volatility_min_periods=12,
+            covariance_half_life=12.0,
+            covariance_newey_west_lags=1,
+            covariance_diagonal_shrinkage=0.35,
+            covariance_regime_lookback=12,
+        ),
+    },
 }
 UNIVERSE_INCEPTION = {
     "CSI2000_ENH": "20230811",
 }
 MIN_MEMBER_COUNTS = {
+    "CSI500_ENH": 450,
     "CSI800_ENH": 600,
     "CSI2000_ENH": 1600,
 }
@@ -1573,7 +1591,7 @@ def run(db, project_root, out_dir, allow_incomplete=False, max_months=None):
     leaderboard = []
     learning_diagnostics = {}
     active_risk_diagnostics = {}
-    for universe in ["ALL_A", "CSI800_ENH", "CSI2000_ENH"]:
+    for universe in ["ALL_A", "CSI500_ENH", "CSI800_ENH", "CSI2000_ENH"]:
         stock_models = {**STOCK_MODELS, "factor_ic_learned_agent_v7": STRUCTURAL_MODELS["factor_ic_learned_agent_v7"], **SPECIAL_STOCK_MODELS.get(universe, {})}
         report_style_models = {
             name: cfg

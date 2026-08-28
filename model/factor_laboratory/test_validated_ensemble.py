@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import math
+import json
 import sys
 import unittest
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -483,6 +485,127 @@ class ValidatedEnsembleMetricsTests(unittest.TestCase):
             [first, changed], dates
         )
         np.testing.assert_allclose(baseline[:4], perturbed[:4])
+
+
+    def test_signal_innovation_gain_is_causal_and_reduces_unstable_turnover(self) -> None:
+        previous_signal = {f"S{index:02d}": float(index) for index in range(20)}
+        stable_signal = dict(previous_signal)
+        reversed_signal = {name: -value for name, value in previous_signal.items()}
+        stable_gain = core.causal_rank_innovation_gain(stable_signal, previous_signal)
+        unstable_gain = core.causal_rank_innovation_gain(reversed_signal, previous_signal)
+        self.assertAlmostEqual(stable_gain, 1.0, places=12)
+        self.assertGreater(unstable_gain, 0.0)
+        self.assertLess(unstable_gain, stable_gain)
+
+        desired = {"A": 0.60, "B": 0.40}
+        previous = {"A": 0.40, "B": 0.60}
+        blended = core.reliability_blended_sleeve(desired, previous, unstable_gain)
+        self.assertAlmostEqual(sum(blended.values()), 1.0, places=12)
+        self.assertLess(
+            core._sleeve_turnover(blended, previous),
+            core._sleeve_turnover(desired, previous),
+        )
+
+    def test_purged_expanding_oof_predictions_are_causal(self) -> None:
+        from sklearn.linear_model import LinearRegression
+
+        rng = np.random.default_rng(20260731)
+        date_count = 40
+        assets_per_date = 6
+        dates = np.repeat(
+            np.asarray([f"2024{index + 1:04d}" for index in range(date_count)]),
+            assets_per_date,
+        )
+        features = rng.normal(size=(len(dates), 2))
+        target = 0.04 * features[:, 0] + rng.normal(scale=0.01, size=len(dates))
+        baseline, report = core.purged_expanding_oof_predictions(
+            LinearRegression(), features, target, dates,
+            lambda matrix: matrix, horizon=5, max_samples=10000,
+            folds=4, initial_fraction=0.40,
+        )
+        changed_target = target.copy()
+        date_index = np.repeat(np.arange(date_count), assets_per_date)
+        changed_target[date_index >= 30] *= -50
+        changed, _ = core.purged_expanding_oof_predictions(
+            LinearRegression(), features, changed_target, dates,
+            lambda matrix: matrix, horizon=5, max_samples=10000,
+            folds=4, initial_fraction=0.40,
+        )
+        prior_mask = date_index < 30
+        np.testing.assert_allclose(
+            baseline[prior_mask], changed[prior_mask], equal_nan=True
+        )
+        self.assertTrue(np.isnan(baseline[: assets_per_date * 16]).all())
+        self.assertTrue(np.isfinite(baseline).any())
+        self.assertEqual(report["purge_trading_dates"], 5)
+        self.assertFalse(report["uses_in_sample_prediction"])
+        self.assertGreater(report["prediction_coverage"], 0.50)
+        for fold in report["folds"]:
+            self.assertLess(fold["training_end"], fold["prediction_start"])
+
+    def test_progress_is_bounded_to_unit_interval(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "progress.json"
+            core.progress(path, "strategy", 1.75, "done")
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["progress"], 1.0)
+
+    def test_robust_development_score_penalizes_single_window_spike(self) -> None:
+        unstable = {
+            "train": {"sharpe": 0.02, "rank_ic": 0.011},
+            "valid": {"sharpe": 1.66, "rank_ic": 0.022, "hit_rate": 0.58},
+            "test": {"sharpe": 99.0},
+        }
+        stable = {
+            "train": {"sharpe": 1.02, "rank_ic": 0.025},
+            "valid": {"sharpe": 0.82, "rank_ic": 0.034, "hit_rate": 0.64},
+            "test": {"sharpe": -99.0},
+        }
+        self.assertGreater(
+            core.robust_development_score(stable),
+            core.robust_development_score(unstable),
+        )
+        changed_test = {
+            **stable,
+            "test": {"sharpe": 9999.0},
+        }
+        self.assertEqual(
+            core.robust_development_score(stable),
+            core.robust_development_score(changed_test),
+        )
+        negative_ic = {
+            "train": {"sharpe": 1.0, "rank_ic": 0.02},
+            "valid": {"sharpe": 1.0, "rank_ic": -0.01, "hit_rate": 0.60},
+        }
+        self.assertEqual(
+            core.robust_development_score(negative_ic),
+            -math.inf,
+        )
+
+
+    def test_gru_runner_sets_recurrent_cell_before_lstm_pipeline(self) -> None:
+        original_lstm = effective_dsr._lstm
+        original_effective = effective_dsr.effective_dsr
+        seen = {}
+
+        def fake_run_lstm(panel, config, progress_path):
+            seen.update(config)
+            return {"engine": config.get("engine"), "architecture": {"components": ["projected_lstm"]}, "selection": {"name": "LSTM"}}
+
+        effective_dsr._lstm = fake_run_lstm
+        effective_dsr.effective_dsr = lambda result, panel, trials=None: result
+        try:
+            result = effective_dsr.run_gru(object(), {"engine": "gru", "lstm_layers": 4}, None)
+        finally:
+            effective_dsr._lstm = original_lstm
+            effective_dsr.effective_dsr = original_effective
+        self.assertEqual(result["engine"], "gru")
+        self.assertEqual(seen["engine"], "gru")
+        self.assertEqual(seen["recurrent_cell"], "gru")
+        self.assertEqual(result["architecture"]["name"], "PIT-Masked Causal Mixture Residual GRU")
+        self.assertEqual(result["selection"]["name"], "GRU")
+
+
 
 
 if __name__ == "__main__":

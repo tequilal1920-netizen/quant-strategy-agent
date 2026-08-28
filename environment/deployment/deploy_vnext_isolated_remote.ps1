@@ -89,11 +89,6 @@ if (-not (Test-Path -LiteralPath $CurrentEnv)) {
   throw "Current private environment is unavailable."
 }
 
-$CurrentHealthBefore = Invoke-RestMethod `
-  -Uri "http://127.0.0.1:8071/healthz" -TimeoutSec 15
-if ($CurrentHealthBefore.version -ne $ExpectedCurrentVersion) {
-  throw "Current 8071 baseline changed before deployment."
-}
 $ServeBeforeRaw = & tailscale funnel status --json
 $ServeBefore = $ServeBeforeRaw | ConvertFrom-Json
 $ServeHost443 = "desktop-i22b489.tailf9d7ac.ts.net:443"
@@ -102,15 +97,29 @@ $CurrentProxyBefore = $ServeBefore.Web.$ServeHost443.Handlers."/quant-agent".Pro
 $PublicRootBefore = $ServeBefore.Web.$ServeHostPublic.Handlers."/".Proxy
 $PublicQuantAiBefore = $ServeBefore.Web.$ServeHostPublic.Handlers."/quant-ai".Proxy
 $PreviousVNextProxy = $ServeBefore.Web.$ServeHostPublic.Handlers.$PublicPath.Proxy
-if ($CurrentProxyBefore -ne "http://127.0.0.1:8071/quant-agent") {
+if ([string]::IsNullOrWhiteSpace($CurrentProxyBefore)) {
+  throw "Current /quant-agent Funnel baseline is unavailable."
+}
+$CurrentProxyUri = [Uri]$CurrentProxyBefore
+if (
+  $CurrentProxyUri.Scheme -ne "http" -or
+  $CurrentProxyUri.Host -ne "127.0.0.1" -or
+  $CurrentProxyUri.AbsolutePath.TrimEnd("/") -ne "/quant-agent"
+) {
   throw "Current /quant-agent Funnel baseline is unexpected."
+}
+$CurrentHealthUri = "{0}://{1}:{2}/healthz" -f `
+  $CurrentProxyUri.Scheme, $CurrentProxyUri.Host, $CurrentProxyUri.Port
+$CurrentHealthBefore = Invoke-RestMethod -Uri $CurrentHealthUri -TimeoutSec 15
+if ($CurrentHealthBefore.version -ne $ExpectedCurrentVersion) {
+  throw "Current /quant-agent version baseline changed before deployment."
 }
 
 $TaskCreated = $false
 $FunnelAdded = $false
 try {
-  New-Item -ItemType Directory -Path $ReleaseRoot -Force | Out-Null
-  Expand-Archive -LiteralPath $ArchivePath -DestinationPath $ReleaseRoot -Force
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  [IO.Compression.ZipFile]::ExtractToDirectory($ArchivePath, $ReleaseRoot)
 
   $AppRoot = Join-Path $ReleaseRoot "board\quant_strategy_agent_vnext"
   $PrivateDir = Join-Path $AppRoot "private"
@@ -177,7 +186,7 @@ try {
     -Trigger $Trigger `
     -Settings $Settings `
     -Principal $Principal `
-    -Description "Isolated five-panel Quant Strategy Agent vNext on 8076" |
+    -Description "Isolated governed Quant Strategy Agent vNext" |
     Out-Null
   $TaskCreated = $true
   Start-ScheduledTask -TaskName $TaskName
@@ -205,6 +214,32 @@ try {
     throw "Local vNext login validation failed."
   }
 
+  $MountedBase = $LocalBase + $PublicPath
+  $MountedSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+  $MountedLogin = Invoke-WebRequest `
+    -UseBasicParsing `
+    -Uri ($MountedBase + "/login") `
+    -Method Post `
+    -Body @{
+      username = $Values["QUANT_AGENT_USER"]
+      password = $Values["QUANT_AGENT_PASSWORD"]
+    } `
+    -WebSession $MountedSession `
+    -MaximumRedirection 5 `
+    -TimeoutSec 20
+  $MountedGovernance = Invoke-RestMethod `
+    -Uri ($MountedBase + "/api/model-governance") `
+    -WebSession $MountedSession `
+    -TimeoutSec 30
+  if (
+    $MountedLogin.StatusCode -ne 200 -or
+    $MountedLogin.Content -notmatch "research_five_panel\.js" -or
+    $MountedLogin.Content -match "research_analysis\.js" -or
+    $MountedGovernance.release -ne $ExpectedGovernanceRelease
+  ) {
+    throw "Local mounted-path vNext validation failed."
+  }
+
   $Governance = Invoke-RestMethod `
     -Uri ($LocalBase + "/api/model-governance") `
     -WebSession $Session `
@@ -212,11 +247,29 @@ try {
   if (
     $Governance.status -ne "ok" -or
     $Governance.release -ne $ExpectedGovernanceRelease -or
+    $Governance.models.index_enhancement.engine -ne
+      "index-enhancement/1.3-bayesian-core-satellite-audit" -or
+    $Governance.models.index_enhancement.robustness.post_test_shadow.model -ne
+      "index_bayesian_stability_core_v16" -or
+    $Governance.models.liquidity_tracking.engine -ne
+      "liquidity-state/1.1-investable-cash-monthly" -or
+    $Governance.models.liquidity_tracking.champion -ne
+      "liquidity_monthly_investable_cash_v9" -or
+    $Governance.models.liquidity_tracking.robustness.selection_uses_test -ne $false -or
+    $Governance.models.liquidity_tracking.robustness.promotion_eligible -ne $false -or
+    $Governance.models.liquidity_tracking.robustness.effective_training_series -ne 18 -or
+    $Governance.models.liquidity_tracking.robustness.excluded_contracts -ne 10 -or
     $Governance.models.portfolio_optimization.engine -ne
-      "portfolio-optimizer/2.4-solver-audit" -or
+      "portfolio-optimizer/2.6-cash-duration-segmentation" -or
     $Governance.models.portfolio_optimization.robustness.quality_status -ne
       "passed" -or
-    @($Governance.models.portfolio_optimization.robustness.solver_benchmark).Count -ne 4
+    @($Governance.models.portfolio_optimization.robustness.solver_benchmark).Count -ne 4 -or
+    $Governance.models.kline_memory.engine -ne
+      "kline-multiscale-expert/1.6-research-deployment-split" -or
+    $Governance.models.kline_memory.gate -ne "research_diagnostic" -or
+    $Governance.models.kline_memory.robustness.multiscale_release_guard.selection_uses_test -ne $false -or
+    $Governance.models.kline_memory.robustness.multiscale_release_guard.release_approved -ne $false -or
+    $null -ne $Governance.models.kline_memory.robustness.multiscale_release_guard.deployment_candidate
   ) {
     throw "Local vNext model-governance validation failed."
   }
@@ -241,8 +294,8 @@ try {
     $Watch.Stop()
     if (
       $Evidence.status -eq "not_applicable" -or
-      @($Evidence.layers).Count -ne 5 -or
-      @($Evidence.mechanism.nodes).Count -ne 6 -or
+      @($Evidence.layers).Count -ne 4 -or
+      $null -ne $Evidence.mechanism -or
       @($Evidence.visuals.PSObject.Properties).Count -ne 4
     ) {
       throw "Research evidence contract failed for $Route"
@@ -253,6 +306,77 @@ try {
       layers = @($Evidence.layers).Count
       visual_blocks = @($Evidence.visuals.PSObject.Properties).Count
     }
+  }
+
+  $RotationSnapshot = Invoke-RestMethod `
+    -Uri ($LocalBase + "/api/rotation/snapshot") `
+    -WebSession $Session `
+    -TimeoutSec 30
+  $RotationTracking = Invoke-RestMethod `
+    -Uri ($LocalBase + "/api/rotation/tracking") `
+    -WebSession $Session `
+    -TimeoutSec 30
+  $RotationEvidence = Invoke-RestMethod `
+    -Uri ($LocalBase + "/api/research-evidence?route=rotation%3Aindustry") `
+    -WebSession $Session `
+    -TimeoutSec 30
+  $MonthlyRotation = $RotationSnapshot.industry.frequencies.monthly
+  $WeeklyRotation = $RotationSnapshot.industry.frequencies.weekly
+  $MonthlyResearch = @($MonthlyRotation.research_ranking)
+  $WeeklyResearch = @($WeeklyRotation.research_ranking)
+  $TrackingRows = @(
+    $RotationTracking.industries.PSObject.Properties |
+      ForEach-Object { $_.Value }
+  )
+  $EffectiveFactorTotal = (
+    $RotationSnapshot.six_dimension.effective_factor_count.PSObject.Properties |
+      Measure-Object -Property Value -Sum
+  ).Sum
+  $BadWeightProfiles = @()
+  $SelectedLabel = ([char]0x5165).ToString() + ([char]0x9009).ToString()
+  foreach ($Profile in $RotationSnapshot.six_dimension.current_weights.PSObject.Properties) {
+    $WeightValues = @($Profile.Value.PSObject.Properties | ForEach-Object { [double]$_.Value })
+    if (
+      [math]::Abs((($WeightValues | Measure-Object -Sum).Sum) - 1.0) -gt 1e-9 -or
+      ($WeightValues | Measure-Object -Minimum).Minimum -lt 0 -or
+      ($WeightValues | Measure-Object -Maximum).Maximum -gt 0.300000001
+    ) {
+      $BadWeightProfiles += $Profile.Name
+    }
+  }
+  if (
+    $RotationSnapshot.six_dimension.model_version -ne
+      "industry-rotation/5.2-six-dimension-pit-adaptive" -or
+    [int]$EffectiveFactorTotal -ne 53 -or
+    @($BadWeightProfiles).Count -ne 0 -or
+    $MonthlyRotation.selected_candidate -ne "C6_direct_month_smooth" -or
+    $WeeklyRotation.selected_candidate -ne "C6_direct_month_smooth" -or
+    $MonthlyRotation.research_selected_candidate -ne
+      "C26_monthly_post_test_diagnostic_six_dimension_online_ic_top10_buffered" -or
+    $WeeklyRotation.research_selected_candidate -ne
+      "C29_weekly_post_test_diagnostic_six_dimension_equal_top10_buffered" -or
+    $MonthlyRotation.promotion_gate.status -ne "diagnostic_only" -or
+    $WeeklyRotation.promotion_gate.status -ne "diagnostic_only" -or
+    $MonthlyResearch.Count -ne 31 -or
+    $WeeklyResearch.Count -ne 31 -or
+    @($MonthlyResearch | Where-Object {
+      @($_.components.PSObject.Properties).Count -ne 7
+    }).Count -ne 0 -or
+    @($WeeklyResearch | Where-Object {
+      @($_.components.PSObject.Properties).Count -ne 7
+    }).Count -ne 0 -or
+    $RotationTracking.selected_candidate -ne
+      "C26_monthly_post_test_diagnostic_six_dimension_online_ic_top10_buffered" -or
+    $RotationTracking.production_candidate -ne "C6_direct_month_smooth" -or
+    $TrackingRows.Count -ne 31 -or
+    @($TrackingRows | Where-Object { $_.selected }).Count -ne 10 -or
+    @($RotationEvidence.visuals.descriptive.chart.heatmap.x).Count -ne 6 -or
+    @($RotationEvidence.visuals.descriptive.chart.heatmap.y).Count -ne 31 -or
+    @($RotationEvidence.visuals.strategy.table.rows).Count -ne 31 -or
+    @($RotationEvidence.visuals.strategy.table.rows |
+      Where-Object { $_.selected -eq $SelectedLabel }).Count -ne 10
+  ) {
+    throw "Industry six-dimension release contract validation failed."
   }
 
   $Target = "http://127.0.0.1:$Port$PublicPath"
@@ -282,24 +406,91 @@ try {
 
   $PublicBase = "https://desktop-i22b489.tailf9d7ac.ts.net:$PublicPort$PublicPath"
   $PublicHealth = Wait-Health ($PublicBase + "/healthz") $ExpectedVersion
-  $PublicSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-  $PublicLogin = Invoke-WebRequest `
-    -UseBasicParsing `
-    -Uri ($PublicBase + "/login") `
-    -Method Post `
-    -Body @{
-      username = $Values["QUANT_AGENT_USER"]
-      password = $Values["QUANT_AGENT_PASSWORD"]
-    } `
+  $PublicReady = $false
+  $PublicLoginStatus = 0
+  $PublicHasFivePanel = $false
+  $PublicHasLegacyAnalysis = $false
+  $PublicFinalUri = ""
+  $PublicLoginForm = $false
+  $PublicContentLength = 0
+  for ($Attempt = 0; $Attempt -lt 12; $Attempt += 1) {
+    try {
+      $PublicSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+      $PublicLogin = Invoke-WebRequest `
+        -UseBasicParsing `
+        -Uri ($PublicBase + "/login") `
+        -Method Post `
+        -Body @{
+          username = $Values["QUANT_AGENT_USER"]
+          password = $Values["QUANT_AGENT_PASSWORD"]
+        } `
+        -WebSession $PublicSession `
+        -MaximumRedirection 5 `
+        -TimeoutSec 30
+      $PublicLoginStatus = [int]$PublicLogin.StatusCode
+      $PublicFinalUri = [string]$PublicLogin.BaseResponse.ResponseUri.AbsoluteUri
+      $PublicContentLength = [int]$PublicLogin.Content.Length
+      $PublicLoginForm = $PublicLogin.Content -match 'class="login-form"'
+      $PublicHasFivePanel = $PublicLogin.Content -match "research_five_panel\.js"
+      $PublicHasLegacyAnalysis = $PublicLogin.Content -match "research_analysis\.js"
+      if (
+        $PublicLoginStatus -eq 200 -and
+        $PublicHasFivePanel -and
+        -not $PublicHasLegacyAnalysis
+      ) {
+        $PublicGovernance = Invoke-RestMethod `
+          -Uri ($PublicBase + "/api/model-governance") `
+          -WebSession $PublicSession `
+          -TimeoutSec 30
+        if (
+          $PublicGovernance.status -eq "ok" -and
+          $PublicGovernance.release -eq $ExpectedGovernanceRelease
+        ) {
+          $PublicReady = $true
+          break
+        }
+      }
+    } catch {}
+    Start-Sleep -Seconds 1
+  }
+  if (-not $PublicReady) {
+    throw (
+      "Public vNext login validation failed after retries. " +
+      "status=$PublicLoginStatus five_panel=$PublicHasFivePanel " +
+      "legacy_analysis=$PublicHasLegacyAnalysis login_form=$PublicLoginForm " +
+      "content_length=$PublicContentLength final_uri=$PublicFinalUri"
+    )
+  }
+
+  $PublicRotationSnapshot = Invoke-RestMethod `
+    -Uri ($PublicBase + "/api/rotation/snapshot") `
     -WebSession $PublicSession `
-    -MaximumRedirection 5 `
+    -TimeoutSec 30
+  $PublicRotationTracking = Invoke-RestMethod `
+    -Uri ($PublicBase + "/api/rotation/tracking") `
+    -WebSession $PublicSession `
+    -TimeoutSec 30
+  $PublicRotationEvidence = Invoke-RestMethod `
+    -Uri ($PublicBase + "/api/research-evidence?route=rotation%3Aindustry") `
+    -WebSession $PublicSession `
     -TimeoutSec 30
   if (
-    $PublicLogin.StatusCode -ne 200 -or
-    $PublicLogin.Content -notmatch "research_five_panel\.js" -or
-    $PublicLogin.Content -match "research_analysis\.js"
+    $PublicRotationSnapshot.six_dimension.model_version -ne
+      $RotationSnapshot.six_dimension.model_version -or
+    $PublicRotationSnapshot.industry.frequencies.monthly.research_selected_candidate -ne
+      $MonthlyRotation.research_selected_candidate -or
+    $PublicRotationSnapshot.industry.frequencies.weekly.research_selected_candidate -ne
+      $WeeklyRotation.research_selected_candidate -or
+    @($PublicRotationSnapshot.industry.frequencies.monthly.research_ranking).Count -ne 31 -or
+    @($PublicRotationSnapshot.industry.frequencies.weekly.research_ranking).Count -ne 31 -or
+    $PublicRotationTracking.selected_candidate -ne $RotationTracking.selected_candidate -or
+    @($PublicRotationTracking.industries.PSObject.Properties).Count -ne 31 -or
+    @($PublicRotationEvidence.visuals.descriptive.chart.heatmap.x).Count -ne 6 -or
+    @($PublicRotationEvidence.visuals.descriptive.chart.heatmap.y).Count -ne 31 -or
+    @($PublicRotationEvidence.visuals.strategy.table.rows |
+      Where-Object { $_.selected -eq $SelectedLabel }).Count -ne 10
   ) {
-    throw "Public vNext login validation failed."
+    throw "Public industry six-dimension contract validation failed."
   }
   $CurrentHealthAfter = Invoke-RestMethod `
     -Uri "https://desktop-i22b489.tailf9d7ac.ts.net/quant-agent/healthz" `
@@ -318,6 +509,7 @@ try {
     public_url = $PublicBase + "/"
     version = $PublicHealth.version
     governance_release = $Governance.release
+    liquidity_engine = $Governance.models.liquidity_tracking.engine
     portfolio_engine = $Governance.models.portfolio_optimization.engine
     task = $TaskName
     task_state = [string](Get-ScheduledTask -TaskName $TaskName).State
@@ -356,6 +548,12 @@ try {
     -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($Listener) {
     Stop-Process -Id $Listener.OwningProcess -Force -ErrorAction SilentlyContinue
+  }
+  if (Test-Path -LiteralPath $ReleaseRoot) {
+    Remove-Item -LiteralPath $ReleaseRoot -Recurse -Force
+  }
+  if (Test-Path -LiteralPath $ReleaseRoot) {
+    throw "Failed release root remains after rollback. Original failure: $($_.Exception.Message)"
   }
   throw
 }

@@ -27,14 +27,18 @@ def test_analysis_component_is_direct_chinese_and_table_free() -> None:
     assert "当前值" not in script
     assert "版本" not in script
     assert "模型参数" in script
-    assert "原理与传导" in script
+    assert "原理与传导" not in script
     assert "数据与截面" in script
     assert "历史与实时" in script
     assert "模型与预测" in script
     assert "策略与归因" in script
     assert "研究原页隐藏" in script
-    assert 'type: "sankey"' in script
+    assert 'type: "sankey"' not in script
+    assert 'data-five-block="mechanism"' not in script
+    assert '{ 编号: "01", 键: "descriptive", 名称: "数据与截面" }' in script
+    assert '{ 编号: "04", 键: "strategy", 名称: "策略与归因" }' in script
     assert "中文值" in script
+    assert 'cache: "no-store"' in script
     assert "中文化可见文本" in script
     login = (APP_DIR / "templates" / "index.html").read_text(encoding="utf-8")
     assert "<footer>版本" not in login
@@ -67,6 +71,17 @@ def test_analysis_component_keeps_global_plot_view() -> None:
     assert "微趋势" in css
     assert "研究原页隐藏" in css
 
+
+def test_rotation_home_keeps_production_and_research_bindings_separate() -> None:
+    script = (APP_DIR / "static" / "js" / "rotation_module.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "rankChart(p1.id,im.ranking)" in script
+    assert 'navChart(p4.id,im,"industry")' in script
+    assert "dimensionHeatmap(p3.id,researchRanking)" in script
+    assert "rankChart(p1.id,researchRanking)" not in script
+    assert 'navChart(p4.id,arr(researchResult.nav).length?researchResult:im,"industry")' not in script
 
 def test_analysis_component_prevents_shell_moves_and_visual_overlap_sources() -> None:
     script = (APP_DIR / "static" / "js" / "research_five_panel.js").read_text(
@@ -129,3 +144,20 @@ def test_navigation_titles_and_order_are_unchanged() -> None:
     ]
     positions = [template.index(title) for title in titles]
     assert positions == sorted(positions)
+
+
+def test_dense_summary_uses_one_focus_row_and_chinese_status() -> None:
+    script = (APP_DIR / "static" / "js" / "research_five_panel.js").read_text(
+        encoding="utf-8"
+    )
+    css = (APP_DIR / "static" / "css" / "research_five_panel.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'diagnostic_only: "仅诊断"' in script
+    assert 'not_required: "无需门禁"' in script
+    assert 'if (格式 === "arrow")' in script
+    assert "const 重点行 = 行列[0] || null;" in script
+    assert "Math.abs(数字) > Math.abs(最佳.数值)" not in script
+    assert "function 大数文本" in script
+    assert "@container (max-width: 1200px)" in css

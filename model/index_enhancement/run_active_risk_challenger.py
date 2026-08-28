@@ -170,7 +170,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--model",
-        choices=("index_active_risk_optimizer_v12", "index_active_risk_reliability_v13"),
+        choices=(
+            "index_active_risk_optimizer_v12",
+            "index_active_risk_reliability_v13",
+            "index_active_risk_covariance_v14",
+        ),
         default=MODEL_NAME,
     )
     args = parser.parse_args()

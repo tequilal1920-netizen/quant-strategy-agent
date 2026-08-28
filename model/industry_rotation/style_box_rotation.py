@@ -1,4 +1,4 @@
-"""Build the quarterly A-share 3×4 stock style-box rotation snapshot.
+"""Build the A-share 3×4 style-domain rotation snapshot.
 
 The style box is an A-share extension inspired by Morningstar's stock-level
 Style Box.  It is deliberately not represented as an official Morningstar
@@ -45,7 +45,10 @@ TEST_START = "2022-01-01"
 
 
 def iso(value: str) -> str:
-    return f"{value[:4]}-{value[4:6]}-{value[6:8]}"
+    text = str(value)
+    if len(text) >= 10 and text[4:5] == "-" and text[7:8] == "-":
+        return text[:10]
+    return f"{text[:4]}-{text[4:6]}-{text[6:8]}"
 
 
 def compact(value: str) -> str:
@@ -651,6 +654,410 @@ def build_nav(backtest: pd.DataFrame) -> list[dict[str, Any]]:
     return output
 
 
+
+def monthly_performance(frame: pd.DataFrame) -> dict[str, Any]:
+    if frame.empty:
+        return {"status":"unavailable","start":None,"end":None,"observations":0,"annual_return":None,"benchmark_annual_return":None,"annual_excess":None,"sharpe":None,"excess_sharpe":None,"max_drawdown":None,"annual_turnover":None}
+    strategy=frame["strategy_return"].astype(float); benchmark=frame["benchmark_return"].astype(float); active=strategy-benchmark
+    years=len(frame)/12.0
+    annual=float(np.prod(1.0+strategy)**(1.0/years)-1.0); bench_annual=float(np.prod(1.0+benchmark)**(1.0/years)-1.0)
+    std=float(strategy.std(ddof=1)); active_std=float(active.std(ddof=1))
+    return {"status":"ok","start":frame["execution_date"].iloc[0],"end":frame["end_date"].iloc[-1],"observations":int(len(frame)),"annual_return":finite(annual),"benchmark_annual_return":finite(bench_annual),"annual_excess":finite(annual-bench_annual),"sharpe":finite(strategy.mean()/std*math.sqrt(12)) if std>0 else None,"excess_sharpe":finite(active.mean()/active_std*math.sqrt(12)) if active_std>0 else None,"max_drawdown":finite(drawdown(strategy)),"annual_turnover":finite(frame["turnover"].mean()*12)}
+
+
+def apply_monthly_style_overlay(style_payload: dict[str, Any], database: Path, source: SourceFrames) -> dict[str, Any]:
+    """Replace the visible style strategy with monthly rotation on quarterly 3×4 labels.
+
+    The original quarterly model is kept under ``legacy_quarterly``.  The new
+    visible ``quarterly`` key is intentionally retained for front-end backward
+    compatibility, but its internal ``frequency`` is monthly.
+    """
+    labels_by_signal, quarterly_features = build_labels(source)
+    connection=sqlite3.connect(f"file:{database.resolve().as_posix()}?mode=ro", uri=True)
+    try:
+        all_days=read_sql(connection,"SELECT DISTINCT trade_date FROM stock_ohlcv_daily ORDER BY trade_date")["trade_date"].astype(str).tolist()
+        month_last={}
+        for day in all_days:
+            if day>="20120330":
+                month_last[day[:6]]=day
+        month_signals=[month_last[key] for key in sorted(month_last)]
+        position={day:index for index,day in enumerate(all_days)}
+        executions={signal:(all_days[position[signal]+1] if position[signal]+1<len(all_days) else next_business_day(signal)) for signal in month_signals}
+        required=sorted(set(month_signals)|{day for day in executions.values() if day<=all_days[-1]})
+        price_frame=read_sql(connection,f"SELECT trade_date,ts_code,stock_name,qfq_close,amount FROM stock_ohlcv_daily WHERE trade_date IN ({placeholders(required)})",required)
+        valuation_frame=read_sql(connection,f"SELECT trade_date,ts_code,pe_ttm,pb,ps_ttm,dv_ttm,circ_mv,turnover_rate,turnover_rate_f,volume_ratio FROM stock_valuation_daily WHERE trade_date IN ({placeholders(month_signals)})",month_signals)
+        moneyflow_frame=read_sql(connection,f"SELECT trade_date,ts_code,net_mf_amount,buy_lg_amount,sell_lg_amount,buy_elg_amount,sell_elg_amount FROM stock_moneyflow_daily WHERE trade_date IN ({placeholders(month_signals)})",month_signals)
+    finally:
+        connection.close()
+    price_frame["trade_date"]=price_frame["trade_date"].astype(str); valuation_frame["trade_date"]=valuation_frame["trade_date"].astype(str); moneyflow_frame["trade_date"]=moneyflow_frame["trade_date"].astype(str)
+    prices={day:group.drop(columns="trade_date").set_index("ts_code") for day,group in price_frame.groupby("trade_date")}
+    valuations={day:group.drop(columns="trade_date").set_index("ts_code") for day,group in valuation_frame.groupby("trade_date")}
+    moneyflows={day:group.drop(columns="trade_date").set_index("ts_code") for day,group in moneyflow_frame.groupby("trade_date")}
+    quarter_map={}; q_index=0
+    for signal in month_signals:
+        while q_index+1<len(source.signals) and source.signals[q_index+1]<=signal:
+            q_index+=1
+        quarter_map[signal]=source.signals[q_index]
+
+    rows=[]; coverage=[]
+    for index,signal in enumerate(month_signals[:-1]):
+        execution=executions[signal]; end_date=month_signals[index+1]
+        start_prices=prices.get(execution); end_prices=prices.get(end_date)
+        if start_prices is None or end_prices is None:
+            continue
+        frame=labels_by_signal[quarter_map[signal]][["ts_code","cell","circ_mv"]].copy()
+        valuation=valuations.get(signal,pd.DataFrame())
+        if not valuation.empty:
+            frame=frame.set_index("ts_code").join(valuation[["circ_mv"]],how="left",rsuffix="_monthly").reset_index()
+            frame["circ_mv"]=frame["circ_mv_monthly"].combine_first(frame["circ_mv"]); frame=frame.drop(columns="circ_mv_monthly")
+        frame=frame.join(start_prices[["qfq_close"]].rename(columns={"qfq_close":"start_close"}),on="ts_code")
+        frame=frame.join(end_prices[["qfq_close"]].rename(columns={"qfq_close":"end_close"}),on="ts_code")
+        frame["stock_return"]=frame["end_close"]/frame["start_close"]-1.0
+        for cell in CELL_CODES:
+            group=frame.loc[frame["cell"].eq(cell)]
+            valid=group["stock_return"].replace([np.inf,-np.inf],np.nan).notna()
+            if valid.any():
+                weights=capped_weights(group["circ_mv"]).loc[valid]; cov=float(weights.sum()); weights=weights/weights.sum(); cell_return=float((weights*group.loc[valid,"stock_return"]).sum())
+            else:
+                cov=0.0; cell_return=np.nan
+            coverage.append(cov)
+            rows.append({"signal_date":signal,"execution_date":execution,"end_date":end_date,"cell":cell,"cell_return":cell_return,"return_weight_coverage":cov})
+    period_returns=pd.DataFrame(rows)
+    return_matrix=period_returns.pivot(index="signal_date",columns="cell",values="cell_return").reindex(columns=CELL_CODES)
+    meta=period_returns[["signal_date","execution_date","end_date"]].drop_duplicates().set_index("signal_date")
+
+    price_pivot=price_frame.pivot(index="trade_date",columns="ts_code",values="qfq_close").reindex(month_signals).sort_index()
+    monthly_return=price_pivot.pct_change(fill_method=None)
+    stock_tech={"十二减一动量":price_pivot.shift(1)/price_pivot.shift(12)-1.0,"半年动量":price_pivot/price_pivot.shift(6)-1.0,"三月动量":price_pivot/price_pivot.shift(3)-1.0,"一月涨幅热度":price_pivot/price_pivot.shift(1)-1.0,"趋势效率":monthly_return.rolling(6).mean()/monthly_return.rolling(6).std(ddof=0),"回撤韧性":price_pivot/price_pivot.rolling(6).max()-1.0}
+    previous_quarter={source.signals[index]:source.signals[index-1] for index in range(1,len(source.signals))}
+    dim_cols={"基本面":["利润同比","收入同比","成长分","价值分"],"技术面":["十二减一动量","半年动量","三月动量","趋势效率","回撤韧性"],"估值面":["盈利收益率","账面收益率","销售收益率","股息率"],"资金面":["主力净流入","大单净流入","超大单净流入"],"拥挤度":["成交热度","量比热度","一月涨幅热度"]}
+    def rank01(values: pd.Series) -> pd.Series:
+        return pd.to_numeric(values,errors="coerce").rank(pct=True,method="average").fillna(0.5).clip(0.0,1.0)
+    features_by_signal={}
+    for signal in month_signals:
+        quarter_signal=quarter_map[signal]
+        frame=labels_by_signal[quarter_signal][["ts_code","cell","circ_mv","value_score","growth_score","dv_ttm","op_yoy","tr_yoy","netprofit_yoy"]].copy()
+        prev_q=previous_quarter.get(quarter_signal)
+        if prev_q:
+            previous=labels_by_signal[prev_q][["ts_code","tr_yoy","netprofit_yoy"]].set_index("ts_code")
+            frame=frame.set_index("ts_code").join(previous,how="left",rsuffix="_previous").reset_index()
+            frame["netprofit_yoy_accel"]=pd.to_numeric(frame["netprofit_yoy"],errors="coerce")-pd.to_numeric(frame["netprofit_yoy_previous"],errors="coerce")
+            frame["tr_yoy_accel"]=pd.to_numeric(frame["tr_yoy"],errors="coerce")-pd.to_numeric(frame["tr_yoy_previous"],errors="coerce")
+        valuation=valuations.get(signal,pd.DataFrame())
+        if not valuation.empty:
+            frame=frame.set_index("ts_code").join(valuation,how="left",rsuffix="_monthly").reset_index()
+            for col in ("circ_mv","pe_ttm","pb","ps_ttm","dv_ttm","turnover_rate","turnover_rate_f","volume_ratio"):
+                mcol=f"{col}_monthly"
+                if mcol in frame:
+                    frame[col]=frame[mcol].combine_first(frame[col]) if col in frame else frame[mcol]
+            frame=frame.drop(columns=[col for col in frame.columns if col.endswith("_monthly")],errors="ignore")
+        for name,matrix in stock_tech.items():
+            frame[name]=frame["ts_code"].map(matrix.loc[signal]) if signal in matrix.index else np.nan
+        moneyflow=moneyflows.get(signal,pd.DataFrame())
+        if not moneyflow.empty:
+            frame=frame.set_index("ts_code").join(moneyflow,how="left").reset_index()
+        for col in ("pe_ttm","pb","ps_ttm","dv_ttm","turnover_rate","turnover_rate_f","volume_ratio","amount","net_mf_amount","buy_lg_amount","sell_lg_amount","buy_elg_amount","sell_elg_amount","netprofit_yoy_accel","tr_yoy_accel"):
+            if col not in frame: frame[col]=np.nan
+        pe=pd.to_numeric(frame["pe_ttm"],errors="coerce"); pb=pd.to_numeric(frame["pb"],errors="coerce"); ps=pd.to_numeric(frame["ps_ttm"],errors="coerce"); amount=pd.to_numeric(frame["amount"],errors="coerce").replace(0.0,np.nan)
+        atom={"景气加速度":frame["netprofit_yoy_accel"],"营收加速度":frame["tr_yoy_accel"],"盈利扩散":pd.to_numeric(frame["netprofit_yoy"],errors="coerce").gt(0.0).astype(float),"收入扩散":pd.to_numeric(frame["tr_yoy"],errors="coerce").gt(0.0).astype(float),"利润同比":frame["netprofit_yoy"],"收入同比":frame["tr_yoy"],"成长分":frame["growth_score"],"价值分":frame["value_score"],"盈利收益率":np.where(pe.gt(0.0),1.0/pe,np.nan),"账面收益率":np.where(pb.gt(0.0),1.0/pb,np.nan),"销售收益率":np.where(ps.gt(0.0),1.0/ps,np.nan),"股息率":frame["dv_ttm"],"主力净流入":pd.to_numeric(frame["net_mf_amount"],errors="coerce")/amount,"大单净流入":(pd.to_numeric(frame["buy_lg_amount"],errors="coerce")-pd.to_numeric(frame["sell_lg_amount"],errors="coerce"))/amount,"超大单净流入":(pd.to_numeric(frame["buy_elg_amount"],errors="coerce")-pd.to_numeric(frame["sell_elg_amount"],errors="coerce"))/amount,"成交热度":pd.to_numeric(frame["turnover_rate"],errors="coerce").combine_first(pd.to_numeric(frame["turnover_rate_f"],errors="coerce")),"量比热度":frame["volume_ratio"],"一月涨幅热度":frame["一月涨幅热度"]}
+        for key,value in atom.items(): frame[key]=rank01(pd.Series(value,index=frame.index))
+        feature_rows=[]
+        for cell in CELL_CODES:
+            group=frame.loc[frame["cell"].eq(cell)]
+            row={"cell":cell,"stock_count":int(len(group)),"cap":float(group["circ_mv"].sum()) if len(group) else 0.0}
+            if len(group):
+                weights=capped_weights(group["circ_mv"])
+                for dim,cols in dim_cols.items():
+                    vals=[]
+                    for col in cols:
+                        x=pd.to_numeric(group[col],errors="coerce"); valid=x.notna()
+                        if valid.any() and float(weights.loc[valid].sum())>0.0:
+                            local=weights.loc[valid]/weights.loc[valid].sum(); vals.append(float((x.loc[valid]*local).sum()))
+                    row[dim]=float(np.mean(vals)) if vals else 0.5
+            else:
+                for dim in dim_cols: row[dim]=0.5
+            feature_rows.append(row)
+        features=pd.DataFrame(feature_rows).set_index("cell").reindex(CELL_CODES)
+        for dim in dim_cols:
+            features[dim]=rank01(features[dim])
+        features_by_signal[signal]=features
+
+    candidates={
+        "技术主锚":{"kind":"MOM","overlay":"none","top_n":2,"risk":True,"core":0.0,"definition":"12-1月风格域动量、半年动量与1月反转；Top2按得分置信度和12月波动风险加权"},
+        "技术Top3":{"kind":"MOM","overlay":"none","top_n":3,"risk":True,"core":0.0,"definition":"同技术主锚，Top3分散化并按风险置信度加权"},
+        "技术主锚低换手":{"kind":"MOM","overlay":"none","top_n":2,"risk":True,"core":0.7,"definition":"70%十二风格域等权核心 + 30%技术主锚Top2主动袖子"},
+        "技术Top4低换手":{"kind":"MOM","overlay":"none","top_n":4,"risk":True,"core":0.5,"definition":"50%十二风格域等权核心 + 50%技术Top4主动袖子"},
+        "五因子轻确认":{"kind":"MOM","overlay":"light","top_n":2,"risk":True,"core":0.0,"definition":"技术主锚82%，基本面/估值/资金确认与拥挤惩罚18%"},
+        "五因子强确认":{"kind":"MOM","overlay":"strong","top_n":2,"risk":True,"core":0.0,"definition":"技术主锚70%，基本面/估值/资金确认与拥挤惩罚30%"},
+        "风险韧性锚":{"kind":"RISK","overlay":"none","top_n":2,"risk":True,"core":0.0,"definition":"12-1月与半年动量，叠加12月低波和6月回撤韧性"},
+        "风险五因子轻确认":{"kind":"RISK","overlay":"light","top_n":2,"risk":True,"core":0.0,"definition":"风险韧性锚82%，基本面/估值/资金确认与拥挤惩罚18%"},
+        "五因子等权":{"kind":"FACTOR","overlay":"factor","top_n":3,"risk":False,"core":0.0,"factor_weights":{"基本面":0.22,"技术面":0.24,"估值面":0.18,"资金面":0.18,"拥挤度":-0.18},"definition":"五因子域暴露横截面标准化后等权近似合成，拥挤度反向，Top3等权"},
+        "质量估值价值":{"kind":"FACTOR","overlay":"factor","top_n":3,"risk":False,"core":0.0,"factor_weights":{"基本面":0.28,"技术面":0.16,"估值面":0.28,"资金面":0.10,"拥挤度":-0.18},"definition":"偏盈利确认、价值红利和低拥挤，弱化短期技术与资金噪声，Top3等权"},
+        "技术价值确认":{"kind":"HYBRID","overlay":"factor","top_n":2,"risk":True,"core":0.0,"base_weight":0.62,"factor_weights":{"基本面":0.12,"估值面":0.12,"资金面":0.06,"拥挤度":-0.08},"definition":"技术主锚62% + 基本面/估值/资金确认38%，拥挤反向，Top2风险加权"},
+        "技术价值低换手":{"kind":"HYBRID","overlay":"factor","top_n":3,"risk":True,"core":0.45,"base_weight":0.58,"factor_weights":{"基本面":0.12,"估值面":0.12,"资金面":0.06,"拥挤度":-0.08},"definition":"45%十二风格域核心 + 55%技术价值确认Top3主动袖子，降低风格误判换手"},
+    }
+    def tech_score(signal: str, risk: bool=False) -> pd.Series | None:
+        history=return_matrix.loc[return_matrix.index<signal,list(CELL_CODES)]
+        if len(history)<12: return None
+        mom6=(1.0+history.tail(6)).prod()-1.0; mom12=(1.0+history.iloc[-12:-1]).prod()-1.0; rev1=-history.tail(1).iloc[0]
+        if risk:
+            vol=history.tail(12).std(ddof=0); wealth=(1.0+history.tail(6)).cumprod(); resil=(wealth/wealth.cummax()-1.0).min()
+            return 0.40*cross_zscore(mom12)+0.30*cross_zscore(mom6)+0.15*cross_zscore(-vol)+0.15*cross_zscore(-resil.abs())
+        return 0.50*cross_zscore(mom12)+0.35*cross_zscore(mom6)+0.15*cross_zscore(rev1)
+    def factor_score(signal: str, weights: dict[str, float]) -> pd.Series:
+        feat=features_by_signal[signal]
+        out=pd.Series(0.0,index=CELL_CODES,dtype=float)
+        for dim,weight in weights.items():
+            if dim in feat:
+                out=out+float(weight)*cross_zscore(feat[dim])
+        return out
+    def score_for(candidate: dict[str, Any], signal: str) -> pd.Series | None:
+        if candidate["kind"]=="FACTOR":
+            return factor_score(signal,candidate.get("factor_weights",{}))
+        base=tech_score(signal,candidate["kind"]=="RISK")
+        if base is None: return None
+        if candidate["kind"]=="HYBRID":
+            return float(candidate.get("base_weight",0.6))*base+factor_score(signal,candidate.get("factor_weights",{}))
+        if candidate["overlay"]=="none": return base
+        feat=features_by_signal[signal]
+        if candidate["overlay"]=="light":
+            return 0.82*base+0.06*cross_zscore(feat["基本面"])+0.04*cross_zscore(feat["估值面"])+0.05*cross_zscore(feat["资金面"])-0.05*cross_zscore(feat["拥挤度"])
+        return 0.70*base+0.09*cross_zscore(feat["基本面"])+0.07*cross_zscore(feat["估值面"])+0.08*cross_zscore(feat["资金面"])-0.08*cross_zscore(feat["拥挤度"])
+    def weights_for(selected: list[str], score: pd.Series, history: pd.DataFrame, candidate: dict[str, Any]) -> pd.Series:
+        weights=pd.Series(float(candidate["core"])/len(CELL_CODES),index=CELL_CODES); active=pd.Series(0.0,index=CELL_CODES)
+        if candidate["risk"]:
+            vol=history.tail(12).std(ddof=0).reindex(selected).replace(0.0,np.nan); fallback=float(vol.dropna().median()) if vol.notna().any() else 1.0
+            conf=score.loc[selected].sub(score.loc[selected].min()).add(0.05).clip(lower=0.01).pow(0.5); raw=conf.div(vol.fillna(fallback).clip(lower=1e-6)).replace([np.inf,-np.inf],np.nan).fillna(0.0).clip(lower=0.0)
+            active.loc[selected]=raw/raw.sum() if raw.sum()>0.0 else 1.0/len(selected)
+        else:
+            active.loc[selected]=1.0/len(selected)
+        return weights+(1.0-float(candidate["core"]))*active
+    def serialize_weights(weights: pd.Series) -> dict[str, float | None]:
+        rounded={cell:finite(float(value)) for cell,value in weights.items() if abs(float(value))>1e-10}
+        if rounded:
+            total=sum(value for value in rounded.values() if value is not None)
+            key=max(rounded,key=lambda cell: rounded[cell] if rounded[cell] is not None else -1.0)
+            rounded[key]=finite(float(rounded[key] or 0.0)+1.0-total)
+        return rounded
+    def run_candidate_monthly(candidate: dict[str, Any]) -> tuple[pd.DataFrame,list[dict[str,Any]]]:
+        rows=[]; holdings=[]; previous=pd.Series(0.0,index=CELL_CODES)
+        for signal in return_matrix.index:
+            score=score_for(candidate,signal)
+            if score is None or return_matrix.loc[signal].isna().any(): continue
+            selected=list(score.sort_values(ascending=False,kind="stable").head(int(candidate["top_n"])).index); history=return_matrix.loc[return_matrix.index<signal,list(CELL_CODES)]
+            weights=weights_for(selected,score,history,candidate); turnover=float((weights-previous).abs().sum()/2.0); gross=float((weights*return_matrix.loc[signal]).sum()); benchmark=float(return_matrix.loc[signal].mean()); row=meta.loc[signal]
+            rows.append({"signal_date":iso(signal),"execution_date":iso(str(row["execution_date"])),"end_date":iso(str(row["end_date"])),"strategy_return":gross-COST_RATE*turnover,"benchmark_return":benchmark,"turnover":turnover,"split":split_name(iso(str(row["execution_date"])))})
+            holdings.append({"signal_date":iso(signal),"execution_date":iso(str(row["execution_date"])),"names":selected,"codes":selected,"weight":finite(float(weights.loc[selected].mean())),"weights":serialize_weights(weights),"active_names":selected,"turnover":finite(turnover)})
+            previous=weights
+        return pd.DataFrame(rows),holdings
+    runs={name:run_candidate_monthly(candidate) for name,candidate in candidates.items()}
+    audits=[]
+    for name,(backtest,_) in runs.items():
+        metrics={split:monthly_performance(backtest.loc[backtest["split"].eq(split)]) for split in ("train","validation","test")}
+        lower=min(metrics["train"]["excess_sharpe"] or -999.0,metrics["validation"]["excess_sharpe"] or -999.0); ann_lower=min(metrics["train"]["annual_excess"] or -999.0,metrics["validation"]["annual_excess"] or -999.0)
+        audits.append({"candidate":name,"definition":candidates[name]["definition"],"selection_objective":finite(lower),"train_excess_sharpe":metrics["train"]["excess_sharpe"],"validation_excess_sharpe":metrics["validation"]["excess_sharpe"],"validation_annual_excess":metrics["validation"]["annual_excess"],"validation_annual_turnover":metrics["validation"]["annual_turnover"],"test_excess_sharpe_report_only":metrics["test"]["excess_sharpe"],"metrics":metrics,"lower_bound_excess_sharpe":finite(lower),"lower_bound_annual_excess":finite(ann_lower)})
+    eligible=[row for row in audits if (row["metrics"]["train"]["sharpe"] or -999.0)>0 and (row["metrics"]["validation"]["sharpe"] or -999.0)>0 and (row["metrics"]["train"]["annual_excess"] or -999.0)>0 and (row["metrics"]["validation"]["annual_excess"] or -999.0)>0]
+    base_pool=eligible or audits
+    best_lower=max((row["lower_bound_excess_sharpe"] or -999.0) for row in base_pool)
+    one_standard_error=0.02
+    robust_pool=[row for row in base_pool if (row["lower_bound_excess_sharpe"] or -999.0)>=best_lower-one_standard_error and (row["lower_bound_annual_excess"] or -999.0)>0]
+    selected_row=min(robust_pool or base_pool,key=lambda row:(row["validation_annual_turnover"] or 999.0,-1.0*(row["lower_bound_excess_sharpe"] or -999.0),-1.0*(row["lower_bound_annual_excess"] or -999.0)))
+    selected=selected_row["candidate"]
+    for row in audits:
+        row["selected"]=row["candidate"]==selected
+        row["within_one_standard_error"]=bool((row["lower_bound_excess_sharpe"] or -999.0)>=best_lower-one_standard_error)
+        row["one_standard_error"]=one_standard_error
+    backtest,holdings=runs[selected]; metrics={split:monthly_performance(backtest.loc[backtest["split"].eq(split)]) for split in ("train","validation","test")}; metrics["all"]=monthly_performance(backtest)
+    latest_signal=month_signals[-1]; candidate=candidates[selected]; latest_score=score_for(candidate,latest_signal)
+    if latest_score is None: return style_payload
+    latest_selected=list(latest_score.sort_values(ascending=False,kind="stable").head(int(candidate["top_n"])).index); latest_history=return_matrix.loc[return_matrix.index<latest_signal,list(CELL_CODES)]; latest_weights=weights_for(latest_selected,latest_score,latest_history,candidate)
+    latest_label=labels_by_signal[quarter_map[latest_signal]]; summaries={row["cell"]:row for row in latest_cell_summary(latest_label,float(latest_label["circ_mv"].sum()))}; latest_features=features_by_signal[latest_signal]
+    ranking=[]
+    for rank,(cell,score) in enumerate(latest_score.sort_values(ascending=False,kind="stable").items(),start=1):
+        summary=summaries[cell]
+        ranking.append({"rank":rank,"code":cell,"name":cell,"size":summary["size"],"style":summary["style"],"score":finite(score),"selected":cell in set(latest_selected),"weight":finite(float(latest_weights.loc[cell])),"stock_count":summary["stock_count"],"cap_share":summary["cap_share"],"components":{"基本面":finite(latest_features.loc[cell,"基本面"]),"技术面":finite(latest_features.loc[cell,"技术面"]),"估值面":finite(latest_features.loc[cell,"估值面"]),"资金面":finite(latest_features.loc[cell,"资金面"]),"拥挤度":finite(latest_features.loc[cell,"拥挤度"])}})
+    latest_execution=executions[latest_signal]; current={"signal_date":iso(latest_signal),"execution_date":iso(latest_execution),"names":latest_selected,"codes":latest_selected,"weight":finite(float(latest_weights.loc[latest_selected].mean())),"weights":serialize_weights(latest_weights),"active_names":latest_selected,"turnover":None,"status":"planned" if latest_execution>source.data_as_of else "executed"}
+    checks={"train_sharpe_positive":bool((metrics["train"]["sharpe"] or -999.0)>0),"train_excess_positive":bool((metrics["train"]["annual_excess"] or -999.0)>0),"validation_sharpe_positive":bool((metrics["validation"]["sharpe"] or -999.0)>0),"validation_excess_positive":bool((metrics["validation"]["annual_excess"] or -999.0)>0),"test_sharpe_positive_report_only":bool((metrics["test"]["sharpe"] or -999.0)>0),"test_excess_positive_report_only":bool((metrics["test"]["annual_excess"] or -999.0)>0)}
+    style_payload["frequencies"]["legacy_quarterly"]=style_payload["frequencies"]["quarterly"]
+    style_payload["frequencies"]["quarterly"]={
+        "frequency":"monthly",
+        "model_type":"季度3×4风格域标签 + 月度五因子风格域轮动",
+        "benchmark":"12风格域月度等权",
+        "selected_candidate":selected,
+        "selected_window":"季度3×4标签、月度12风格域五因子聚合、训练验证下界选型",
+        "selected_weights":[finite(float(latest_weights.loc[cell])) for cell in latest_selected],
+        "selection_rule":"训练集和验证集同时为正后，先按两段超额Sharpe下界筛入一标准误内候选，再选验证期换手最低且年化超额为正的稳健模型；2022年后测试集只报告。",
+        "current_regime":" / ".join(current["names"]),
+        "latest_signal_date":iso(latest_signal),
+        "latest_execution_date":iso(latest_execution),
+        "candidate_audit":audits,
+        "metrics":metrics,
+        "gate":{"status":"pass" if all(checks.values()) else "review","checks":checks,"policy":"训练和验证负责选模；测试期只报告，不因测试结果反向调整。"},
+        "nav":build_nav(backtest),
+        "ranking":ranking,
+        "holdings":holdings+[current],
+    }
+    style_payload["latest_signal_date"]=iso(latest_signal); style_payload["latest_execution_date"]=iso(latest_execution); style_payload["frequency"]="monthly"; style_payload["model_type"]="季度3×4风格域标签 + 月度五因子风格域轮动"; style_payload["benchmark"]="12风格域月度等权"
+    style_payload["data_quality"].update({"monthly_signal_count":int(len(month_signals)),"completed_return_months":int(period_returns["signal_date"].nunique()),"style_label_rebalance":"quarterly","style_rotation_rebalance":"monthly","monthly_factor_dimensions":["基本面","技术面","估值面","资金面","拥挤度"],"mean_monthly_return_weight_coverage":finite(float(np.mean(coverage)))})
+    style_payload["factor_contract"]["signal"]="月末交易日收盘后；个股3×4风格标签按最近季度标签沿用"
+    style_payload["factor_contract"]["execution"]="下一交易日收盘"
+    style_payload["factor_contract"]["portfolio"]="季度3×4风格域内聚合股票级五因子；训练验证选择月度Top2风格域，按得分置信度和12月波动风险加权；12风格域月度等权为基准"
+    return style_payload
+
+
+def apply_six_dimension_style_overlay(style_payload: dict[str, Any], project_root: Path, source: SourceFrames) -> dict[str, Any]:
+    """Use the strict five-factor style-domain research output as visible style strategy.
+
+    The frontend still reads the historical compatibility key ``quarterly``.
+    Internally the strategy is monthly: quarterly 3×4 stock labels, monthly
+    style-domain factor scoring and next-trading-day execution.
+    """
+    result_path = project_root / "output" / "industry_rotation" / "style_six_dimension_monthly" / "style_six_dimension_monthly.json"
+    if not result_path.exists():
+        return style_payload
+    try:
+        payload = json.loads(result_path.read_text(encoding="utf-8"))
+    except Exception:
+        return style_payload
+    if str(payload.get("data_as_of") or "") != iso(source.data_as_of):
+        return style_payload
+    strategy = ((payload.get("strategies") or {}).get("style12") or {})
+    latest = strategy.get("latest_holding") or {}
+    selected = list(latest.get("selected") or [])
+    if not strategy or not selected:
+        return style_payload
+
+    def normalised_weights(raw: dict[str, Any]) -> dict[str, float | None]:
+        weights = {str(k): finite(float(v)) for k, v in (raw or {}).items() if v is not None}
+        weights = {k: v for k, v in weights.items() if v is not None and abs(float(v)) > 1e-12}
+        if weights:
+            total = sum(float(v) for v in weights.values())
+            key = max(weights, key=lambda item: float(weights[item] or 0.0))
+            weights[key] = finite(float(weights[key] or 0.0) + 1.0 - total)
+        return weights
+
+    latest_weights = normalised_weights(latest.get("weights") or {})
+    cell_map = {row.get("cell"): row for row in style_payload.get("cells", [])}
+    score_map = dict(latest.get("score") or {})
+    ranking = []
+    for row in strategy.get("latest_ranking") or []:
+        name = str(row.get("name") or "")
+        summary = cell_map.get(name, {})
+        ranking.append({
+            "rank": int(row.get("rank") or len(ranking) + 1),
+            "code": name,
+            "name": name,
+            "size": summary.get("size") or name[:2],
+            "style": summary.get("style") or name[2:],
+            "score": finite(row.get("score")),
+            "selected": name in set(selected),
+            "weight": latest_weights.get(name, 0.0),
+            "stock_count": summary.get("stock_count"),
+            "cap_share": summary.get("cap_share"),
+            "components": {},
+        })
+    if not ranking and score_map:
+        for rank, (name, score) in enumerate(sorted(score_map.items(), key=lambda kv: kv[1], reverse=True), start=1):
+            summary = cell_map.get(name, {})
+            ranking.append({"rank": rank, "code": name, "name": name, "size": summary.get("size") or name[:2], "style": summary.get("style") or name[2:], "score": finite(score), "selected": name in set(selected), "weight": latest_weights.get(name, 0.0), "stock_count": summary.get("stock_count"), "cap_share": summary.get("cap_share"), "components": {}})
+
+    def split_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
+        out = {}
+        for split in ("train", "validation", "test", "all"):
+            row = dict((metrics or {}).get(split) or {})
+            row.setdefault("annual_turnover", None)
+            out[split] = row
+        return out
+
+    holdings = []
+    for item in strategy.get("holdings") or []:
+        names = list(item.get("selected") or [])
+        weights = normalised_weights(item.get("weights") or {})
+        execution = iso(item.get("execution_date")) if item.get("execution_date") else None
+        holdings.append({
+            "signal_date": iso(item.get("signal_date")),
+            "execution_date": execution,
+            "names": names,
+            "codes": names,
+            "weight": finite(np.mean(list(weights.values()))) if weights else None,
+            "weights": weights,
+            "active_names": names,
+            "turnover": finite(item.get("turnover")),
+            "status": "planned" if execution and execution > iso(source.data_as_of) else "executed",
+        })
+
+    candidate_audit = []
+    for item in strategy.get("candidate_audit") or []:
+        metrics = {
+            "train": dict(item.get("train") or {}),
+            "validation": dict(item.get("validation") or {}),
+            "test": dict(item.get("test_report_only") or {}),
+        }
+        metrics["all"] = {}
+        candidate_audit.append({
+            "candidate": item.get("candidate"),
+            "definition": item.get("execution"),
+            "selection_objective": finite(item.get("objective")),
+            "selected": bool(item.get("selected")),
+            "research_selected": bool(item.get("research_selected")),
+            "metrics": metrics,
+            "train_excess_sharpe": metrics["train"].get("excess_sharpe"),
+            "validation_excess_sharpe": metrics["validation"].get("excess_sharpe"),
+            "validation_annual_excess": metrics["validation"].get("annual_excess"),
+            "test_excess_sharpe_report_only": metrics["test"].get("excess_sharpe"),
+        })
+
+    metrics = split_metrics(strategy.get("metrics") or {})
+    benchmark_source = dict(strategy.get("benchmark_source") or {})
+    benchmark_label = str(benchmark_source.get("label") or "标准指数基准")
+    checks = {
+        "train_excess_positive": bool((metrics["train"].get("annual_excess") or -999.0) > 0),
+        "validation_excess_positive": bool((metrics["validation"].get("annual_excess") or -999.0) > 0),
+        "test_excess_positive_report_only": bool((metrics["test"].get("annual_excess") or -999.0) > 0),
+        "test_sharpe_positive_report_only": bool((metrics["test"].get("sharpe") or -999.0) > 0),
+    }
+    top_n = int(strategy.get("top_n") or len(selected))
+    visible = {
+        "frequency": "monthly",
+        "model_type": "季度3×4风格域标签 + 月度五因子检验轮动",
+        "benchmark": benchmark_label,
+        "benchmark_source": benchmark_source,
+        "top_n": top_n,
+        "selected_candidate": strategy.get("selected_candidate") or "五因子框架",
+        "research_selected_candidate": strategy.get("research_selected_candidate"),
+        "selected_window": "季度3×4标签、月度五因子子因子检验、训练验证选权重与调仓数量",
+        "selected_weights": list(latest_weights.values()),
+        "selection_rule": (str(strategy.get("selection_rule") or "训练集和验证集筛选候选权重与调仓参数；测试期只报告。") + "；训练集/验证集选模，2022年后测试集只报告。"),
+        "current_regime": " / ".join(selected),
+        "latest_signal_date": iso(latest.get("signal_date")),
+        "latest_execution_date": iso(latest.get("execution_date")),
+        "candidate_audit": candidate_audit,
+        "metrics": metrics,
+        "gate": {"status": "pass" if all(checks.values()) else "review", "checks": checks, "policy": "训练和验证负责选模；测试期只报告，不因测试结果反向调整。"},
+        "nav": strategy.get("nav") or [],
+        "ranking": ranking,
+        "holdings": holdings,
+        "factor_diagnostics": strategy.get("factor_diagnostics"),
+        "calendar_year": strategy.get("calendar_year"),
+    }
+    style_payload["frequencies"] = {"quarterly": visible}
+    style_payload["latest_signal_date"] = visible["latest_signal_date"]
+    style_payload["latest_execution_date"] = visible["latest_execution_date"]
+    style_payload["frequency"] = "monthly"
+    style_payload["model_type"] = visible["model_type"]
+    style_payload["benchmark"] = visible["benchmark"]
+    style_payload["data_quality"].update({
+        "style_label_rebalance": "quarterly",
+        "style_rotation_rebalance": "monthly",
+        "five_factor_model_version": payload.get("model_version"),
+        "monthly_signal_count": payload.get("signal_count"),
+        "monthly_factor_dimensions": ["基本面", "技术面", "估值", "资金面", "拥挤度"],
+        "admitted_factor_count": strategy.get("admitted_factor_count"),
+    })
+    style_payload["factor_contract"]["portfolio"] = f"季度3×4风格域标签；月度聚合股票级五因子；原子因子经RankIC/ICIR、胜率、Top-Bottom多空收益和稳定性检验后合成一级维度；训练验证在等权、检验权重、滚动IC与防守候选中选择；基准采用{benchmark_label}"
+    return style_payload
+
+
 def build_style_payload(source: SourceFrames) -> dict[str, Any]:
     labels_by_signal, features_by_signal = build_labels(source)
     period_returns, cell_history, mean_coverage = build_period_returns(source, labels_by_signal)
@@ -902,7 +1309,9 @@ def build_style_payload(source: SourceFrames) -> dict[str, Any]:
 
 def update_snapshot(database: Path, snapshot: Path) -> dict[str, Any]:
     original = json.loads(snapshot.read_text(encoding="utf-8"))
-    style_payload = build_style_payload(load_sources(database))
+    source = load_sources(database)
+    style_payload = apply_monthly_style_overlay(build_style_payload(source), database, source)
+    style_payload = apply_six_dimension_style_overlay(style_payload, Path(__file__).resolve().parents[2], source)
     snapshot_as_of = str(original.get("as_of") or "")
     for holding in style_payload.get("frequencies", {}).get("quarterly", {}).get("holdings", []):
         if holding.get("status") == "planned" and str(holding.get("execution_date") or "") <= snapshot_as_of:
@@ -911,25 +1320,25 @@ def update_snapshot(database: Path, snapshot: Path) -> dict[str, Any]:
     original["generated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     original.setdefault("method", {})["style_universe"] = "全体合格A股季度个股标签"
     original["method"]["style_box"] = "大/中/小盘×成长/均衡/价值/红利，共12个互斥且穷尽的风格箱"
-    original["method"]["style_frequency"] = "quarterly"
-    original["method"]["style_portfolio"] = "每季度Top3风格箱只做多；基础候选等权，风险候选按得分置信度和近四季波动加权；12风格箱等权基准"
-    original["method"]["style_timing"] = "季度末收盘形成标签与信号；下一交易日收盘执行"
+    original["method"]["style_frequency"] = "monthly_rotation_with_quarterly_labels"
+    original["method"]["style_portfolio"] = "季度更新3×4风格域标签；月度聚合域内股票五因子，原子因子经RankIC与Top-Bottom多空收益检验后训练验证选择候选权重和调仓数量；基准采用标准市值/风格指数代理"
+    original["method"]["style_timing"] = "月末收盘形成轮动信号；下一交易日收盘执行；风格域标签按最近季度标签沿用"
     original["method"]["style_splits"] = {
         "train": ["2012-01-01", TRAIN_END],
         "validation": [VALIDATION_START, VALIDATION_END],
         "test": [TEST_START, "2099-12-31"],
     }
-    original["method"]["style_test_policy"] = "2019–2021验证集选择预注册候选；2022年后冻结只报告"
+    original["method"]["style_test_policy"] = "训练/验证选择预注册五因子候选；2022年后冻结只报告"
     original["source_audit"] = [
         row for row in original.get("source_audit", [])
-        if row.get("purpose") != "季度个股3×4风格箱与轮动回测"
+        if row.get("purpose") not in {"季度个股3×4风格箱与轮动回测", "季度3×4风格域标签与月度六维轮动回测", "季度3×4风格域标签与月度五因子轮动回测"}
     ]
     original["source_audit"].append({
-        "source": "research_warehouse.db（只读）+ Morningstar/国证官方方法文件",
-        "purpose": "季度个股3×4风格箱与轮动回测",
+        "source": "research_warehouse.db（只读）+ Morningstar/国证官方方法文件 + AKShare中证指数公开行情",
+        "purpose": "季度3×4风格域标签、月度五因子轮动回测与标准指数基准",
         "status": "ok",
         "as_of": original["style"]["end"],
-        "note": "本模型为晨星启发的A股扩展，不冒充官方Morningstar分类。",
+        "note": "本模型为晨星启发的A股扩展；标签季度更新，轮动信号月度更新；风格轮动基准采用可复现的标准市值/风格指数组合，不使用测试期挑弱基准。",
     })
     temporary = snapshot.with_suffix(snapshot.suffix + ".tmp")
     temporary.write_text(json.dumps(original, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

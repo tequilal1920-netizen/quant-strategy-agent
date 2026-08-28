@@ -108,20 +108,20 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         champion = payload["champion"]
-        self.assertEqual(payload["engine_version"], "factor-lab/3.2-inverse-volatility-rank-execution")
+        self.assertEqual(payload["engine_version"], "factor-lab/3.5-stable-development-selection")
         self.assertEqual(champion["status"], "ok")
         self.assertEqual(champion["selection_basis"], "train_and_validation_only")
         self.assertEqual(champion["test_usage"], "report_only")
-        self.assertEqual(champion["candidate_count"], 39)
-        self.assertEqual(champion["gate_summary"]["passed"], 9)
+        self.assertEqual(champion["candidate_count"], 48)
+        self.assertEqual(champion["gate_summary"]["passed"], 10)
         self.assertEqual(champion["gate_summary"]["total"], 10)
-        self.assertFalse(champion["gate_summary"]["all_passed"])
+        self.assertTrue(champion["gate_summary"]["all_passed"])
         metrics = {row["split"]: row for row in champion["splits"]}
-        self.assertAlmostEqual(metrics["valid"]["sharpe"], 1.1258799248439653)
-        self.assertAlmostEqual(metrics["test"]["sharpe"], 2.4657836700650093)
-        self.assertAlmostEqual(metrics["test"]["max_drawdown"], -0.028151793434887717)
+        self.assertAlmostEqual(metrics["valid"]["sharpe"], 0.8199760424013568)
+        self.assertAlmostEqual(metrics["test"]["sharpe"], 2.89372502999757)
+        self.assertAlmostEqual(metrics["test"]["max_drawdown"], -0.033796103362012886)
         turnover = next(row for row in champion["gates"] if row["gate"] == "turnover")
-        self.assertFalse(turnover["passed"])
+        self.assertTrue(turnover["passed"])
         js = (APP_ROOT / "static" / "js" / "factor_lab.js").read_text(encoding="utf-8")
         self.assertIn("function championHtml(champion)", js)
         self.assertIn("训练集与验证集选择，测试集仅作一次性报告", js)
@@ -194,6 +194,21 @@ class CanonicalAppTest(unittest.TestCase):
         snapshot_bytes = self.decoded(snapshot_response)
         self.assertLess(len(snapshot_bytes), 3_000_000)
         snapshot = json.loads(snapshot_bytes.decode("utf-8"))
+        for frequency in ("monthly", "weekly"):
+            model = snapshot["industry"]["frequencies"][frequency]
+            self.assertEqual(len(model["research_ranking"]), 31)
+            self.assertNotIn("six_dimension", model)
+            self.assertEqual(
+                set(model["research_ranking"][0]["components"]),
+                {
+                    "prosperity", "fundamental", "technical", "valuation",
+                    "funds", "crowding", "anti_crowding",
+                },
+            )
+            self.assertTrue(model["research_result"]["nav"])
+        self.assertEqual(
+            sum(snapshot["six_dimension"]["factor_count"].values()), 53
+        )
         self.assertNotIn("stock_labels", snapshot["style"])
         self.assertEqual(
             snapshot["style"]["stock_labels_endpoint"],
@@ -335,6 +350,16 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertIn("selection_basis:'train_validation_conservative_sharpe'", app_js)
         self.assertIn("selection_uses_test:false", app_js)
         self.assertIn("S.kline.history=best?[best.row]:[];", app_js)
+        self.assertIn("return [eligible[0]];", app_js)
+        factor_lab_js = (
+            APP_ROOT / "static" / "js" / "factor_lab.js"
+        ).read_text(encoding="utf-8")
+        factor_lab_backend = (
+            APP_ROOT / "factor_lab_backend.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("historyPayload.governed_history || []", factor_lab_js)
+        self.assertIn("completed_model_family_record_without_test_ranking", factor_lab_backend)
+        self.assertIn('\"selection_uses_test\": False', factor_lab_backend)
         self.assertIn("best&&best.model?[best]:[]", index_js)
         self.assertIn("完整比较仍保留在上方图表", index_js)
 if __name__ == "__main__":

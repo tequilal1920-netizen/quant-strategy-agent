@@ -78,10 +78,17 @@ expected_cells = {
 actual_cells = {row["cell"] for row in style["cells"]}
 if style["count"] != 12 or quality["cell_count"] != 12 or actual_cells != expected_cells:
     raise AssertionError(f"style cells invalid: {sorted(actual_cells)}")
-if style["frequency"] != "quarterly" or quarterly["frequency"] != "quarterly":
-    raise AssertionError("style frequency must be quarterly")
-if style["benchmark"] != "12风格箱等权":
-    raise AssertionError("style benchmark mismatch")
+if style["frequency"] != "monthly" or quarterly["frequency"] != "monthly":
+    raise AssertionError("style rotation frequency must be monthly")
+if quality.get("style_label_rebalance") != "quarterly" or quality.get("style_rotation_rebalance") != "monthly":
+    raise AssertionError("style label/rotation rebalance contract mismatch")
+if not str(style.get("benchmark") or "").startswith("标准"):
+    raise AssertionError(f"style benchmark mismatch: {style.get('benchmark')}")
+benchmark_source = quarterly.get("benchmark_source") or {}
+if benchmark_source.get("status") != "standard_cni_index_benchmark":
+    raise AssertionError(f"style benchmark source mismatch: {benchmark_source}")
+if "style12_rule" not in benchmark_source:
+    raise AssertionError("style 12-cell benchmark rule missing")
 coverage = {
     quality["latest_eligible_stock_count"],
     quality["latest_labelled_stock_count"],
@@ -93,18 +100,21 @@ if quality["latest_labelled_stock_count"] <= 0 or quality["min_cell_stock_count"
     raise AssertionError("style universe or a style cell is empty")
 if set(quarterly["metrics"]) != {"train", "validation", "test", "all"}:
     raise AssertionError("style split metrics incomplete")
-if "验证集" not in quarterly["selection_rule"] or "2022年后仅报告" not in quarterly["selection_rule"]:
+if "训练集" not in quarterly["selection_rule"] or "2022年后测试集只报告" not in quarterly["selection_rule"]:
     raise AssertionError("style candidate selection rule is not frozen")
 style_holdings = quarterly["holdings"]
 bad_style_dates = [row for row in style_holdings if row["signal_date"] >= row["execution_date"]]
-bad_style_size = [row for row in style_holdings if len(row["names"]) != 3]
-bad_style_weight = [row for row in style_holdings if abs(row["weight"] - 1 / 3) > 1e-6]
+EXPECTED_STYLE_TOP_N = 3
+if int(quarterly.get("top_n") or -1) != EXPECTED_STYLE_TOP_N:
+    raise AssertionError(f"style top_n contract mismatch: {quarterly.get("top_n")}")
+bad_style_size = [row for row in style_holdings if len(row["names"]) != EXPECTED_STYLE_TOP_N]
+bad_style_weight_sum = [row for row in style_holdings if abs(sum((row.get("weights") or {}).values()) - 1.0) > 1e-6 and row.get("status") != "planned"]
 if bad_style_dates:
-    raise AssertionError(f"quarterly style T/T+1 violation: {bad_style_dates[:3]}")
+    raise AssertionError(f"monthly style T/T+1 violation: {bad_style_dates[:3]}")
 if bad_style_size:
-    raise AssertionError(f"quarterly style is not Top3: {bad_style_size[:3]}")
-if bad_style_weight:
-    raise AssertionError(f"quarterly style is not equal weight: {bad_style_weight[:3]}")
+    raise AssertionError(f"monthly style is not Top3: {bad_style_size[:3]}")
+if bad_style_weight_sum:
+    raise AssertionError(f"monthly style weights do not sum to 1: {bad_style_weight_sum[:3]}")
 latest_style = style_holdings[-1]
 if latest_style["execution_date"] <= p["as_of"] and latest_style.get("status") != "executed":
     raise AssertionError(f"stale planned style holding: {latest_style}")

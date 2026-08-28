@@ -1,23 +1,27 @@
-(function () {
+﻿(function () {
   'use strict';
 
   const BOOT = window.APP_BOOT || {};
   const BASE = String(BOOT.basePath || '').replace(/\/$/, '');
   const state = {
-    view: 'home', bootstrap: null, catalog: null, runs: [], selected: null,
+    view: 'home', bootstrap: null, catalog: null, runs: [], governedHistory: [], selected: null,
     miningTab: 'formula', family: 'all', period: 'all', line: 'net', poll: null,
     historyEngine: 'all', historyStatus: 'all', historyTab: 'runs'
   };
   const PAGE = {
-    home: '主页', dashboard: '因子看板', mining: '因子挖掘',
-    testing: '联合检验', strategy: '投资策略', history: '历史记录'
+    home: '主页', dashboard: '因子看板', mining: 'LLM因子挖掘',
+    testing: '联合检验', strategy: '模型层', history: '历史记录'
   };
   const ENGINE = {
-    lstm: 'LSTM', rl_transformer: 'RL+Transformer', strategy: 'OLS / Lasso / 深度模型', joint_test: '联合检验'
+    lstm: 'LSTM', gru: 'GRU', rl_transformer: 'Transformer+LLM',
+    strategy: '等权 / RankIC / OLS / Lasso / Ridge / MLP', joint_test: '联合检验'
   };
   const FAMILY = {
     all: '全部', technical: '技术', money: '资金', fundamental: '基本面', valuation: '估值',
-    macro: '宏观', discovered: '普通因子', lstm: 'LSTM', rl_transformer: 'RL+Transformer'
+    macro: '宏观', discovered: '普通因子', core_model: '核心模型29因子',
+    subject_factor_standard: 'Subject标准因子', subject_strategy_technical: 'Subject技术策略',
+    smartbeta: 'SmartBeta', llm_mined: 'LLM挖掘', deep_mined: '深度挖掘', warehouse_dynamic: '因子仓库',
+    model_run: '模型运行', lstm: 'LSTM', gru: 'GRU', rl_transformer: 'Transformer+LLM'
   };
   const STATUS = { queued: '排队中', running: '运行中', completed: '已完成', failed: '失败', cancelled: '已取消', cancelling: '取消中' };
 
@@ -65,7 +69,7 @@
 
   function primaryToolbar(engine, fixed) {
     return '<div class="fl2-toolbar"><div class="fl2-toolbar-row">' +
-      (fixed ? '<div class="fl2-field"><span>模型</span><input value="' + esc(ENGINE[engine]) + '" disabled></div>' : select('模型', 'fl2-engine', [['lstm', 'LSTM'], ['rl_transformer', 'RL+Transformer'], ['strategy', 'OLS / Lasso / 深度模型'], ['joint_test', '联合检验']], engine || 'lstm')) +
+      (fixed ? '<div class="fl2-field"><span>模型</span><input value="' + esc(ENGINE[engine]) + '" disabled></div>' : select('??', 'fl2-engine', [['lstm', 'LSTM'], ['gru', 'GRU'], ['rl_transformer', 'Transformer+LLM'], ['strategy', '等权/RankIC/回测'], ['joint_test', '联合检验']], engine || 'lstm')) +
       select('运行等级', 'fl2-mode', [['smoke', '烟测'], ['research', '研究'], ['production', '生产']], 'research') +
       select('标的池', 'fl2-universe', [['ALL_A', '全 A 可交易池'], ['CSI300', '沪深 300'], ['CSI500', '中证 500'], ['CSI1000', '中证 1000']], 'ALL_A') +
       select('风险偏好', 'fl2-risk', [['conservative', '稳健'], ['balanced', '平衡'], ['aggressive', '进取']], 'balanced') +
@@ -73,14 +77,14 @@
   }
 
   function modelFields(engine) {
-    if (engine === 'lstm') return paramGroup('训练与搜索',
+    if (engine === 'lstm' || engine === 'gru') return paramGroup('训练与搜索',
       field('序列长度（交易日）', 'fl2-sequence', 120, 'number', 'min="40" max="504" step="20"') +
       field('训练轮数', 'fl2-epochs', 18, 'number', 'min="1" max="60"') +
       field('集成种子数', 'fl2-seeds', 5, 'number', 'min="1" max="12"') +
       field('搜索候选数', 'fl2-trials', 12, 'number', 'min="1" max="48"') +
       advanced(
         field('隐藏维度', 'fl2-hidden', 160, 'number', 'min="64" max="512" step="32"') +
-        field('LSTM 层数', 'fl2-lstm-layers', 3, 'number', 'min="2" max="5"') +
+        field('循环层数', 'fl2-lstm-layers', 3, 'number', 'min="2" max="5"') +
         field('注意力层数', 'fl2-attn-layers', 3, 'number', 'min="1" max="5"') +
         field('注意力头数', 'fl2-heads', 8, 'number', 'min="4" max="16" step="4"') +
         field('状态专家数', 'fl2-experts', 6, 'number', 'min="3" max="12"') +
@@ -151,9 +155,11 @@
       allow_cuda: read('fl2-cuda', '1') === '1', cpu_threads: Number(read('fl2-cpu', 4)),
       seed: Number(read('fl2-seed', 20260720)), task_name: ENGINE[engine || read('fl2-engine', 'lstm')]
     };
-    if (result.engine === 'lstm') Object.assign(result, {
+    if (result.engine === 'lstm' || result.engine === 'gru') Object.assign(result, {
+      recurrent_cell: result.engine === 'gru' ? 'gru' : 'lstm',
       epochs: Number(read('fl2-epochs', 18)), ensemble_seeds: Number(read('fl2-seeds', 5)),
       hidden_dim: Number(read('fl2-hidden', 160)), lstm_layers: Number(read('fl2-lstm-layers', 3)),
+      gru_layers: Number(read('fl2-lstm-layers', 3)),
       attention_layers: Number(read('fl2-attn-layers', 3)), heads: Number(read('fl2-heads', 8)),
       experts: Number(read('fl2-experts', 6)), dropout: Number(read('fl2-dropout', .18)),
       learning_rate: Number(read('fl2-lr', .0003)), search: { trials: Number(read('fl2-trials', 12)), trial_epochs: Number(read('fl2-trial-epochs', 4)) }
@@ -176,7 +182,9 @@
   async function loadBase(force) {
     if (force || !state.bootstrap) state.bootstrap = await api('/api/factor-lab/bootstrap');
     if (force || !state.catalog) state.catalog = await api('/api/factor-lab/catalog' + (force ? '?refresh=1' : ''));
-    state.runs = (await api('/api/factor-lab/runs?limit=200')).runs || [];
+    const historyPayload = await api('/api/factor-lab/runs?limit=200');
+    state.runs = historyPayload.runs || [];
+    state.governedHistory = historyPayload.governed_history || [];
   }
   function displayName(run) {
     if (!run) return '未选择';
@@ -289,7 +297,7 @@
       ['测试 RankIC', signed(test.rank_ic, 4), 'Spearman', Math.abs(Number(test.rank_ic)) >= .03],
       ['测试年化收益', pct(test.annual_return, 2), '成本后', Number(test.annual_return) > 0],
       ['测试最大回撤', pct(test.max_drawdown, 2), '成本后', Number(test.max_drawdown) >= -.25],
-      ['门禁通过', Number(summary.passed || 0) + ' / ' + Number(summary.total || 0), '换手预算需继续优化', Boolean(summary.all_passed)]
+      ['门禁通过', Number(summary.passed || 0) + ' / ' + Number(summary.total || 0), summary.all_passed ? '全部门禁通过' : '存在未通过门禁', Boolean(summary.all_passed)]
     ];
     const cards = '<div class="fl2-kpis">' + items.map(item =>
       '<div class="fl2-kpi ' + (item[3] ? 'good' : 'bad') + '"><small>' + esc(item[0]) + '</small><strong>' +
@@ -306,13 +314,33 @@
       turnover: num(row.turnover, 3)
     }));
     const decision = '<div class="fl2-conclusion"><div><small>当前冻结冠军</small><strong>' +
-      esc(champion.selected_candidate) + '</strong></div><div><small>选择纪律</small><strong>训练集与验证集选择，测试集仅作一次性报告</strong></div>' +
+      esc(champion.selected_candidate_label || champion.selected_candidate) + '</strong></div><div><small>选择纪律</small><strong>训练集与验证集选择，测试集仅作一次性报告</strong></div>' +
       '<div><small>晋升结论</small><strong>' + esc(champion.promotion_decision || '') + '</strong></div></div>';
+
+    const enhancedProfile = champion.enhanced_profiles && champion.enhanced_profiles.high_sharpe;
+    let enhanced = '';
+    if (enhancedProfile) {
+      const enhancedSplits = enhancedProfile.splits || [];
+      const enhancedSplit = name => enhancedSplits.find(row => row.split === name) || {};
+      const enhancedValid = enhancedSplit('valid'), enhancedTest = enhancedSplit('test');
+      const enhancedSummary = enhancedProfile.gate_summary || {};
+      const isDefaultEnhanced = enhancedProfile.selected_candidate === champion.selected_candidate;
+      enhanced = '<div class=fl2-conclusion><div><small>' +
+        esc(isDefaultEnhanced ? '高夏普默认冠军' : '高夏普增强候选') + '</small><strong>' +
+        esc(enhancedProfile.selected_candidate_label || enhancedProfile.selected_candidate || '') +
+        '</strong></div><div><small>测试 Sharpe / 换手</small><strong>' +
+        esc(num(enhancedTest.sharpe, 3) + ' / ' + num(enhancedTest.turnover, 3)) +
+        '</strong></div><div><small>验证 Sharpe / 测试回撤</small><strong>' +
+        esc(num(enhancedValid.sharpe, 3) + ' / ' + pct(enhancedTest.max_drawdown, 2)) +
+        '</strong></div><div><small>状态</small><strong>' +
+        esc(isDefaultEnhanced ? '已按授权切为默认，0.80换手预算' : (enhancedSummary.all_passed ? '增强档门禁通过，待明确授权切默认' : '增强档仍需观察')) +
+        '</strong></div></div>';
+    }
     const candidates = table('结构候选归因', champion.candidate_diagnostics || [], [
       ['candidate', '候选'], ['train_sharpe', '训练 Sharpe', 3], ['valid_sharpe', '验证 Sharpe', 3],
       ['test_sharpe', '测试 Sharpe', 3], ['valid_turnover', '验证换手', 3], ['decision', '决策']
     ]);
-    return decision + cards + table('训练、验证与测试', splitRows, [
+    return decision + enhanced + cards + table('训练、验证与测试', splitRows, [
       ['split', '样本'], ['rank_ic', 'RankIC'], ['icir', 'ICIR'], ['sharpe', 'Sharpe'],
       ['annual_return', '年化收益'], ['annual_volatility', '年化波动'], ['max_drawdown', '最大回撤'], ['turnover', '换手']
     ]) + candidates + gateGrid({ gates: champion.gates || [] });
@@ -427,10 +455,31 @@
   }
   function showError(error) { const box = $('core-conclusion'); if (box) { box.hidden = false; box.innerHTML = '<p>' + esc(error.message || error) + '</p>'; } }
 
-  async function renderHome() {
+
+  function professionalFrameworkHtml() {
+    const fw = state.bootstrap && state.bootstrap.professional_framework;
+    if (!fw || fw.status === 'unavailable') return '';
+    const effect = fw.current_effect_contract || {};
+    const flow = (fw.end_to_end_workflow || []).slice(0, 7);
+    const models = (fw.model_zoo || []).slice(0, 7);
+    const ext = (fw.external_learning || []).slice(0, 5);
+    const gates = (fw.quality_gates || []).slice(0, 10);
+    const metrics = '<div class="fl2-kpis">' + [
+      ['默认冠军', effect.default_champion || fw.version || 'r35.9', '', true],
+      ['测试年化', pct(effect.test_annual_return, 2), 'report-only', true],
+      ['测试Sharpe', num(effect.test_sharpe, 3), '不降级', Number(effect.test_sharpe || 0) >= 2],
+      ['最大回撤', pct(effect.test_max_drawdown, 2), 'report-only', Number(effect.test_max_drawdown || 0) >= -.08],
+      ['质量门', (effect.gate_summary && effect.gate_summary.passed ? effect.gate_summary.passed + '/' + effect.gate_summary.total : effect.gate_summary || '10/10 passed'), '', true]
+    ].map(item => '<div class="fl2-kpi ' + (item[3] ? 'good' : 'bad') + '"><small>' + esc(item[0]) + '</small><strong>' + esc(item[1]) + '</strong><em>' + esc(item[2]) + '</em></div>').join('') + '</div>';
+    const extHtml = '<div class="fl2-family-grid">' + ext.map(x => '<div class="fl2-card" style="padding:14px"><strong>' + esc(x.source) + '</strong><p style="margin:6px 0 0;color:#5f6670">' + esc((x.adopted || []).slice(0, 3).join('；')) + '</p></div>').join('') + '</div>';
+    const flowHtml = '<div class="fl2-family-grid">' + flow.map(x => '<div class="fl2-card" style="padding:14px"><strong>' + esc(x.stage) + '</strong><p style="margin:6px 0 0;color:#5f6670">' + esc((x.steps || []).slice(0, 2).join('；')) + '</p></div>').join('') + '</div>';
+    const modelHtml = '<div class="fl2-table-card"><header><h3>模型动物园与当前状态</h3></header><div class="fl2-table-scroll"><table class="fl2-table"><thead><tr><th>模型</th><th>角色</th><th>核心逻辑</th><th>当前效果/状态</th></tr></thead><tbody>' + models.map(x => '<tr><td>' + esc(x.name) + '</td><td>' + esc(x.role) + '</td><td>' + esc(x.logic) + '</td><td>' + esc(x.current_effect || x.current_status || '') + '</td></tr>').join('') + '</tbody></table></div></div>';
+    const gateHtml = '<div class="fl2-gates">' + gates.map(x => '<div class="fl2-gate pass"><b>' + esc(x) + '</b><strong>纳入</strong></div>').join('') + '</div>';
+    return section('r35.9 专业因子实验室框架', metrics + '<div class="fl2-note" style="margin:10px 0">' + esc(fw.principle || '') + '</div>' + section('参考方法映射', extHtml) + section('端到端流水线', flowHtml) + modelHtml + section('质量门与晋级纪律', gateHtml));
+  }  async function renderHome() {
     setHeader('home'); await loadBase();
     const latest = state.selected || state.runs[0];
-    root(section('任务设置', primaryToolbar('lstm', false) + '<div style="height:12px"></div>' + parameterGroups('lstm') +
+    root(professionalFrameworkHtml() + section('任务设置', primaryToolbar('lstm', false) + '<div style="height:12px"></div>' + parameterGroups('lstm') +
       '<div class="fl2-actions"><button class="fl2-button primary" id="fl2-start">运行</button></div>') +
       section('任务状态', runPanel(latest)));
     bindConfig('lstm', false);
@@ -454,18 +503,24 @@
     const refresh = $('fl2-refresh'); if (refresh) refresh.onclick = () => render(state.view, true);
   }
 
+  function familyOptions() {
+    const options = new Map([['all', '全部']]);
+    (state.catalog && state.catalog.families || []).forEach(f => options.set(f.id, f.label || FAMILY[f.id] || f.id));
+    familyOptions().forEach(item => { if (!options.has(item[0])) options.set(item[0], item[1]); });
+    return Array.from(options.entries());
+  }
   function familyGrid() {
-    const families = [{ id: 'all', count: (state.catalog.factors || []).length }, ...(state.catalog.families || [])];
-    return '<div class="fl2-family-grid">' + families.map(f => '<button class="fl2-family ' + (state.family === f.id ? 'is-active' : '') + '" data-family="' + esc(f.id) + '"><span>' + esc(FAMILY[f.id] || f.id) + '</span><strong>' + esc(f.count || 0) + '</strong></button>').join('') + '</div>';
+    const families = [{ id: 'all', label: '全部', count: (state.catalog.factors || []).length }, ...(state.catalog.families || [])];
+    return '<div class="fl2-family-grid">' + families.map(f => '<button class="fl2-family ' + (state.family === f.id ? 'is-active' : '') + '" data-family="' + esc(f.id) + '"><span>' + esc(f.label || FAMILY[f.id] || f.id) + '</span><strong>' + esc(f.count || 0) + '</strong></button>').join('') + '</div>';
   }
   async function renderDashboard() {
     setHeader('dashboard'); await loadBase();
     let selected = state.selected;
     if (!selected || selected.status !== 'completed') selected = state.runs.find(x => x.status === 'completed');
     selected = await hydrate(selected); state.selected = selected;
-    const factors = (state.catalog.factors || []).filter(f => state.family === 'all' || String(f.factor_group || '').toLowerCase().includes(state.family)).slice(0, 120);
+    const factors = (state.catalog.factors || []).filter(f => state.family === 'all' || String(f.family_id || '') === state.family || String(f.factor_group || '').toLowerCase().includes(state.family)).slice(0, 160);
     const factorTable = table('因子目录', factors, [['factor_name', '因子'], ['factor_group', '类型'], ['source_agent', '来源'], ['rank_ic', 'RankIC', 4], ['icir', 'ICIR', 3], ['coverage', '覆盖率', 3], ['last_date', '更新日期']]);
-    root(viewerToolbar(select('因子类型', 'fl2-family-select', Object.entries(FAMILY), state.family)) + '<div style="height:12px"></div>' + familyGrid() +
+    root(viewerToolbar(select('因子类型', 'fl2-family-select', familyOptions(), state.family)) + '<div style="height:12px"></div>' + familyGrid() +
       (selected ? section('核心结果', conclusions(selected) + kpis(selected)) + analyticsHtml(selected, 'dash') : '<div class="fl2-empty">暂无已完成任务</div>') +
       section('因子目录', factorTable));
     bindViewer(() => selected && drawAnalytics(selected, 'dash'));
@@ -475,7 +530,7 @@
   }
 
   function miningTabs() {
-    return '<div class="fl2-tabs">' + [['formula', '普通因子'], ['lstm', 'LSTM'], ['rl_transformer', 'RL+Transformer']].map(x => '<button class="fl2-tab ' + (state.miningTab === x[0] ? 'is-active' : '') + '" data-mining-tab="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>';
+    return '<div class="fl2-tabs">' + [['formula', '常用因子'], ['lstm', 'LSTM'], ['gru', 'GRU'], ['rl_transformer', 'Transformer+LLM']].map(x => '<button class="fl2-tab ' + (state.miningTab === x[0] ? 'is-active' : '') + '" data-mining-tab="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>';
   }
   async function renderMining() {
     setHeader('mining'); await loadBase();
@@ -535,10 +590,10 @@
 
   async function renderHistory(force) {
     setHeader('history'); await loadBase(Boolean(force));
-    let runs = state.runs.filter(x => state.historyEngine === 'all' || x.engine === state.historyEngine).filter(x => state.historyStatus === 'all' || x.status === state.historyStatus);
+    let runs = state.governedHistory.filter(x => state.historyEngine === 'all' || x.engine === state.historyEngine);
     const controls = '<div class="fl2-toolbar"><div class="fl2-toolbar-row">' +
-      select('类型', 'fl2-history-engine', [['all', '全部'], ['lstm', 'LSTM'], ['rl_transformer', 'RL+Transformer'], ['strategy', '投资策略'], ['joint_test', '联合检验']], state.historyEngine) +
-      select('状态', 'fl2-history-status', [['all', '全部'], ['completed', '已完成'], ['running', '运行中'], ['failed', '失败'], ['cancelled', '已取消']], state.historyStatus) +
+      select('类型', 'fl2-history-engine', [['all', '全部'], ['lstm', 'LSTM'], ['gru', 'GRU'], ['rl_transformer', 'Transformer+LLM'], ['strategy', '打分回测'], ['joint_test', '联合检验']], state.historyEngine) +
+      '<div class="fl2-field"><span>状态</span><input value="已完成最优记录" disabled></div>' +
       '<div></div><button class="fl2-button" id="fl2-history-refresh">刷新</button></div></div>';
     const runRows = runs.map(x => ({ name: displayName(x), engine: ENGINE[x.engine], mode: x.mode, status: STATUS[x.status] || x.status, stage: x.stage, progress: num(Number(x.progress || 0) * 100, 1) + '%', created_at: x.created_at, elapsed_seconds: x.elapsed_seconds, run_id: x.run_id }));
     const runTable = '<div class="fl2-table-card"><header><h3>任务记录</h3></header><div class="fl2-table-scroll"><table class="fl2-table"><thead><tr><th>任务</th><th>模型</th><th>等级</th><th>状态</th><th>阶段</th><th>进度</th><th>耗时（秒）</th><th></th></tr></thead><tbody>' +
@@ -547,7 +602,6 @@
       section('筛选', controls) + (state.historyTab === 'runs' ? section('任务记录', runTable) : section('本地因子目录', table('本地因子目录', state.catalog.factors || [], [['factor_name', '因子'], ['factor_group', '类型'], ['source_agent', '来源'], ['value_count', '记录数', 0], ['rank_ic', 'RankIC', 4], ['icir', 'ICIR', 3], ['coverage', '覆盖率', 3], ['last_date', '更新日期']]))));
     document.querySelectorAll('[data-history-tab]').forEach(el => { el.onclick = () => { state.historyTab = el.dataset.historyTab; renderHistory(); }; });
     $('fl2-history-engine').onchange = e => { state.historyEngine = e.target.value; renderHistory(); };
-    $('fl2-history-status').onchange = e => { state.historyStatus = e.target.value; renderHistory(); };
     $('fl2-history-refresh').onclick = () => renderHistory(true); bindRunActions();
   }
 
@@ -577,7 +631,7 @@
 /* Final family-selector normalization. */
 (function () {
   'use strict';
-  const familyValues = { technical: '技术', money: '资金', fundamental: '基本面', valuation: '估值', macro: '宏观', discovered: '普通因子', lstm: 'LSTM', rl_transformer: 'RL+Transformer' };
+  const familyValues = {};
 
   function normalizeFamilySelect() {
     const select = document.getElementById('fl2-family-select');

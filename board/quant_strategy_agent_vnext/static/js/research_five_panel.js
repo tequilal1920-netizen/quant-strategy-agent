@@ -5,11 +5,10 @@
   const 支持页面 = /^(allocation|liquidity|rotation|factorlab|technical|portfolio):/;
   const 主色 = ["#c00000", "#ffc000", "#2f75b5", "#808080", "#ed7d31", "#7030a0", "#00b050", "#5b9bd5"];
   const 板块定义 = [
-    { 编号: "01", 键: "mechanism", 名称: "原理与传导" },
-    { 编号: "02", 键: "descriptive", 名称: "数据与截面" },
-    { 编号: "03", 键: "history", 名称: "历史与实时" },
-    { 编号: "04", 键: "diagnostics", 名称: "模型与预测" },
-    { 编号: "05", 键: "strategy", 名称: "策略与归因" },
+    { 编号: "01", 键: "descriptive", 名称: "数据与截面" },
+    { 编号: "02", 键: "history", 名称: "历史与实时" },
+    { 编号: "03", 键: "diagnostics", 名称: "模型与预测" },
+    { 编号: "04", 键: "strategy", 名称: "策略与归因" },
   ];
   const 字段中文 = {
     id: "模型",
@@ -27,7 +26,7 @@
     turnover_l1: "换手一阶惩罚",
     turnover_l2: "换手二阶惩罚",
     turnover_cap: "换手上限",
-    position_cap: "单仓上限",
+    position_cap: "风险资产上限",
     portfolio_volatility_target: "目标波动",
     probability_power: "概率幂",
     probability_slope: "概率斜率",
@@ -45,6 +44,7 @@
   const 状态中文 = {
     conditional_champion: "条件冠军",
     current_champion: "当前冠军",
+    post_test_diagnostic_candidate: "后验诊断候选",
     current_champion_with_shadow: "冠军与影子盘",
     mixed_governance: "混合治理",
     tracking_not_return_model: "跟踪模型",
@@ -53,6 +53,8 @@
     pass: "通过",
     failed: "未通过",
     fail: "未通过",
+    diagnostic_only: "仅诊断",
+    not_required: "无需门禁",
     ready: "就绪",
     live: "运行",
     optimal: "最优",
@@ -70,6 +72,9 @@
     adaptive_icir_12m_neutral: "十二月自适应信息系数",
     continuous_rank_volatility_budget: "连续秩波动预算",
     equity_guarded_posterior: "权益保护后验",
+    barra_robust: "稳健协方差",
+    approximate_constrained: "近似约束解",
+    inactive_by_pit_gate: "PIT门禁未激活",
   };
 
   function 转义(值) {
@@ -91,6 +96,7 @@
       数据缓存.set(
         页面,
         fetch(接口地址("/api/research-evidence?route=" + encodeURIComponent(页面)), {
+          cache: "no-store",
           credentials: "same-origin",
           headers: { Accept: "application/json" },
         }).then(function (响应) {
@@ -121,6 +127,14 @@
     return Number.isFinite(数字) ? 数字 : null;
   }
 
+  function 大数文本(数字, 带正号) {
+    const 绝对值 = Math.abs(数字);
+    const 符号 = 数字 < 0 ? "-" : (带正号 && 数字 > 0 ? "+" : "");
+    if (绝对值 >= 1e8) return 符号 + (绝对值 / 1e8).toFixed(2) + "亿";
+    if (绝对值 >= 1e4) return 符号 + (绝对值 / 1e4).toFixed(1) + "万";
+    return "";
+  }
+
   function 中文值(值) {
     if (值 == null) return "—";
     if (值 === true) return "通过";
@@ -136,9 +150,9 @@
       .replace(/coincident/g, "同步")
       .replace(/lagging/g, "滞后")
       .replace(/diversified posterior/gi, "分散后验")
-      .replace(/train/gi, "训练")
-      .replace(/validation/gi, "验证")
-      .replace(/test/gi, "测试")
+      .replace(/\btrain\b/gi, "训练")
+      .replace(/\bvalidation\b/gi, "验证")
+      .replace(/\btest\b/gi, "测试")
       .replace(/sharpe/gi, "夏普")
       .replace(/turnover/gi, "换手")
       .replace(/candidate/gi, "候选");
@@ -147,13 +161,14 @@
   function 数值文本(值, 格式) {
     const 数字 = 有限数(值);
     if (数字 == null) return 中文值(值);
+    if (格式 === "arrow") return 数字 > 0 ? "↑" : 数字 < 0 ? "↓" : "→";
     if (格式 === "percent" || 格式 === "signed_percent") {
       return (格式 === "signed_percent" && 数字 > 0 ? "+" : "") + (数字 * 100).toFixed(1) + "%";
     }
     if (格式 === "percentile") return (数字 * 100).toFixed(0) + "%";
     if (格式 === "integer") return String(Math.round(数字));
-    if (格式 === "signed") return (数字 > 0 ? "+" : "") + 数字.toFixed(2);
-    return Math.abs(数字) >= 100 ? 数字.toFixed(0) : 数字.toFixed(2);
+    if (格式 === "signed") return 大数文本(数字, true) || (数字 > 0 ? "+" : "") + 数字.toFixed(2);
+    return 大数文本(数字, false) || (Math.abs(数字) >= 100 ? 数字.toFixed(0) : 数字.toFixed(2));
   }
 
   function 参数值(键, 值) {
@@ -191,13 +206,18 @@
       已有.add(项.名称);
       去重.push(项);
     });
-    return 去重.slice(0, 10);
+    return 去重;
   }
 
   function 参数区(数据) {
-    const 摘要 = 参数摘要(数据);
-    return '<section class="统一参数区" data-five-parameters>' +
-      '<div class="统一参数标题"><b>模型参数</b><span>调整后同步重绘</span></div>' +
+    const 精简 = ["rotation", "portfolio"].includes(String(数据.module || ""));
+    const 参数列 = 参数摘要(数据);
+    const 上限 = 精简 ? 6 : 10;
+    const 状态项 = 参数列.find(function (项) { return 项.名称 === "状态"; });
+    const 摘要 = 参数列.filter(function (项) { return 项.名称 !== "状态"; }).slice(0, 状态项 ? 上限 - 1 : 上限);
+    if (状态项) 摘要.push(状态项);
+    return '<section class="统一参数区' + (精简 ? ' 统一参数区--精简' : '') + '" data-five-parameters>' +
+      '<div class="统一参数标题"><b>模型参数</b></div>' +
       '<div class="统一参数控件" data-five-controls></div>' +
       '<div class="统一参数摘要">' + 摘要.map(function (项) {
         return '<div><small>' + 转义(项.名称) + '</small><strong>' + 转义(项.数值) + '</strong></div>';
@@ -205,7 +225,7 @@
   }
 
   function 行名称(行) {
-    const 候选键 = ["name", "factor", "asset", "candidate", "industry", "model", "source", "group", "split", "solver", "chart"];
+    const 候选键 = ["name", "item", "factor", "asset", "candidate", "industry", "model", "source", "group", "split", "solver", "chart"];
     for (let 序号 = 0; 序号 < 候选键.length; 序号 += 1) {
       const 值 = 行[候选键[序号]];
       if (值 != null && 值 !== "") return 中文值(值);
@@ -245,13 +265,13 @@
       强度 = Math.max(8, Math.min(100, Math.abs(数字) * (Math.abs(数字) <= 2 ? 45 : 2)));
       颜色 = 数字 >= 0 ? 主色[0] : 主色[2];
     }
-    return "background:linear-gradient(90deg," + 颜色 + "1f 0 " + 强度.toFixed(0) + "%,transparent " + 强度.toFixed(0) + "% 100%)";
+    return "background-color:transparent;background-image:linear-gradient(90deg," + 颜色 + "66 0 " + 强度.toFixed(0) + "%,transparent " + 强度.toFixed(0) + "% 100%);background-repeat:no-repeat;background-size:100% 68%;background-position:left center;font-weight:400";
   }
 
   function 矩阵列(表格) {
     const 全列 = (表格 && tableColumns(表格)) || [];
     const 标识 = 全列.find(function (列) {
-      return ["name", "factor", "asset", "candidate", "industry", "model", "source", "group", "split", "solver", "chart"].includes(列.key);
+      return ["name", "item", "factor", "asset", "candidate", "industry", "model", "source", "group", "split", "solver", "chart"].includes(列.key);
     }) || 全列[0];
     const 趋势 = 全列.find(function (列) { return 列.format === "sparkline"; });
     const 指标 = 全列.filter(function (列) {
@@ -265,7 +285,8 @@
   }
 
   function 条件矩阵(表格, 备用项) {
-    const 行列 = 表格 && Array.isArray(表格.rows) ? 表格.rows.slice(0, 11) : [];
+    const 行上限 = 表格 && Number.isFinite(Number(表格.limit_rows)) ? Number(表格.limit_rows) : Infinity;
+    const 行列 = 表格 && Array.isArray(表格.rows) ? 表格.rows.slice(0, 行上限) : [];
     if (!行列.length && 备用项 && 备用项.length) {
       return '<div class="条件矩阵 条件矩阵--参数"><div class="条件矩阵标题">关键参数</div>' +
         备用项.slice(0, 10).map(function (项, 序号) {
@@ -302,19 +323,25 @@
     const 列 = tableColumns(表格).filter(function (项) {
       return !["text", "sparkline", "status"].includes(项.format);
     });
+    const 重点行 = 行列[0] || null;
     const 结果 = [];
     列.some(function (项) {
-      let 最佳 = null;
-      行列.forEach(function (行) {
-        const 数字 = 有限数(行[项.key]);
-        if (数字 == null) return;
-        if (!最佳 || Math.abs(数字) > Math.abs(最佳.数值)) 最佳 = { 数值: 数字, 行: 行 };
-      });
-      if (!最佳) return false;
+      let 重点 = null;
+      if (重点行) {
+        const 数字 = 有限数(重点行[项.key]);
+        if (数字 != null) 重点 = { 数值: 数字, 行: 重点行 };
+      }
+      if (!重点) {
+        const 首个 = 行列.find(function (行) {
+          return 有限数(行[项.key]) != null;
+        });
+        if (首个) 重点 = { 数值: 有限数(首个[项.key]), 行: 首个 };
+      }
+      if (!重点) return false;
       结果.push({
         名称: 项.label,
-        数值: 数值文本(最佳.数值, 项.format),
-        说明: 行名称(最佳.行),
+        数值: 数值文本(重点.数值, 项.format),
+        说明: 行名称(重点.行),
       });
       return 结果.length >= 4;
     });
@@ -323,22 +350,25 @@
   }
 
   function 板块HTML(定义, 数据) {
-    if (定义.键 === "mechanism") {
-      return '<section class="五图板块" data-five-block="mechanism">' +
-        '<header class="五图标题"><b>' + 定义.编号 + '</b><h2>' + 定义.名称 + '</h2></header>' +
-        '<div class="五图综合画布 五图综合画布--机理"><div class="五图主图" data-five-plot="mechanism"></div>' +
-        条件矩阵(null, 参数摘要(数据)) + "</div></section>";
-    }
     const 模块 = (数据.visuals || {})[定义.键] || {};
     const 数字 = 关键数(模块);
-    return '<section class="五图板块" data-five-block="' + 定义.键 + '">' +
+    const 图列 = [模块.chart].concat(Array.isArray(模块.secondary_charts) ? 模块.secondary_charts : [])
+      .filter(Boolean);
+    const 纯图 = 模块.display === "charts_only";
+    const 画布 = 纯图
+      ? '<div class="五图综合画布 五图综合画布--图形">' + 图列.map(function (_, 序号) {
+          return '<div class="' + (序号 === 0 ? '五图主图' : '五图副图') +
+            '" data-five-plot="' + 定义.键 + '-' + 序号 + '"></div>';
+        }).join("") + "</div>"
+      : '<div class="五图综合画布"><div class="五图主图" data-five-plot="' + 定义.键 +
+        '-0"></div>' + 条件矩阵(模块.table) + "</div>";
+    return '<section class="五图板块' + (纯图 ? ' 五图板块--纯图' : '') +
+      '" data-five-block="' + 定义.键 + '">' +
       '<header class="五图标题"><b>' + 定义.编号 + '</b><h2>' + 定义.名称 + '</h2><div class="五图数字">' +
       数字.map(function (项) {
         return '<span><small>' + 转义(项.名称) + '</small><strong>' + 转义(项.数值) +
           '</strong><em>' + 转义(中文值(项.说明)) + "</em></span>";
-      }).join("") + "</div></header>" +
-      '<div class="五图综合画布"><div class="五图主图" data-five-plot="' + 定义.键 + '"></div>' +
-      条件矩阵(模块.table) + "</div></section>";
+      }).join("") + "</div></header>" + 画布 + "</section>";
   }
 
   function 页面HTML(页面, 数据) {
@@ -360,8 +390,13 @@
       y: 序列.y || [],
       yaxis: 序列.axis === "y2" ? "y2" : "y",
       text: (序列.text || []).map(中文值),
-      hovertemplate: "%{x}<br>%{y:.4f}<extra>" + 转义(中文值(序列.name || "")) + "</extra>",
+      hovertemplate: 序列.hovertemplate || "%{x}<br>%{y:.4f}<extra>" + 转义(中文值(序列.name || "")) + "</extra>",
     };
+    if (序列.fill) 结果.fill = 序列.fill;
+    if (序列.fillcolor) 结果.fillcolor = 序列.fillcolor;
+    if (序列.opacity != null) 结果.opacity = 序列.opacity;
+    if (序列.marker_symbol) 结果.marker = Object.assign({}, 结果.marker || {}, { symbol: 序列.marker_symbol });
+    if (序列.connectgaps != null) 结果.connectgaps = !!序列.connectgaps;
     if (类型 === "bar") {
       结果.marker = {
         color: 总数 > 1 ? 颜色 : 数值列.map(function (值) {
@@ -369,15 +404,31 @@
         }),
         line: { color: "#ffffff", width: 0.6 },
       };
-      if (数值列.length <= 16) {
-        结果.texttemplate = "%{y:.2f}";
-        结果.textposition = "outside";
+      if (序列.base) 结果.base = 序列.base;
+      if (序列.show_text !== false && 数值列.length <= 16) {
+        结果.texttemplate = 序列.texttemplate || "%{y:.2f}";
+        结果.textposition = 序列.textposition || "outside";
         结果.cliponaxis = false;
       }
     } else {
-      结果.line = { color: 颜色, width: 序号 === 0 ? 2.6 : 1.8, dash: 序号 > 3 ? "dot" : "solid" };
+      结果.line = {
+        color: 颜色,
+        width: 序列.line_width || (序号 === 0 ? 2.6 : 1.8),
+        dash: 序列.dash || (序号 > 3 ? "dot" : "solid"),
+      };
+      if (序列.line_shape) 结果.line.shape = 序列.line_shape;
       if (String(结果.mode).indexOf("markers") >= 0) {
-        结果.marker = { size: 8, color: 颜色, line: { color: "#ffffff", width: 0.8 } };
+        结果.marker = {
+          size: 序列.marker_size || 8,
+          color: 序列.marker_color || 颜色,
+          colorscale: [[0, "#d9eaf7"], [0.5, "#ffc000"], [1, "#b42318"]],
+          showscale: Array.isArray(序列.marker_color),
+          colorbar: Array.isArray(序列.marker_color)
+            ? { title: "风险贡献", thickness: 8, len: 0.56 }
+            : undefined,
+          line: { color: "#ffffff", width: 0.8 },
+          opacity: 0.88,
+        };
       }
     }
     return 结果;
@@ -412,6 +463,7 @@
     布局.xaxis.ticktext = 序号.map(function (索引) {
       const 名称 = String(标签[索引]);
       if (最长 > 18) return String(索引 + 1).padStart(2, "0");
+      if (标签.length > 16 && 名称.length > 3) return 名称.slice(0, 3);
       return 名称.length > 7 ? 名称.slice(0, 7) : 名称;
     });
     布局.xaxis.tickangle = 最长 > 18 ? 0 : -18;
@@ -423,9 +475,9 @@
         text: 中文值((图表 && 图表.title) || ""),
         x: 0.01,
         xanchor: "left",
-        font: { size: 15, color: "#18212b" },
+        font: { size: 16, color: "#18212b" },
       },
-      height: 高度,
+      height: Number.isFinite(Number(图表 && 图表.height)) ? Number(图表.height) : 高度,
       margin: { l: 62, r: 图表 && 图表.y2_title ? 62 : 24, t: 52, b: 68 },
       paper_bgcolor: "#ffffff",
       plot_bgcolor: "#ffffff",
@@ -442,7 +494,7 @@
         showgrid: false,
         zeroline: false,
         linecolor: "#cfd8e3",
-        tickfont: { size: 11 },
+        tickfont: { size: 12 },
       },
       yaxis: {
         autorange: true,
@@ -452,9 +504,16 @@
         gridwidth: 0.7,
         zerolinecolor: "#a5a5a5",
       },
-      legend: { orientation: "h", y: -0.19, x: 0, font: { size: 11 } },
-      font: { family: "Arial, KaiTi, STKaiti, sans-serif", size: 12, color: "#18212b" },
+      legend: { orientation: "h", y: -0.21, x: 0, font: { size: 12 } },
+      font: { family: "Arial, KaiTi, STKaiti, sans-serif", size: 13, color: "#18212b" },
     };
+    if (图表 && 图表.log_y) {
+      布局.yaxis.type = "log";
+      布局.yaxis.tickmode = "array";
+      布局.yaxis.tickvals = [1e-12, 1e-10, 1e-8, 1e-6, 1e-4, 1e-2, 1];
+      布局.yaxis.ticktext = ["1e-12", "1e-10", "1e-8", "1e-6", "1e-4", "1e-2", "1"];
+      布局.yaxis.tickfont = { size: 12 };
+    }
     if (图表 && 图表.y2_title) {
       布局.yaxis2 = {
         title: 中文值(图表.y2_title),
@@ -475,66 +534,28 @@
         line: { color: 主色[0], dash: "dash", width: 1.4 },
       }];
     }
+    if (图表 && 图表.margin && typeof 图表.margin === "object") 布局.margin = Object.assign({}, 布局.margin, 图表.margin);
+    if (图表 && 图表.showlegend != null) 布局.showlegend = !!图表.showlegend;
+    if (图表 && 图表.legend && typeof 图表.legend === "object") 布局.legend = Object.assign({}, 布局.legend, 图表.legend);
+    if (图表 && 图表.barmode) 布局.barmode = 图表.barmode;
+    if (图表 && Array.isArray(图表.y_range)) 布局.yaxis.range = 图表.y_range;
+    if (图表 && Array.isArray(图表.y_tickvals)) { 布局.yaxis.tickmode = "array"; 布局.yaxis.tickvals = 图表.y_tickvals; 布局.yaxis.ticktext = (图表.y_ticktext || 图表.y_tickvals).map(中文值); }
+    if (图表 && Array.isArray(图表.x_range)) 布局.xaxis.range = 图表.x_range;
+    if (图表 && Array.isArray(图表.x_tickvals)) { 布局.xaxis.tickmode = "array"; 布局.xaxis.tickvals = 图表.x_tickvals.map(中文值); 布局.xaxis.ticktext = (图表.x_ticktext || 图表.x_tickvals).map(中文值); }
+    if (图表 && 图表.x_tickformat) 布局.xaxis.tickformat = 图表.x_tickformat;
+    if (图表 && 布局.yaxis2 && Array.isArray(图表.y2_range)) 布局.yaxis2.range = 图表.y2_range;
+    if (图表 && Array.isArray(图表.shapes)) 布局.shapes = (布局.shapes || []).concat(图表.shapes);
+    if (图表 && Array.isArray(图表.annotations)) 布局.annotations = (布局.annotations || []).concat(图表.annotations);
     压缩横轴(布局, 图表);
     return 布局;
   }
 
-  function 绘制机理(容器, 数据) {
-    const 节点全文 = ((数据.mechanism || {}).nodes || []).map(中文值);
-    const 节点 = 节点全文.map(function (名称, 序号) {
-      const 简称 = 名称.length > 3 ? 名称.slice(0, 3) : 名称;
-      return String(序号 + 1).padStart(2, "0") + "<br>" + 简称;
-    });
-    if (!节点全文.length) return Promise.resolve();
-    const 序列 = [{
-      type: "sankey",
-      orientation: "h",
-      arrangement: "snap",
-      node: {
-        pad: 24,
-        thickness: 22,
-        line: { color: "#ffffff", width: 1 },
-        label: 节点,
-        customdata: 节点全文,
-        color: 节点.map(function (_, 序号) { return 主色[序号 % 主色.length]; }),
-        hovertemplate: "%{customdata}<extra></extra>",
-      },
-      link: {
-        source: 节点.slice(0, -1).map(function (_, 序号) { return 序号; }),
-        target: 节点.slice(1).map(function (_, 序号) { return 序号 + 1; }),
-        value: 节点.slice(1).map(function () { return 1; }),
-        color: 节点.slice(1).map(function (_, 序号) { return 主色[序号 % 主色.length] + "33"; }),
-        hovertemplate: "%{source.label} → %{target.label}<extra></extra>",
-      },
-    }];
-    const 公式 = String((数据.mechanism || {}).formula || "").split("；")[0].slice(0, 72);
-    const 布局 = {
-      height: 420,
-      margin: { l: 20, r: 20, t: 36, b: 54 },
-      paper_bgcolor: "#ffffff",
-      plot_bgcolor: "#ffffff",
-      font: { family: "Arial, KaiTi, STKaiti, sans-serif", size: 12, color: "#18212b" },
-      annotations: 公式 ? [{
-        x: 0.5,
-        y: -0.08,
-        xref: "paper",
-        yref: "paper",
-        text: 转义(公式),
-        showarrow: false,
-        font: { size: 12, color: "#4b5563" },
-      }] : [],
-    };
-    return window.Plotly.newPlot(容器, 序列, 布局, {
-      responsive: true,
-      scrollZoom: false,
-      doubleClick: false,
-      displaylogo: false,
-      displayModeBar: false,
-    });
-  }
-
-  function 绘制模块(容器, 模块) {
-    const 图表 = (模块 && 模块.chart) || {};
+  function 绘制图表(容器, 图表) {
+    图表 = 图表 || {};
+    if (图表.html) {
+      容器.innerHTML = String(图表.html);
+      return Promise.resolve();
+    }
     let 序列 = [];
     let 高度 = 420;
     if (图表.heatmap) {
@@ -545,13 +566,19 @@
         x: (图表.heatmap.x || []).map(中文值),
         y: (图表.heatmap.y || []).map(中文值),
         z: 图表.heatmap.z || [],
-        zmin: 0,
-        zmax: 1,
-        colorscale: [[0, "#f4cccc"], [0.48, "#fff2cc"], [0.52, "#d9eaf7"], [1, "#2f75b5"]],
+        zmin: Number.isFinite(Number(图表.heatmap.zmin)) ? Number(图表.heatmap.zmin) : 0,
+        zmax: Number.isFinite(Number(图表.heatmap.zmax)) ? Number(图表.heatmap.zmax) : 1,
+        zmid: Number.isFinite(Number(图表.heatmap.zmid)) ? Number(图表.heatmap.zmid) : undefined,
+        text: 图表.heatmap.text || [],
+        texttemplate: 图表.heatmap.text ? "%{text}" : undefined,
+        textfont: { size: 11, color: "#18212b" },
+        colorscale: 图表.heatmap.colorscale || [[0, "#f4cccc"], [0.48, "#fff2cc"], [0.52, "#d9ead3"], [1, "#168a47"]],
         showscale: false,
         xgap: 2,
         ygap: 2,
-        hovertemplate: "%{y}<br>%{x}：%{z}<extra></extra>",
+        hovertemplate: 图表.heatmap.text
+          ? "%{y}<br>%{x}：%{text}<extra></extra>"
+          : "%{y}<br>%{x}：%{z:.4f}<extra></extra>",
       }];
     } else {
       const 原序列 = 图表.traces || [];
@@ -633,8 +660,13 @@
       已移动.add(元素);
     }
 
+    const 仅结果 = /^(portfolio:|allocation:)/.test(页面);
     原子项.forEach(function (节点) {
       const 查询 = "select,input:not([type='hidden']),textarea";
+      if (仅结果) {
+        节点.classList.add("研究原页隐藏");
+        return;
+      }
       const 控件列 = 节点.querySelectorAll ? Array.from(节点.querySelectorAll(查询)) : [];
       const 字段列 = [];
       控件列.map(function (控件) {
@@ -655,7 +687,9 @@
       节点.classList.add("研究原页隐藏");
     });
 
-    控件宿主.querySelectorAll("select,input,textarea").forEach(function (控件) {
+    if (仅结果) {
+      控件宿主.remove();
+    } else 控件宿主.querySelectorAll("select,input,textarea").forEach(function (控件) {
       if (控件.dataset.fivePanelSync === "1") return;
       控件.dataset.fivePanelSync = "1";
       控件.addEventListener("change", function () {
@@ -666,7 +700,7 @@
         }, 420);
       });
     });
-    if (!控件宿主.querySelector("select,input,textarea,button")) 控件宿主.remove();
+    if (控件宿主.isConnected && !控件宿主.querySelector("select,input,textarea,button")) 控件宿主.remove();
     宿主.classList.add("研究五图模式");
   }
 
@@ -705,11 +739,17 @@
     if (!新区块) return;
     收拢原页(宿主, 新区块, 页面, 工作区);
     await 载入绘图库();
-    await Promise.all(板块定义.map(function (定义) {
-      const 容器 = 新区块.querySelector('[data-five-plot="' + 定义.键 + '"]');
-      if (定义.键 === "mechanism") return 绘制机理(容器, 数据);
-      return 绘制模块(容器, (数据.visuals || {})[定义.键]);
-    }));
+    const 绘图任务 = [];
+    板块定义.forEach(function (定义) {
+      const 模块 = (数据.visuals || {})[定义.键] || {};
+      const 图列 = [模块.chart].concat(Array.isArray(模块.secondary_charts) ? 模块.secondary_charts : [])
+        .filter(Boolean);
+      图列.forEach(function (图表, 序号) {
+        const 容器 = 新区块.querySelector('[data-five-plot="' + 定义.键 + '-' + 序号 + '"]');
+        if (容器) 绘图任务.push(绘制图表(容器, 图表));
+      });
+    });
+    await Promise.all(绘图任务);
     中文化可见文本(新区块);
   }
 

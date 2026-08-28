@@ -74,6 +74,7 @@ def _compact_metrics(value: Any) -> Any:
         "annual_return",
         "benchmark_annual_return",
         "annual_excess",
+        "annual_excess_return",
         "sharpe",
         "excess_sharpe",
         "information_ratio",
@@ -123,9 +124,184 @@ def _limit(params: dict[str, Any], default: int = 10, maximum: int = 50) -> int:
         raise QueryError("数量必须是整数") from exc
     return max(1, min(value, maximum))
 
+ASSET_V64_STAGE_CN = {
+    "recovery": "复苏期",
+    "overheat": "过热期",
+    "stagflation": "滞胀期",
+    "recession": "衰退期",
+    "I_credit_repair": "阶段I 复苏期",
+    "II_profit_expansion": "阶段II 繁荣期",
+    "III_prosperity": "阶段III 过热期",
+    "IV_credit_pressure": "阶段IV 滞涨期",
+    "V_profit_downturn": "阶段V 衰退前期",
+    "V_stagflation_profit_downturn": "阶段V 衰退前期",
+    "VI_recession_repair": "阶段VI 衰退后期",
+}
+
+
+def _asset_v64_stage(value: Any) -> Any:
+    return ASSET_V64_STAGE_CN.get(str(value), value)
+
+
+def _asset_v64_labels(payload: dict[str, Any]) -> dict[str, str]:
+    labels = payload.get("asset_labels") or {}
+    fallback = {"equity": "股票", "bond": "债券", "gold": "黄金", "commodity": "商品"}
+    return {key: str(labels.get(key) or fallback.get(key) or key) for key in _asset_v64_order(payload)}
+
+
+def _asset_v64_order(payload: dict[str, Any]) -> list[str]:
+    order = [str(item) for item in (payload.get("asset_order") or [])]
+    return order if order else ["equity", "bond", "gold", "commodity"]
+
+
+def _asset_v64_weights(payload: dict[str, Any], weights: Any) -> dict[str, Any]:
+    labels = _asset_v64_labels(payload)
+    order = _asset_v64_order(payload)
+    if isinstance(weights, dict):
+        return {labels[asset]: weights.get(asset) for asset in order}
+    if isinstance(weights, list):
+        return {labels[asset]: weights[index] if index < len(weights) else None for index, asset in enumerate(order)}
+    return {}
+
+
+def _asset_v64_model_key(params: dict[str, Any], payload: dict[str, Any]) -> str:
+    rec = payload.get("recommended") or {}
+    default = str(rec.get("primary_model") or "macro_factor")
+    raw = str(_param(params, "model", "模型", "strategy", "策略", default=default)).strip()
+    aliases = {
+        "": default,
+        "primary": default,
+        "recommended": default,
+        "主推": default,
+        "推荐": default,
+        "best": default,
+        "收益冠军": str(rec.get("excess_champion_vs_equal_full_report_only") or default),
+        "excess": str(rec.get("excess_champion_vs_equal_full_report_only") or default),
+        "夏普冠军": str(rec.get("sharpe_champion_full_report_only") or default),
+        "sharpe": str(rec.get("sharpe_champion_full_report_only") or default),
+        "bl": "black_litterman",
+        "black_litterman": "black_litterman",
+        "black-litterman": "black_litterman",
+        "周期观点bl": "black_litterman",
+        "风险平价": "risk_parity",
+        "风险预算": "risk_parity",
+        "risk_parity": "risk_parity",
+        "risk-parity": "risk_parity",
+        "宏观因子": "macro_factor",
+        "宏观": "macro_factor",
+        "macro": "macro_factor",
+        "macro_factor": "macro_factor",
+        "macro-factor": "macro_factor",
+    }
+    key = aliases.get(raw, aliases.get(raw.lower(), raw))
+    models = payload.get("allocation_models") or {}
+    if key not in models:
+        choices = "、".join(models.keys())
+        raise QueryError(f"未知资产配置模型：{raw}；可选：主推、收益冠军、夏普冠军、black_litterman、risk_parity、macro_factor；当前模型集：{choices}")
+    return key
+
+
+def _asset_v64_cycle(payload: dict[str, Any]) -> dict[str, Any]:
+    cycle = payload.get("cycle_tracking") or {}
+    history = [row for row in (cycle.get("history") or []) if isinstance(row, dict)]
+    latest = history[-1] if history else {}
+    cycles = []
+    for row in cycle.get("cycles") or []:
+        if not isinstance(row, dict):
+            continue
+        cycles.append({
+            "周期": row.get("cycle"),
+            "维度": row.get("dimensions"),
+            "当前阶段": _asset_v64_stage(row.get("current_stage")),
+            "置信度": row.get("display_probability"),
+            "研究准入": row.get("research_admitted"),
+            "生产准入": row.get("production_admitted"),
+        })
+    return {
+        "当前月份": latest.get("month"),
+        "美林阶段": _asset_v64_stage(latest.get("merrill_stage")),
+        "美林增长": latest.get("merrill_growth"),
+        "美林通胀": latest.get("merrill_inflation"),
+        "普林格阶段": _asset_v64_stage(latest.get("pring_stage")),
+        "普林格货币": latest.get("pring_money"),
+        "普林格信用": latest.get("pring_credit"),
+        "普林格增长": latest.get("pring_growth"),
+        "综合排序": (payload.get("recommended") or {}).get("current_cycle_rank") or cycle.get("combined_asset_ranking"),
+        "周期模型": cycles,
+        "历史样本数": len(history),
+        "说明": cycle.get("current_summary"),
+    }
+
+
+def _asset_v64_metric_splits(model: dict[str, Any]) -> dict[str, Any]:
+    metrics = model.get("metrics") or {}
+    return {
+        "训练": _compact_metrics(metrics.get("train")),
+        "验证": _compact_metrics(metrics.get("validation")),
+        "报告期仅展示": _compact_metrics(metrics.get("test_report_only")),
+        "全区间": _compact_metrics(metrics.get("full")),
+    }
+
+
+def _asset_query_v64(operation: str, params: dict[str, Any], payload: dict[str, Any], path: Path) -> dict[str, Any]:
+    models = payload.get("allocation_models") or {}
+    rec = payload.get("recommended") or {}
+    key = _asset_v64_model_key(params, payload) if operation in {"current", "backtest"} else str(rec.get("primary_model") or "macro_factor")
+    model = models.get(key) or {}
+    gate = rec.get("publication_gate") or {}
+    if operation == "cycle":
+        cycle = payload.get("cycle_tracking") or {}
+        result = {
+            "周期": _asset_v64_cycle(payload),
+            "候选因子数": cycle.get("candidate_factor_count"),
+            "入选研究因子数": cycle.get("selected_factor_count"),
+            "研究准入周期": cycle.get("research_admitted_cycles"),
+            "生产准入周期": cycle.get("production_admitted_cycles"),
+            "真实性边界": cycle.get("truth_boundary"),
+        }
+    elif operation == "backtest":
+        result = {
+            "主推模型": rec.get("primary_model"),
+            "收益冠军": rec.get("excess_champion_vs_equal_full_report_only"),
+            "夏普冠军": rec.get("sharpe_champion_full_report_only"),
+            "选择规则": rec.get("selection_rule"),
+            "展示模型": key,
+            "展示模型绩效": _asset_v64_metric_splits(model),
+            "发布门禁": gate,
+            "近年相对诊断": rec.get("recent_relative_diagnostics"),
+            "近年弱项结论": rec.get("recent_weakness_diagnosis"),
+        }
+    elif operation == "current":
+        result = {
+            "快照版本": payload.get("schema_version"),
+            "引擎版本": payload.get("engine_version"),
+            "兼容说明": "v6.4不再使用稳健/平衡/权益优先画像；profile/画像参数仅保留兼容，默认返回主推模型。",
+            "主推模型": rec.get("primary_model"),
+            "收益冠军": rec.get("excess_champion_vs_equal_full_report_only"),
+            "夏普冠军": rec.get("sharpe_champion_full_report_only"),
+            "展示模型": key,
+            "模型名称": model.get("name"),
+            "模型说明": model.get("role"),
+            "当前权重": _asset_v64_weights(payload, model.get("current_weights")),
+            "当前周期": _asset_v64_cycle(payload),
+            "绩效": _asset_v64_metric_splits(model),
+            "发布门禁": gate.get(key),
+            "选择规则": rec.get("selection_rule"),
+            "治理": {
+                "状态": (payload.get("governance") or {}).get("status"),
+                "测试是否参与选择": (payload.get("governance") or {}).get("selection_uses_test"),
+                "部署允许": (payload.get("governance") or {}).get("deployment_allowed"),
+                "真实性边界": (payload.get("governance") or {}).get("truth_boundary"),
+            },
+        }
+    else:
+        raise QueryError("资产配置动作仅支持 current、cycle、backtest")
+    return _response("asset-allocation", operation, payload, path, result)
 
 def _asset_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
     payload, path = _snapshot("asset_allocation_snapshot.json")
+    if str(payload.get("schema_version") or "").strip().startswith("6.") or payload.get("allocation_models"):
+        return _asset_query_v64(operation, params, payload, path)
     allocations = payload.get("allocations") or {}
     current = allocations.get("current_cycle") or {}
     aliases = {
@@ -226,7 +402,7 @@ def _industry_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
     high_rows = (payload.get("high_frequency") or {}).get("industries") or []
     if operation == "ranking":
         if frequency == "high_frequency":
-            rows = sorted(high_rows, key=lambda row: row.get("rank", 10_000))
+            rows = sorted(high_rows, key=lambda row: row.get("rank") if row.get("rank") is not None else 10_000)
             ranking = [
                 {
                     "排名": row.get("rank"),
@@ -428,9 +604,36 @@ def _factor_manifest() -> tuple[dict[str, Any], Path]:
     return _read_json(path), path
 
 
+
+def _factor_professional_framework() -> tuple[dict[str, Any], Path]:
+    configured = os.environ.get("QUANT_AGENT_FACTOR_PROFESSIONAL_FRAMEWORK", "").strip()
+    candidates: list[Path] = []
+    if configured:
+        candidates.append(Path(configured).expanduser())
+    candidates.extend([
+        ROOT / "model" / "factor_laboratory" / "professional_framework.json",
+        ROOT.parent / "model" / "factor_laboratory" / "professional_framework.json",
+        ROOT.parent / "source" / "professional_framework.json",
+        ROOT.parent.parent / "source" / "professional_framework.json",
+        ROOT.parent / "ai-models" / "factor-laboratory" / "source" / "professional_framework.json",
+    ])
+    for path in candidates:
+        if path.is_file():
+            return _read_json(path), path
+    fallback = candidates[0] if candidates else ROOT / "model" / "factor_laboratory" / "professional_framework.json"
+    return {
+        "status": "unavailable",
+        "version": "r35.9-professional-factor-lab-framework",
+        "message": "professional_framework_artifact_unavailable",
+    }, fallback
+
+
 def _factor_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
     if operation == "champion":
         payload, path = _factor_manifest()
+        high_sharpe = (
+            (payload.get("enhanced_profiles") or {}).get("high_sharpe") or {}
+        )
         result = {
             "冠军": payload.get("selected_candidate"),
             "选择依据": payload.get("selection_basis"),
@@ -442,6 +645,20 @@ def _factor_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
             "门禁": payload.get("gates"),
             "候选归因": payload.get("candidate_diagnostics"),
         }
+        if high_sharpe:
+            result["高夏普增强档"] = {
+                "候选": high_sharpe.get("selected_candidate"),
+                "候选名称": high_sharpe.get("selected_candidate_label"),
+                "选择依据": high_sharpe.get("selection_basis"),
+                "测试用途": high_sharpe.get("test_usage"),
+                "研究状态": high_sharpe.get("promotion_status"),
+                "晋级结论": high_sharpe.get("promotion_decision"),
+                "换手预算": high_sharpe.get("turnover_budget"),
+                "三段绩效": high_sharpe.get("splits"),
+                "门禁": high_sharpe.get("gates"),
+                "门禁汇总": high_sharpe.get("gate_summary"),
+                "默认状态": "已按授权切为默认，采用0.80增强档换手预算。" if high_sharpe.get("selected_candidate") == payload.get("selected_candidate") else "需明确授权放宽默认换手预算至0.80后才能替代0.65稳健冠军。",
+            }
         return _response("factor-laboratory", operation, payload, path, result)
 
     payload, path = _snapshot("index_enhancement_snapshot.json")
@@ -465,12 +682,14 @@ def _factor_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
             "治理": payload.get("governance"),
         }
     elif operation == "models":
+        framework, _framework_path = _factor_professional_framework()
         result = {
             "模型": payload.get("models"),
             "SmartBeta": payload.get("smartbeta"),
             "风险层": payload.get("risk"),
             "求解": payload.get("solver"),
             "治理": payload.get("governance"),
+            "professional_framework": framework,
         }
     else:
         raise QueryError("因子实验室动作仅支持 champion、index、models")

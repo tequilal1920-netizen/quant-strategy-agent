@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import math
@@ -428,9 +428,36 @@ def _factor_manifest() -> tuple[dict[str, Any], Path]:
     return _read_json(path), path
 
 
+
+def _factor_professional_framework() -> tuple[dict[str, Any], Path]:
+    configured = os.environ.get("QUANT_AGENT_FACTOR_PROFESSIONAL_FRAMEWORK", "").strip()
+    candidates: list[Path] = []
+    if configured:
+        candidates.append(Path(configured).expanduser())
+    candidates.extend([
+        ROOT / "model" / "factor_laboratory" / "professional_framework.json",
+        ROOT.parent / "model" / "factor_laboratory" / "professional_framework.json",
+        ROOT.parent / "source" / "professional_framework.json",
+        ROOT.parent.parent / "source" / "professional_framework.json",
+        ROOT.parent / "ai-models" / "factor-laboratory" / "source" / "professional_framework.json",
+    ])
+    for path in candidates:
+        if path.is_file():
+            return _read_json(path), path
+    fallback = candidates[0] if candidates else ROOT / "model" / "factor_laboratory" / "professional_framework.json"
+    return {
+        "status": "unavailable",
+        "version": "r35.9-professional-factor-lab-framework",
+        "message": "professional_framework_artifact_unavailable",
+    }, fallback
+
+
 def _factor_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
     if operation == "champion":
         payload, path = _factor_manifest()
+        high_sharpe = (
+            (payload.get("enhanced_profiles") or {}).get("high_sharpe") or {}
+        )
         result = {
             "冠军": payload.get("selected_candidate"),
             "选择依据": payload.get("selection_basis"),
@@ -442,6 +469,20 @@ def _factor_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
             "门禁": payload.get("gates"),
             "候选归因": payload.get("candidate_diagnostics"),
         }
+        if high_sharpe:
+            result["高夏普增强档"] = {
+                "候选": high_sharpe.get("selected_candidate"),
+                "候选名称": high_sharpe.get("selected_candidate_label"),
+                "选择依据": high_sharpe.get("selection_basis"),
+                "测试用途": high_sharpe.get("test_usage"),
+                "研究状态": high_sharpe.get("promotion_status"),
+                "晋级结论": high_sharpe.get("promotion_decision"),
+                "换手预算": high_sharpe.get("turnover_budget"),
+                "三段绩效": high_sharpe.get("splits"),
+                "门禁": high_sharpe.get("gates"),
+                "门禁汇总": high_sharpe.get("gate_summary"),
+                "默认状态": "已按授权切为默认，采用0.80增强档换手预算。" if high_sharpe.get("selected_candidate") == payload.get("selected_candidate") else "需明确授权放宽默认换手预算至0.80后才能替代0.65稳健冠军。",
+            }
         return _response("factor-laboratory", operation, payload, path, result)
 
     payload, path = _snapshot("index_enhancement_snapshot.json")
@@ -465,12 +506,14 @@ def _factor_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
             "治理": payload.get("governance"),
         }
     elif operation == "models":
+        framework, _framework_path = _factor_professional_framework()
         result = {
             "模型": payload.get("models"),
             "SmartBeta": payload.get("smartbeta"),
             "风险层": payload.get("risk"),
             "求解": payload.get("solver"),
             "治理": payload.get("governance"),
+            "professional_framework": framework,
         }
     else:
         raise QueryError("因子实验室动作仅支持 champion、index、models")

@@ -1,0 +1,274 @@
+{
+  "schema_version": "ConstraintKnowledgeBase/v1",
+  "purpose": "Evidence-bound retrieval corpus for compiling natural-language portfolio mandates into reviewable constraints. It never produces portfolio weights.",
+  "numeric_policy": "No template contains a default economic bound or penalty. A compiled numeric lower, upper, or penalty must be copied from the user's request or supported by a value-specific evidence record.",
+  "sources": [
+    {
+      "source_id": "repo.portfolio_optimizer.convex_solver.v2_6",
+      "kind": "executable_code",
+      "title": "ConvexPortfolioSolver executable contract",
+      "organization": "local repository",
+      "location": "agent/model/portfolio_optimization/portfolio_optimization_engine.py",
+      "locator": "class ConvexPortfolioSolver",
+      "audited_claims": [
+        "The current executable solver supports budget, long-only, per-asset, grouped and turnover constraints.",
+        "The current executable solver does not establish joint exact-cardinality, industry/style active exposure or tracking-error capability."
+      ],
+      "page_citation": null
+    },
+    {
+      "source_id": "repo.index_active_risk_optimizer",
+      "kind": "executable_code",
+      "title": "Index active-risk optimizer executable contract",
+      "organization": "local repository",
+      "location": "agent/framework/backtest/index_active_risk_optimizer.py",
+      "locator": "optimize_weights",
+      "audited_claims": [
+        "The implementation consumes benchmark-relative scores and an active-risk covariance representation.",
+        "The implementation is not a mixed-integer joint security-selection and weighting solver."
+      ],
+      "page_citation": null
+    },
+    {
+      "source_id": "repo.index_core_satellite_optimizer",
+      "kind": "executable_code",
+      "title": "Index core-satellite optimizer executable contract",
+      "organization": "local repository",
+      "location": "agent/framework/backtest/index_regime_core_satellite.py",
+      "locator": "optimize_core_satellite_weights",
+      "audited_claims": [
+        "The implementation supplies a benchmark-aware continuous optimization reference path.",
+        "It does not prove exact-cardinality MISOCP capability."
+      ],
+      "page_citation": null
+    },
+    {
+      "source_id": "local.sop.reference_reports",
+      "kind": "local_document",
+      "title": "参考研报：组合优化与指数增强章节",
+      "organization": "local project",
+      "location": "参考研报.docx",
+      "locator": "三、组合优化；四、指数增强",
+      "audited_claims": [
+        "The local research map requires alpha, risk, industry/style exposure, turnover, transaction cost and benchmark-relative evaluation to be considered together.",
+        "Historical report results are research evidence and are not production performance guarantees."
+      ],
+      "page_citation": null
+    },
+    {
+      "source_id": "broker.dfzq.2017.portfolio_optimization",
+      "kind": "broker_report",
+      "title": "组合优化是与非——因子选股系列之二十一",
+      "organization": "东方证券",
+      "date": "2017-03-06",
+      "location": "audited title in 参考研报.docx",
+      "locator": "report title; no page citation asserted",
+      "audited_claims": [
+        "Portfolio optimization is an execution layer for controlling exposure, turnover and risk rather than an independent source of alpha.",
+        "Input error, covariance robustness and the feasible set must be governed explicitly."
+      ],
+      "page_citation": null
+    },
+    {
+      "source_id": "broker.zxjt.2018.fundamental_quant",
+      "kind": "broker_report",
+      "title": "基本面量化投资新时代——2019年投资策略报告",
+      "organization": "中信建投证券",
+      "date": "2018-12-11",
+      "location": "audited title in 参考研报.docx",
+      "locator": "report title; no page citation asserted",
+      "audited_claims": [
+        "A Barra-style factor-risk representation connects expected return, covariance, exposure control and attribution.",
+        "Industry and style active exposures should be measured against the benchmark."
+      ],
+      "page_citation": null
+    },
+    {
+      "source_id": "broker.ebscn.2019.csi300_enhancement",
+      "kind": "broker_report",
+      "title": "沪深300指数增强模型构建与测试——多因子系列报告之二十三",
+      "organization": "光大证券",
+      "date": "2019-08-04",
+      "location": "audited title in 参考研报.docx",
+      "locator": "report title; no page citation asserted",
+      "audited_claims": [
+        "Factors must be retested inside the target benchmark universe.",
+        "Alpha and the optimizer should be evaluated jointly with industry, size and security-level active-weight controls."
+      ],
+      "page_citation": null
+    },
+    {
+      "source_id": "broker.htsec.2025.enhancement_attribution",
+      "kind": "broker_report",
+      "title": "2024年绩优指数增强超额收益来源解析",
+      "organization": "海通证券",
+      "date": "2025-02-21",
+      "location": "audited title in 参考研报.docx",
+      "locator": "report title; no page citation asserted",
+      "audited_claims": [
+        "Index-enhancement products must be compared within benchmark and active-risk budget cohorts.",
+        "Style drift and factor reversals require rolling exposure and attribution controls."
+      ],
+      "page_citation": null
+    },
+    {
+      "source_id": "broker.cnhbstock.barra_active_exposure",
+      "kind": "broker_report",
+      "title": "主动暴露的得与失——从Barra框架到私募指增因子分析方法",
+      "organization": "华宝证券",
+      "date": null,
+      "location": "audited title in 参考研报.docx",
+      "locator": "report title; no date or page citation asserted",
+      "audited_claims": [
+        "Active exposures should be intentional, priced and attributable.",
+        "Alpha, risk, turnover and transaction cost belong in one governed portfolio-construction process."
+      ],
+      "page_citation": null
+    },
+    {
+      "source_id": "method.msci_barra.factor_risk",
+      "kind": "methodology_family",
+      "title": "MSCI Barra equity factor-risk model methodology family",
+      "organization": "MSCI Barra",
+      "location": "methodology family reference",
+      "locator": "factor covariance plus specific risk; no edition or page citation asserted",
+      "audited_claims": [
+        "Benchmark-relative risk can be decomposed through factor exposures, factor covariance and specific risk.",
+        "Industry and style exposure constraints can be expressed as linear constraints on active weights."
+      ],
+      "page_citation": null
+    },
+    {
+      "source_id": "method.grinold_kahn.active_management",
+      "kind": "book",
+      "title": "Active Portfolio Management: A Quantitative Approach for Producing Superior Returns and Controlling Risk",
+      "organization": "Richard C. Grinold and Ronald N. Kahn",
+      "location": "book-level methodology reference",
+      "locator": "benchmark-relative active management; no edition or page citation asserted",
+      "audited_claims": [
+        "Expected active return and active risk must be expressed relative to the benchmark.",
+        "Information ratio is a portfolio-level outcome, not a guarantee from raw score ranking."
+      ],
+      "page_citation": null
+    },
+    {
+      "source_id": "local.learning_map.htsc_portfolionet",
+      "kind": "local_learning_map",
+      "title": "华泰金工 PortfolioNet、组合优化与风险预算框架",
+      "organization": "local audited learning map",
+      "location": "agent/framework/reference_artifacts/agentconsole_v10_final/strategy_reference_map.json",
+      "locator": "exact local learning-map entry; not asserted as a bibliographic report title",
+      "audited_claims": [
+        "LLM and neural models may create auditable forecasts or constraint drafts, while deterministic solvers retain weight authority.",
+        "A learned model does not replace deterministic feasibility and risk checks."
+      ],
+      "page_citation": null
+    }
+  ],
+  "constraint_templates": [
+    {
+      "template_id": "holding.cardinality",
+      "type": "holding",
+      "aliases": ["持仓数量", "股票数量", "成分数量", "选股数量", "cardinality", "number of holdings"],
+      "allowed_metrics": ["cardinality"],
+      "units": ["count"],
+      "formula": "sum_i z_i is bounded by the requested holding count, with z_i in {0,1}",
+      "data_dependencies": ["universe_membership", "alpha_scores"],
+      "problem_class": "mixed_integer",
+      "source_ids": ["broker.dfzq.2017.portfolio_optimization", "broker.ebscn.2019.csi300_enhancement"]
+    },
+    {
+      "template_id": "holding.security_weight",
+      "type": "holding",
+      "aliases": ["单票权重", "个股权重", "权重上下限", "security weight", "name limit"],
+      "allowed_metrics": ["security_weight", "active_security_weight"],
+      "units": ["weight_fraction"],
+      "formula": "lower_i z_i <= w_i <= upper_i z_i, or bounds on active weight w_i - w_benchmark_i",
+      "data_dependencies": ["universe_membership", "benchmark_weights"],
+      "problem_class": "linear_or_mixed_integer",
+      "source_ids": ["broker.dfzq.2017.portfolio_optimization", "broker.ebscn.2019.csi300_enhancement"]
+    },
+    {
+      "template_id": "industry.active_exposure",
+      "type": "industry",
+      "aliases": ["行业约束", "行业偏离", "行业中性", "industry active exposure", "sector deviation"],
+      "allowed_metrics": ["active_exposure"],
+      "units": ["weight_fraction"],
+      "formula": "lower_g <= sum_i industry_{i,g}(w_i - w_benchmark_i) <= upper_g",
+      "data_dependencies": ["industry_classification_pit", "benchmark_weights"],
+      "problem_class": "linear",
+      "source_ids": ["broker.zxjt.2018.fundamental_quant", "method.msci_barra.factor_risk"]
+    },
+    {
+      "template_id": "style.active_exposure",
+      "type": "style",
+      "aliases": ["风格约束", "风格暴露", "市值暴露", "贝塔暴露", "style exposure", "factor exposure"],
+      "allowed_metrics": ["active_exposure"],
+      "units": ["raw_exposure", "zscore"],
+      "formula": "lower_k <= sum_i style_{i,k}(w_i - w_benchmark_i) <= upper_k",
+      "data_dependencies": ["style_exposure_matrix_pit", "benchmark_weights"],
+      "problem_class": "linear",
+      "source_ids": ["broker.zxjt.2018.fundamental_quant", "broker.cnhbstock.barra_active_exposure", "method.msci_barra.factor_risk"]
+    },
+    {
+      "template_id": "active_risk.tracking_error",
+      "type": "active_risk",
+      "aliases": ["跟踪误差", "主动风险", "TE", "tracking error", "active risk"],
+      "allowed_metrics": ["tracking_error", "active_variance"],
+      "units": ["annualized_fraction", "variance"],
+      "formula": "sqrt((w-w_benchmark)' Sigma (w-w_benchmark) * annualization) <= upper",
+      "data_dependencies": ["benchmark_weights", "factor_covariance_pit", "specific_risk_pit"],
+      "problem_class": "second_order_cone_or_quadratic",
+      "source_ids": ["method.msci_barra.factor_risk", "method.grinold_kahn.active_management", "broker.htsec.2025.enhancement_attribution"]
+    },
+    {
+      "template_id": "trading.turnover",
+      "type": "trading",
+      "aliases": ["换手", "换手率", "调仓幅度", "turnover", "trade budget"],
+      "allowed_metrics": ["one_way_turnover", "two_way_turnover", "transaction_cost"],
+      "units": ["turnover_fraction", "currency", "weight_fraction"],
+      "formula": "sum_i abs(w_i - w_previous_i) is bounded using the declared one-way or two-way convention",
+      "data_dependencies": ["previous_weights", "tradeability_flags", "transaction_cost_model"],
+      "problem_class": "linearized_absolute_value",
+      "source_ids": ["repo.portfolio_optimizer.convex_solver.v2_6", "broker.dfzq.2017.portfolio_optimization", "broker.cnhbstock.barra_active_exposure"]
+    },
+    {
+      "template_id": "liquidity.adv_participation",
+      "type": "liquidity",
+      "aliases": ["流动性", "成交额占比", "ADV", "参与率", "liquidity", "participation rate"],
+      "allowed_metrics": ["adv_participation", "days_to_liquidate", "minimum_adv"],
+      "units": ["adv_fraction", "days", "currency"],
+      "formula": "abs(order_notional_i) <= upper_i * point_in_time_ADV_i, with explicit lookback and lag",
+      "data_dependencies": ["point_in_time_adv", "portfolio_nav", "previous_weights", "prices_pit"],
+      "problem_class": "linear_or_convex_cost",
+      "source_ids": ["broker.dfzq.2017.portfolio_optimization", "broker.cnhbstock.barra_active_exposure"]
+    },
+    {
+      "template_id": "list.security_lists",
+      "type": "list",
+      "aliases": ["黑名单", "白名单", "禁买", "必选", "剔除名单", "blacklist", "whitelist"],
+      "allowed_metrics": ["blacklist", "whitelist", "forced_include", "forced_exclude"],
+      "units": ["binary"],
+      "formula": "forced-exclude names have z_i=0; forced-include names have z_i=1, subject to feasibility",
+      "data_dependencies": ["security_master_pit", "tradeability_flags"],
+      "problem_class": "linear_or_mixed_integer",
+      "source_ids": ["broker.dfzq.2017.portfolio_optimization", "local.sop.reference_reports"]
+    }
+  ],
+  "data_dependency_registry": [
+    "alpha_scores",
+    "universe_membership",
+    "benchmark_weights",
+    "industry_classification_pit",
+    "style_exposure_matrix_pit",
+    "factor_covariance_pit",
+    "specific_risk_pit",
+    "previous_weights",
+    "tradeability_flags",
+    "transaction_cost_model",
+    "point_in_time_adv",
+    "portfolio_nav",
+    "prices_pit",
+    "security_master_pit"
+  ]
+}

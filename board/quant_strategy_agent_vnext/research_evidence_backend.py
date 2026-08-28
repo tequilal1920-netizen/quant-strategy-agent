@@ -413,20 +413,34 @@ def _allocation_v56_metric_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _allocation(page: str = "strategy") -> dict[str, Any]:
     data = _load(_allocation_snapshot_path())
-    if str(data.get("schema_version") or "") == "6.3.0":
-        from asset_allocation_visual_v63 import build as build_v63_visuals
+    schema_version = str(data.get("schema_version") or "")
+    if schema_version in {"6.4.0", "6.3.0"}:
+        if schema_version == "6.4.0":
+            from asset_allocation_visual_v64 import build as build_asset_visuals
 
+            title = "资产配置 v6.4：正超额门控 × 美林/普林格 × BL/风险预算/宏观因子"
+            summary = (data.get("cycle_tracking") or {}).get("current_summary") or (
+                "四资产资产配置：美林/普林格周期进入BL与宏观调控，风险平价升级为风险预算增强；"
+                "三大配置模型均通过正超额发布门，D3/PIT生产门禁保持fail-closed。"
+            )
+        else:
+            from asset_allocation_visual_v63 import build as build_asset_visuals
+
+            title = "资产配置 v6.3：真实因子链路 × 美林/普林格 × BL/风险平价/宏观因子"
+            summary = (data.get("cycle_tracking") or {}).get("current_summary") or (
+                "四资产资产配置：真实D2因子筛选进入美林、普林格、BL和宏观因子调控；"
+                "D3/PIT生产门禁保持fail-closed。"
+            )
         return {
             "schema_version": "research-evidence/1.0",
             "route": f"allocation:{page}",
-            "title": "资产配置 v6.3：真实因子链路 × 美林/普林格 × BL/风险平价/宏观因子",
-            "summary": (data.get("cycle_tracking") or {}).get("current_summary")
-            or "四资产资产配置：真实D2因子筛选进入美林、普林格、BL和宏观因子调控；D3/PIT生产门禁保持fail-closed。",
+            "title": title,
+            "summary": summary,
             "tables": [],
             "metrics": _allocation_v56_metric_rows(data),
             "governance": data.get("governance") or {},
             "references": data.get("references") or [],
-            "visuals": build_v63_visuals(data, metrics=_allocation_v56_metric_rows(data), page=page),
+            "visuals": build_asset_visuals(data, metrics=_allocation_v56_metric_rows(data), page=page),
             "source": "asset_allocation_snapshot.json",
         }
     if str(data.get("schema_version") or "") == "6.2.0":

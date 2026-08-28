@@ -1,15 +1,16 @@
 """Broad-index timing research charts.
 
-The script keeps the existing timing framework intact:
+The timing page is organised as a compact five-step framework:
 
-* left-side factors: valuation/reversal/repair;
-* right-side factors: price-volume trend and RSRS confirmation;
-* nonlinear sentiment and risk radar: high sentiment is not treated as a top
-  unless fundamentals/trend/risk also deteriorate.
+1. factor construction;
+2. data treatment;
+3. factor efficacy tests;
+4. attack/defense signal fusion into five exposure buckets;
+5. T+1 backtest tracking.
 
-It is intentionally reporting-oriented: it fetches index daily data from
-Tushare, builds causal T+1 positions, and writes the reference-style NAV chart
-plus annual-return table for each configured broad index.
+The factor families follow the local broker-reference synthesis under
+``reference/择时``: macro, price-volume, sentiment and valuation. Legacy
+signals remain in the candidate pool only as a no-degradation guard.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -42,7 +44,19 @@ TABLE_BLUE = "#E8EEF7"
 TABLE_BEIGE = "#F4E7D8"
 
 DEFAULT_OUTPUT = Path(r"C:\Users\Rye\Desktop\指数增强")
-BOARD_SNAPSHOT = Path(__file__).resolve().parents[2] / "board" / "quant_strategy_agent" / "data" / "broad_index_timing_snapshot.json"
+
+
+def _project_root() -> Path:
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "board" / "quant_strategy_agent").exists() and (parent / "database").exists():
+            return parent
+    return current.parents[2]
+
+
+PROJECT_ROOT = _project_root()
+DB_PATH = PROJECT_ROOT / "database" / "research_warehouse.db"
+BOARD_SNAPSHOT = PROJECT_ROOT / "board" / "quant_strategy_agent" / "data" / "broad_index_timing_snapshot.json"
 
 INDEXES = [
     ("中证红利", "000922.CSI"),
@@ -141,6 +155,99 @@ CONFIGS = [
 ]
 
 
+@dataclass(frozen=True)
+class FusionProfile:
+    name: str
+    macro_weight: float = 0.24
+    price_volume_weight: float = 0.36
+    sentiment_weight: float = 0.20
+    valuation_weight: float = 0.20
+    defense_risk_weight: float = 0.42
+    defense_price_weight: float = 0.24
+    defense_valuation_weight: float = 0.20
+    defense_macro_weight: float = 0.14
+    attack_small: float = 0.54
+    attack_medium: float = 0.60
+    attack_large: float = 0.66
+    defense_small: float = 0.48
+    defense_medium: float = 0.58
+    defense_large: float = 0.68
+    smooth: int = 5
+    strong_floor: float = 1.0
+    repair_floor: float = 0.75
+    weak_cap: float = 0.50
+    crash_cap: float = 0.0
+
+
+FUSION_PROFILES = [
+    FusionProfile("因子检验五档融合"),
+    FusionProfile(
+        "防守优先五档融合",
+        macro_weight=0.26,
+        price_volume_weight=0.30,
+        sentiment_weight=0.16,
+        valuation_weight=0.28,
+        defense_risk_weight=0.48,
+        defense_price_weight=0.22,
+        defense_valuation_weight=0.20,
+        defense_macro_weight=0.10,
+        attack_small=0.55,
+        attack_medium=0.61,
+        attack_large=0.68,
+        defense_small=0.44,
+        defense_medium=0.54,
+        defense_large=0.64,
+        weak_cap=0.25,
+        crash_cap=0.0,
+    ),
+    FusionProfile(
+        "趋势确认五档融合",
+        macro_weight=0.18,
+        price_volume_weight=0.46,
+        sentiment_weight=0.22,
+        valuation_weight=0.14,
+        defense_risk_weight=0.36,
+        defense_price_weight=0.34,
+        defense_valuation_weight=0.14,
+        defense_macro_weight=0.16,
+        attack_small=0.52,
+        attack_medium=0.58,
+        attack_large=0.64,
+        defense_small=0.50,
+        defense_medium=0.61,
+        defense_large=0.72,
+        smooth=3,
+    ),
+    FusionProfile(
+        "宏观估值五档融合",
+        macro_weight=0.34,
+        price_volume_weight=0.28,
+        sentiment_weight=0.14,
+        valuation_weight=0.24,
+        defense_risk_weight=0.38,
+        defense_price_weight=0.20,
+        defense_valuation_weight=0.26,
+        defense_macro_weight=0.16,
+        attack_small=0.53,
+        attack_medium=0.59,
+        attack_large=0.65,
+        defense_small=0.48,
+        defense_medium=0.57,
+        defense_large=0.66,
+        smooth=5,
+    ),
+]
+
+
+FACTOR_FAMILY_LABELS = {
+    "macro": "宏观因子",
+    "price_volume": "量价因子",
+    "sentiment": "情绪因子",
+    "valuation": "估值因子",
+    "risk": "风险控制",
+}
+
+
 RISK_RADAR_CFG = {
     "danger_votes": 5,
     "crash_votes": 3,
@@ -231,6 +338,122 @@ def _rsrs(high: pd.Series, low: pd.Series, n: int = 18, m: int = 600) -> tuple[p
     return (z * r2).fillna(0.0), r2.fillna(0.0)
 
 
+def _adx(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> pd.Series:
+    high = high.astype(float)
+    low = low.astype(float)
+    close = close.astype(float)
+    up_move = high.diff()
+    down_move = -low.diff()
+    plus_dm = up_move.where((up_move > down_move) & (up_move > 0.0), 0.0)
+    minus_dm = down_move.where((down_move > up_move) & (down_move > 0.0), 0.0)
+    tr = pd.concat(
+        [(high - low).abs(), (high - close.shift(1)).abs(), (low - close.shift(1)).abs()],
+        axis=1,
+    ).max(axis=1)
+    atr = tr.ewm(alpha=1.0 / window, adjust=False, min_periods=window).mean().replace(0.0, np.nan)
+    plus_di = 100.0 * plus_dm.ewm(alpha=1.0 / window, adjust=False, min_periods=window).mean() / atr
+    minus_di = 100.0 * minus_dm.ewm(alpha=1.0 / window, adjust=False, min_periods=window).mean() / atr
+    dx = (100.0 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0.0, np.nan)).replace([np.inf, -np.inf], np.nan)
+    return dx.ewm(alpha=1.0 / window, adjust=False, min_periods=window).mean().fillna(20.0)
+
+
+_MARKET_CONTEXT_CACHE: dict[tuple[str, str, str], pd.DataFrame] = {}
+
+
+def _fetch_market_context(start: str, end: str) -> pd.DataFrame:
+    """Read low-frequency macro and daily market context from the local warehouse.
+
+    Macro rows are lagged to month-end plus ten calendar days before they can be
+    used.  Daily aggregates are broad-market context, not index-specific future
+    information.  Missing data is allowed; the feature builder maps it to 0.5.
+    """
+    key = (str(DB_PATH), start, end)
+    if key in _MARKET_CONTEXT_CACHE:
+        return _MARKET_CONTEXT_CACHE[key].copy()
+    if not DB_PATH.is_file():
+        _MARKET_CONTEXT_CACHE[key] = pd.DataFrame()
+        return pd.DataFrame()
+    start_dt = pd.to_datetime(start, format="%Y%m%d") - pd.DateOffset(years=2)
+    context_start = start_dt.strftime("%Y%m%d")
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            valuation = pd.read_sql_query(
+                """
+                SELECT
+                    trade_date,
+                    AVG(turnover_rate_f) AS ctx_turnover_rate,
+                    AVG(volume_ratio) AS ctx_volume_ratio,
+                    AVG(CASE WHEN pe_ttm > 0 THEN 1.0 / pe_ttm END) AS ctx_earnings_yield,
+                    AVG(pb) AS ctx_pb,
+                    AVG(dv_ttm) AS ctx_dividend_yield,
+                    COUNT(*) AS ctx_stock_count
+                FROM stock_valuation_daily
+                WHERE trade_date BETWEEN ? AND ?
+                GROUP BY trade_date
+                ORDER BY trade_date
+                """,
+                conn,
+                params=(context_start, end),
+            )
+            moneyflow = pd.read_sql_query(
+                """
+                SELECT
+                    trade_date,
+                    SUM(net_mf_amount) AS ctx_net_mf_amount,
+                    SUM(COALESCE(buy_lg_amount, 0) + COALESCE(buy_elg_amount, 0)
+                        - COALESCE(sell_lg_amount, 0) - COALESCE(sell_elg_amount, 0)) AS ctx_large_net_amount
+                FROM stock_moneyflow_daily
+                WHERE trade_date BETWEEN ? AND ?
+                GROUP BY trade_date
+                ORDER BY trade_date
+                """,
+                conn,
+                params=(context_start, end),
+            )
+            macro = pd.read_sql_query(
+                """
+                SELECT month, pmi_manufacturing, pmi_non_manufacturing, pmi_composite,
+                       cpi_national_yoy, ppi_yoy, m1_yoy, m2_yoy, sf_inc_month, sf_stock_endval
+                FROM macro_monthly
+                ORDER BY month
+                """,
+                conn,
+            )
+    except Exception:
+        _MARKET_CONTEXT_CACHE[key] = pd.DataFrame()
+        return pd.DataFrame()
+    if valuation.empty:
+        _MARKET_CONTEXT_CACHE[key] = pd.DataFrame()
+        return pd.DataFrame()
+    daily = valuation.merge(moneyflow, on="trade_date", how="left") if not moneyflow.empty else valuation
+    daily["date"] = pd.to_datetime(daily["trade_date"], format="%Y%m%d")
+    numeric_cols = [c for c in daily.columns if c not in {"trade_date", "date"}]
+    for column in numeric_cols:
+        daily[column] = pd.to_numeric(daily[column], errors="coerce")
+    daily["ctx_turnover_pct252"] = _rolling_percentile(daily["ctx_turnover_rate"], 252, 80).fillna(0.5)
+    daily["ctx_turnover_z120"] = _zscore(np.log(daily["ctx_turnover_rate"].replace(0.0, np.nan)), 120, 40)
+    daily["ctx_volume_ratio_pct252"] = _rolling_percentile(daily["ctx_volume_ratio"], 252, 80).fillna(0.5)
+    daily["ctx_moneyflow_z120"] = _zscore(daily.get("ctx_net_mf_amount", pd.Series(index=daily.index, dtype=float)).fillna(0.0), 120, 40)
+    daily["ctx_large_moneyflow_z120"] = _zscore(daily.get("ctx_large_net_amount", pd.Series(index=daily.index, dtype=float)).fillna(0.0), 120, 40)
+    daily["ctx_market_value_pct756"] = _rolling_percentile(daily["ctx_earnings_yield"], 756, 180).fillna(0.5)
+    daily["ctx_market_pb_guard756"] = 1.0 - _rolling_percentile(daily["ctx_pb"], 756, 180).fillna(0.5)
+    if not macro.empty:
+        macro = macro.copy()
+        macro["date"] = pd.to_datetime(macro["month"].astype(str) + "01", format="%Y%m%d") + pd.offsets.MonthEnd(1) + pd.Timedelta(days=10)
+        for column in macro.columns:
+            if column not in {"month", "date"}:
+                macro[column] = pd.to_numeric(macro[column], errors="coerce")
+        daily = pd.merge_asof(
+            daily.sort_values("date"),
+            macro.drop(columns=["month"]).sort_values("date"),
+            on="date",
+            direction="backward",
+        )
+    daily = daily[daily["trade_date"].between(start, end)].reset_index(drop=True)
+    _MARKET_CONTEXT_CACHE[key] = daily
+    return daily.copy()
+
+
 def _fetch_index_daily(pro: Any, code: str, start: str, end: str) -> pd.DataFrame:
     raw = pro.index_daily(ts_code=code, start_date=start, end_date=end)
     if raw.empty:
@@ -258,15 +481,31 @@ def _fetch_daily_basic(pro: Any, code: str, start: str, end: str) -> pd.DataFram
     return basic
 
 
-def _prepare_features(raw: pd.DataFrame, basic: pd.DataFrame | None = None) -> tuple[pd.DataFrame, dict[str, list[str]]]:
+def _prepare_features(
+    raw: pd.DataFrame,
+    basic: pd.DataFrame | None = None,
+    market_context: pd.DataFrame | None = None,
+) -> tuple[pd.DataFrame, dict[str, list[str]]]:
     frame = raw.copy()
     if basic is not None and not basic.empty:
         frame = frame.merge(basic.drop(columns=["ts_code"], errors="ignore"), on="trade_date", how="left")
+    if market_context is not None and not market_context.empty:
+        ctx = market_context.drop(columns=["date"], errors="ignore").copy()
+        frame = frame.merge(ctx, on="trade_date", how="left")
+        ctx_cols = [c for c in ctx.columns if c != "trade_date"]
+        for column in ctx_cols:
+            frame[column] = pd.to_numeric(frame[column], errors="coerce").ffill()
+
     close = frame["close"].astype(float)
     high = frame["high"].astype(float)
     low = frame["low"].astype(float)
     amount = frame["amount"].astype(float)
     ret = frame["ret"].astype(float)
+
+    def _col(name: str, default: float = np.nan) -> pd.Series:
+        if name in frame.columns:
+            return pd.to_numeric(frame[name], errors="coerce")
+        return pd.Series(float(default), index=frame.index, dtype=float)
 
     for n in [5, 10, 20, 40, 60, 120, 240]:
         frame[f"ma{n}"] = close.rolling(n, min_periods=max(5, n // 3)).mean()
@@ -283,24 +522,17 @@ def _prepare_features(raw: pd.DataFrame, basic: pd.DataFrame | None = None) -> t
     frame["range_pct120"] = _rolling_percentile(frame["range_pct"], 120, 40).fillna(0.5)
     frame["rsi14"] = _rsi(close, 14)
     frame["rsrs_z"], frame["rsrs_r2"] = _rsrs(high, low)
+    frame["adx14"] = _adx(high, low, close, 14)
 
-    features: dict[str, list[str]] = {"left": [], "right": [], "sentiment": [], "risk": []}
+    features: dict[str, list[str]] = {"macro": [], "price_volume": [], "sentiment": [], "valuation": [], "risk": []}
 
+    # 量价因子：把原左侧修复/反转和右侧趋势合并到同一个价格-成交体系。
     frame["f_trend20"] = _sigmoid(frame["mom20"].fillna(0.0), 0.035).values
     frame["f_trend60"] = _sigmoid(frame["mom60"].fillna(0.0), 0.075).values
     frame["f_trend120"] = _sigmoid(frame["mom120"].fillna(0.0), 0.13).values
     frame["f_ma_distance"] = _sigmoid((frame["ma60"] / frame["ma120"] - 1.0).fillna(0.0), 0.035).values
     frame["f_rsrs"] = _sigmoid(frame["rsrs_z"].fillna(0.0), 0.85).values
     frame["f_amount_trend"] = _clip01(0.55 * frame["amount_pct252"] + 0.45 * frame["up_share20"]).values
-    features["right"] = [
-        "f_trend20",
-        "f_trend60",
-        "f_trend120",
-        "f_ma_distance",
-        "f_rsrs",
-        "f_amount_trend",
-    ]
-
     frame["f_repair"] = _clip01(
         0.45 * _sigmoid(-frame["drawdown60"].fillna(0.0), 0.08)
         + 0.35 * _sigmoid(frame["mom10"].fillna(0.0), 0.025)
@@ -311,27 +543,126 @@ def _prepare_features(raw: pd.DataFrame, basic: pd.DataFrame | None = None) -> t
         0.60 * (1.0 - frame["rsi14"].clip(0.0, 100.0) / 100.0)
         + 0.40 * _sigmoid(frame["mom5"].fillna(0.0), 0.018)
     ).values
-    features["left"] = ["f_repair", "f_low_vol", "f_oversold_reversal"]
+    trend_direction = _clip01(
+        0.50
+        + 0.28 * np.tanh(frame["mom20"].fillna(0.0) / 0.055)
+        + 0.22 * np.tanh(((frame["ma20"] / frame["ma60"] - 1.0).fillna(0.0)) / 0.030)
+    )
+    adx_strength = ((frame["adx14"].fillna(20.0) - 15.0) / 25.0).clip(0.0, 1.0)
+    frame["f_adx_trend"] = _clip01(0.50 * (1.0 - adx_strength) + trend_direction * adx_strength).values
+    std20 = close.rolling(20, min_periods=10).std(ddof=0).replace(0.0, np.nan)
+    boll_z = ((close - frame["ma20"]) / (2.0 * std20)).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    frame["f_bollinger_path"] = _clip01(0.50 + 0.35 * np.tanh(boll_z) + 0.15 * np.tanh(frame["mom5"].fillna(0.0) / 0.020)).values
+    roll_min = close.rolling(252, min_periods=80).min()
+    roll_max = close.rolling(252, min_periods=80).max()
+    tr_degree = ((close - roll_min) / (roll_max - roll_min).replace(0.0, np.nan)).clip(0.0, 1.0).fillna(0.5)
+    frame["tr_degree"] = tr_degree
+    frame["f_tr_location"] = _clip01(
+        np.where(
+            (tr_degree < 0.20) & (frame["mom5"].fillna(0.0) > 0.0),
+            0.85,
+            np.where(
+                (tr_degree > 0.86) & (frame["mom5"].fillna(0.0) < 0.0),
+                0.20,
+                0.50 + 0.45 * np.tanh(frame["mom20"].fillna(0.0) / 0.075),
+            ),
+        )
+    ).values
+    features["price_volume"] = [
+        "f_trend20",
+        "f_trend60",
+        "f_trend120",
+        "f_ma_distance",
+        "f_rsrs",
+        "f_amount_trend",
+        "f_repair",
+        "f_low_vol",
+        "f_oversold_reversal",
+        "f_adx_trend",
+        "f_bollinger_path",
+        "f_tr_location",
+    ]
 
-    if "pe" in frame.columns:
-        pe = pd.to_numeric(frame["pe"], errors="coerce")
-        frame["f_pe_value"] = 1.0 - _rolling_percentile(pe, 756, 180).fillna(0.5)
-        features["left"].append("f_pe_value")
-    if "pb" in frame.columns:
-        pb = pd.to_numeric(frame["pb"], errors="coerce")
-        frame["f_pb_value"] = 1.0 - _rolling_percentile(pb, 756, 180).fillna(0.5)
-        features["left"].append("f_pb_value")
-    for dy_col in ("dv_ratio", "dv_ttm"):
+    # 估值因子：指数自身估值优先，缺失时使用全市场估值上下文做温和补充。
+    pe_col = "pe_ttm" if "pe_ttm" in frame.columns else "pe" if "pe" in frame.columns else None
+    pb_col = "pb" if "pb" in frame.columns else None
+    if pe_col:
+        pe = pd.to_numeric(frame[pe_col], errors="coerce")
+        earnings_yield = (1.0 / pe.where(pe > 0.0)).replace([np.inf, -np.inf], np.nan)
+        frame["f_pe_value"] = _rolling_percentile(earnings_yield, 756, 180).fillna(_col("ctx_market_value_pct756", 0.5)).fillna(0.5)
+        frame["f_valuation_extreme_guard"] = (1.0 - _rolling_percentile(pe, 756, 180).fillna(0.5)).clip(0.0, 1.0)
+    else:
+        frame["f_pe_value"] = _col("ctx_market_value_pct756", 0.5).fillna(0.5)
+        frame["f_valuation_extreme_guard"] = _col("ctx_market_pb_guard756", 0.5).fillna(0.5)
+    if pb_col:
+        pb = pd.to_numeric(frame[pb_col], errors="coerce")
+        frame["f_pb_value"] = (1.0 - _rolling_percentile(pb, 756, 180).fillna(0.5)).clip(0.0, 1.0)
+    else:
+        frame["f_pb_value"] = _col("ctx_market_pb_guard756", 0.5).fillna(0.5)
+    dividend_source = None
+    for dy_col in ("dv_ratio", "dv_ttm", "ctx_dividend_yield"):
         if dy_col in frame.columns:
-            frame["f_dividend_value"] = _rolling_percentile(pd.to_numeric(frame[dy_col], errors="coerce"), 756, 180).fillna(0.5)
-            features["left"].append("f_dividend_value")
+            dividend_source = pd.to_numeric(frame[dy_col], errors="coerce")
             break
+    frame["f_dividend_value"] = _rolling_percentile(dividend_source, 756, 180).fillna(0.5) if dividend_source is not None else 0.5
+    frame["f_erp_proxy"] = _clip01(0.65 * frame["f_pe_value"] + 0.35 * _col("ctx_market_value_pct756", 0.5).fillna(0.5)).values
+    frame["f_value_repair"] = _clip01(0.58 * frame["f_erp_proxy"] + 0.42 * _sigmoid(-frame["drawdown120"].fillna(0.0), 0.16)).values
+    features["valuation"] = ["f_pe_value", "f_pb_value", "f_dividend_value", "f_erp_proxy", "f_valuation_extreme_guard", "f_value_repair"]
 
+    # 宏观因子：月度数据按可得性滞后后映射到日频，输出增长、流动性、信用、通胀四类方向。
+    pmi = _col("pmi_composite", np.nan).combine_first(_col("pmi_manufacturing", 50.0)).ffill()
+    m1 = _col("m1_yoy", np.nan).ffill()
+    m2 = _col("m2_yoy", np.nan).ffill()
+    sf_stock = _col("sf_stock_endval", np.nan).ffill()
+    sf_inc = _col("sf_inc_month", np.nan).ffill()
+    cpi = _col("cpi_national_yoy", np.nan).ffill()
+    ppi = _col("ppi_yoy", np.nan).ffill()
+    frame["macro_m1m2_gap"] = m1 - m2
+    frame["f_macro_growth"] = _clip01(0.50 + 0.24 * _zscore(pmi.diff(63), 756, 180) + 0.16 * _zscore(pmi - 50.0, 756, 180)).fillna(0.5).values
+    frame["f_macro_liquidity"] = _clip01(0.50 + 0.22 * _zscore(frame["macro_m1m2_gap"], 756, 180) + 0.14 * _zscore(m2.diff(63), 756, 180)).fillna(0.5).values
+    frame["f_macro_credit"] = _clip01(
+        0.50
+        + 0.22 * _zscore(sf_stock.pct_change(63, fill_method=None), 756, 180)
+        + 0.12 * _zscore(sf_inc.pct_change(252, fill_method=None), 756, 180)
+    ).fillna(0.5).values
+    inflation_pressure = pd.concat([cpi, ppi], axis=1).mean(axis=1)
+    frame["f_macro_inflation_relief"] = (1.0 - _rolling_percentile(inflation_pressure, 756, 180).fillna(0.5)).clip(0.0, 1.0).values
+    frame["f_macro_policy_mix"] = _clip01(
+        0.32 * frame["f_macro_growth"]
+        + 0.32 * frame["f_macro_liquidity"]
+        + 0.24 * frame["f_macro_credit"]
+        + 0.12 * frame["f_macro_inflation_relief"]
+    ).values
+    features["macro"] = ["f_macro_growth", "f_macro_liquidity", "f_macro_credit", "f_macro_inflation_relief", "f_macro_policy_mix"]
+
+    # 情绪因子：弱情绪只做左侧修复，强情绪更多跟随，尾部风险交给估值和量价风控。
     low_sentiment_repair = ((frame["amount_pct252"] <= 0.15) & (frame["mom5"].fillna(0.0) > 0.0)).astype(float)
     strong_sentiment_follow = ((frame["amount_pct252"] >= 0.60) & (frame["mom20"].fillna(0.0) > -0.02)).astype(float)
     frame["f_sentiment_v"] = _clip01(0.50 * low_sentiment_repair + 0.50 * strong_sentiment_follow + 0.25 * frame["up_share20"]).values
     frame["f_sentiment_flow_proxy"] = _clip01(0.45 * frame["amount_pct252"] + 0.55 * _sigmoid(frame["mom20"].fillna(0.0), 0.045)).values
-    features["sentiment"] = ["f_sentiment_v", "f_sentiment_flow_proxy"]
+    ctx_turnover = _col("ctx_turnover_pct252", 0.5).fillna(0.5)
+    ctx_flow = _col("ctx_moneyflow_z120", 0.0).fillna(0.0)
+    ctx_large_flow = _col("ctx_large_moneyflow_z120", 0.0).fillna(0.0)
+    frame["f_market_turnover_follow"] = _clip01(0.45 * ctx_turnover + 0.30 * frame["up_share20"] + 0.25 * _sigmoid(frame["mom20"].fillna(0.0), 0.050)).values
+    frame["f_moneyflow_confirm"] = _clip01(0.50 * _sigmoid(ctx_flow, 1.2) + 0.50 * _sigmoid(ctx_large_flow, 1.2)).values
+    frame["f_single_side_sentiment"] = _clip01(
+        np.where(
+            (ctx_turnover < 0.22) & (frame["mom5"].fillna(0.0) > 0.0),
+            0.85,
+            np.where(
+                ctx_turnover >= 0.60,
+                0.72 + 0.18 * _sigmoid(frame["mom20"].fillna(0.0), 0.055),
+                np.where((ctx_turnover < 0.40) & (frame["mom20"].fillna(0.0) < 0.0), 0.28, 0.50),
+            ),
+        )
+    ).values
+    features["sentiment"] = [
+        "f_sentiment_v",
+        "f_sentiment_flow_proxy",
+        "f_market_turnover_follow",
+        "f_moneyflow_confirm",
+        "f_single_side_sentiment",
+    ]
 
     risk_votes = pd.DataFrame(index=frame.index)
     risk_votes["below_ma60"] = (close < frame["ma60"]).astype(float)
@@ -343,7 +674,10 @@ def _prepare_features(raw: pd.DataFrame, basic: pd.DataFrame | None = None) -> t
     risk_votes["vol_bad"] = (frame["vol20"] > frame["vol20"].rolling(252, min_periods=80).quantile(0.80)).astype(float)
     risk_votes["drawdown_bad"] = (frame["drawdown60"] < -0.08).astype(float)
     frame["risk_votes"] = risk_votes.sum(axis=1)
+    enhanced_risk_votes = frame["risk_votes"] + (frame["f_valuation_extreme_guard"] < 0.18).astype(float) + (frame["f_macro_policy_mix"] < 0.34).astype(float)
+    frame["risk_votes_enhanced"] = enhanced_risk_votes
     frame["f_risk_guard"] = (1.0 - frame["risk_votes"] / risk_votes.shape[1]).clip(0.0, 1.0)
+    frame["f_macro_valuation_guard"] = (1.0 - frame["risk_votes_enhanced"] / (risk_votes.shape[1] + 2)).clip(0.0, 1.0)
     frame["f_crash_guard"] = _clip01(
         1.0
         - 0.35 * (frame["mom20"].fillna(0.0) < -0.08).astype(float)
@@ -357,8 +691,13 @@ def _prepare_features(raw: pd.DataFrame, basic: pd.DataFrame | None = None) -> t
         - 0.25 * ((frame["rsi14"] > 75.0) & (frame["mom5"] < 0.0)).astype(float)
         - 0.25 * ((frame["ma20"] < frame["ma60"]) & (frame["mom20"] < 0.0)).astype(float)
     ).values
-    features["risk"] = ["f_risk_guard", "f_crash_guard", "f_top_guard"]
+    frame["f_drawdown_guard"] = _clip01(1.0 + frame["drawdown60"].fillna(0.0) / 0.18).values
+    frame["f_volatility_guard"] = (1.0 - _rolling_percentile(frame["vol20"], 252, 80).fillna(0.5)).clip(0.0, 1.0).values
+    features["risk"] = ["f_risk_guard", "f_crash_guard", "f_top_guard", "f_drawdown_guard", "f_volatility_guard", "f_macro_valuation_guard"]
 
+    # Compatibility aliases preserve the old left/right candidate inputs exactly enough for the no-degradation guard.
+    features["left"] = list(dict.fromkeys(["f_repair", "f_low_vol", "f_oversold_reversal", "f_pe_value", "f_pb_value", "f_dividend_value"]))
+    features["right"] = list(dict.fromkeys(["f_trend20", "f_trend60", "f_trend120", "f_ma_distance", "f_rsrs", "f_amount_trend"]))
     return frame, features
 
 
@@ -398,6 +737,282 @@ def _effective_group_score(
     denom = weight_frame.sum(axis=1).replace(0.0, np.nan)
     score = (score_frame * weight_frame).sum(axis=1) / denom
     return score.fillna(score_frame.mean(axis=1)).fillna(0.5).clip(0.0, 1.0)
+
+
+def _factor_test_summary(frame: pd.DataFrame, groups: dict[str, list[str]], forward_days: int = 20) -> dict[str, Any]:
+    close = frame["close"].astype(float)
+    future_by_horizon = {
+        horizon: (close.shift(-horizon) / close - 1.0).replace([np.inf, -np.inf], np.nan)
+        for horizon in (5, 20, 60)
+    }
+    if "date" in frame.columns:
+        date_source = frame["date"]
+    elif "trade_date" in frame.columns:
+        date_source = frame["trade_date"]
+    else:
+        date_source = pd.Series(frame.index, index=frame.index)
+    date_axis = pd.to_datetime(date_source, errors="coerce").dt.strftime("%Y-%m-%d")
+    if date_axis.isna().all():
+        date_axis = pd.Series([str(item) for item in frame.index], index=frame.index)
+
+    def _series_payload(signal: pd.Series, rolling_ic: pd.Series) -> dict[str, Any]:
+        path = signal.replace([np.inf, -np.inf], np.nan).clip(0.0, 1.0)
+        pit_ric = rolling_ic.replace([np.inf, -np.inf], np.nan).shift(forward_days)
+        cumulative = pit_ric.fillna(0.0).cumsum()
+        payload = pd.DataFrame(
+            {
+                "date": date_axis,
+                "signal": path,
+                "rolling_ic": pit_ric,
+                "cumulative_ic": cumulative,
+            },
+            index=frame.index,
+        ).dropna(subset=["date"])
+        if len(payload) > 756:
+            payload = payload.tail(756)
+        return {
+            "dates": payload["date"].astype(str).tolist(),
+            "signal": pd.to_numeric(payload["signal"], errors="coerce").round(6).where(payload["signal"].notna(), None).tolist(),
+            "rolling_ic": pd.to_numeric(payload["rolling_ic"], errors="coerce").round(6).where(payload["rolling_ic"].notna(), None).tolist(),
+            "cumulative_ic": pd.to_numeric(payload["cumulative_ic"], errors="coerce").round(6).where(payload["cumulative_ic"].notna(), None).tolist(),
+        }
+
+    rows: list[dict[str, Any]] = []
+    for family in ("macro", "price_volume", "sentiment", "valuation"):
+        for column in groups.get(family, []):
+            if column not in frame.columns:
+                continue
+            signal = pd.to_numeric(frame[column], errors="coerce").astype(float).clip(0.0, 1.0)
+            future = future_by_horizon[forward_days]
+            valid = signal.notna() & future.notna()
+            n = int(valid.sum())
+            if n < 120 or float(signal[valid].std(ddof=0)) <= 1.0e-12:
+                continue
+            sig = signal[valid]
+            fut = future[valid]
+            ic20 = float(np.corrcoef(sig, fut)[0, 1]) if n >= 3 else 0.0
+            if not math.isfinite(ic20):
+                ic20 = 0.0
+            signed = sig if ic20 >= 0.0 else 1.0 - sig
+            centered = signed - 0.5
+            edge = centered * fut
+            edge_std = float(edge.std(ddof=1)) if n > 1 else 0.0
+            t_value = 0.0 if edge_std <= 1.0e-12 else float(edge.mean() / edge_std * math.sqrt(n))
+            rolling_ic = signal.rolling(126, min_periods=60).corr(future)
+            ric = rolling_ic.replace([np.inf, -np.inf], np.nan).dropna()
+            icir = 0.0 if len(ric) < 20 or float(ric.std(ddof=0)) <= 1.0e-12 else float(ric.mean() / ric.std(ddof=0))
+            horizon_ics: dict[str, float] = {}
+            for horizon, horizon_future in future_by_horizon.items():
+                mask = signal.notna() & horizon_future.notna()
+                if int(mask.sum()) < 120 or float(signal[mask].std(ddof=0)) <= 1.0e-12:
+                    horizon_ics[str(horizon)] = 0.0
+                    continue
+                val = float(np.corrcoef(signal[mask], horizon_future[mask])[0, 1])
+                horizon_ics[str(horizon)] = 0.0 if not math.isfinite(val) else val
+            q_hi = float(signed.quantile(0.70))
+            q_lo = float(signed.quantile(0.30))
+            high_mask = signed >= q_hi
+            low_mask = signed <= q_lo
+            spread = float(fut[high_mask].mean() - fut[low_mask].mean()) if bool(high_mask.any() and low_mask.any()) else 0.0
+            fut_scale = float(fut.std(ddof=0))
+            decay = 0.0 if abs(horizon_ics["5"]) <= 1.0e-12 else abs(horizon_ics["60"]) / max(abs(horizon_ics["5"]), 1.0e-12)
+            spread_strength = 0.0 if fut_scale <= 1.0e-12 else max(0.0, spread / fut_scale)
+            quality = (
+                0.42 * min(1.0, abs(icir) / 1.2)
+                + 0.26 * min(1.0, abs(t_value) / 3.0)
+                + 0.22 * min(1.0, spread_strength)
+                + 0.10 * min(1.0, decay)
+            )
+            rows.append(
+                {
+                    "family": family,
+                    "family_label": FACTOR_FAMILY_LABELS.get(family, family),
+                    "factor": column,
+                    "direction": "正向" if ic20 >= 0.0 else "反向",
+                    "sample": n,
+                    "ic": round(ic20, 6),
+                    "icir": round(icir, 6),
+                    "t_value": round(t_value, 6),
+                    "ic_decay": round(decay, 6),
+                    "long_short_return": round(spread, 6),
+                    "quality": round(float(quality), 6),
+                    "admitted": bool(quality >= 0.18 and (abs(t_value) >= 0.75 or spread > 0.0)),
+                    "horizon_ic": {k: round(v, 6) for k, v in horizon_ics.items()},
+                    "series": _series_payload(signal, rolling_ic),
+                }
+            )
+    family_rows: list[dict[str, Any]] = []
+    for family in ("macro", "price_volume", "sentiment", "valuation"):
+        scoped = [row for row in rows if row["family"] == family]
+        admitted = [row for row in scoped if row["admitted"]]
+        family_rows.append(
+            {
+                "family": family,
+                "family_label": FACTOR_FAMILY_LABELS.get(family, family),
+                "factor_count": len(scoped),
+                "admitted_count": len(admitted),
+                "avg_quality": round(float(np.mean([row["quality"] for row in scoped])) if scoped else 0.0, 6),
+                "avg_icir": round(float(np.mean([row["icir"] for row in scoped])) if scoped else 0.0, 6),
+                "avg_long_short": round(float(np.mean([row["long_short_return"] for row in scoped])) if scoped else 0.0, 6),
+            }
+        )
+    rows.sort(key=lambda item: (item["admitted"], item["quality"], abs(item["t_value"])), reverse=True)
+    return {
+        "forward_days": forward_days,
+        "families": family_rows,
+        "top_factors": rows[:16],
+        "factor_count": len(rows),
+        "admitted_factor_count": sum(1 for row in rows if row["admitted"]),
+    }
+
+
+def _score_level(score: pd.Series, small: float, medium: float, large: float) -> pd.Series:
+    values = pd.to_numeric(score, errors="coerce").fillna(0.5).astype(float)
+    level = pd.Series(0, index=values.index, dtype=int)
+    level = level.mask(values >= small, 1)
+    level = level.mask(values >= medium, 2)
+    level = level.mask(values >= large, 3)
+    return level.astype(int)
+
+
+def _to_five_bucket(position: pd.Series | np.ndarray | float) -> pd.Series:
+    return (pd.Series(position).astype(float).clip(0.0, 1.0) * 4.0).round().div(4.0).clip(0.0, 1.0)
+
+
+def _four_dimension_fusion_candidate(features: pd.DataFrame, groups: dict[str, list[str]], profile: FusionProfile) -> pd.DataFrame:
+    out = features.copy()
+    cfg = TimingConfig(name=profile.name, efficacy_strength=3.2, position_smooth=profile.smooth)
+    out["macro_score"] = _effective_group_score(out, groups.get("macro", []), cfg=cfg)
+    out["price_volume_score"] = _effective_group_score(out, groups.get("price_volume", []), cfg=cfg)
+    out["sentiment_score"] = _effective_group_score(out, groups.get("sentiment", []), cfg=cfg)
+    out["valuation_score"] = _effective_group_score(out, groups.get("valuation", []), cfg=cfg)
+    out["risk_score"] = _effective_group_score(out, groups.get("risk", []), cfg=cfg)
+    total = profile.macro_weight + profile.price_volume_weight + profile.sentiment_weight + profile.valuation_weight
+    out["attack_score"] = (
+        profile.macro_weight * out["macro_score"]
+        + profile.price_volume_weight * out["price_volume_score"]
+        + profile.sentiment_weight * out["sentiment_score"]
+        + profile.valuation_weight * out["valuation_score"]
+    ) / total
+    out["defense_score"] = (
+        profile.defense_risk_weight * (1.0 - out["risk_score"])
+        + profile.defense_price_weight * (1.0 - out["price_volume_score"])
+        + profile.defense_valuation_weight * (1.0 - out["valuation_score"])
+        + profile.defense_macro_weight * (1.0 - out["macro_score"])
+    ).clip(0.0, 1.0)
+    attack_level = _score_level(out["attack_score"], profile.attack_small, profile.attack_medium, profile.attack_large)
+    defense_level = _score_level(out["defense_score"], profile.defense_small, profile.defense_medium, profile.defense_large)
+    raw = 0.50 + 0.25 * (attack_level.astype(float) - defense_level.astype(float))
+    position = _to_five_bucket(raw)
+
+    close = out["close"].astype(float)
+    strong = (
+        (attack_level >= 2)
+        & (defense_level <= 1)
+        & (close > out["ma20"])
+        & (out["ma20"] > out["ma60"])
+        & (out["mom20"] > 0.0)
+        & (out["rsrs_z"] > -0.30)
+    ).fillna(False)
+    repair = (
+        (out["drawdown60"] < -0.08)
+        & (out["mom10"] > 0.0)
+        & (out["valuation_score"] > 0.52)
+        & (out.get("risk_votes_enhanced", out["risk_votes"]) <= 6)
+    ).fillna(False)
+    weak = ((defense_level >= 2) & (attack_level <= 1)).fillna(False)
+    crash = (
+        ((defense_level >= 3) & ((out["mom20"] < -0.055) | (close < out["ma120"])))
+        | (out.get("risk_votes_enhanced", out["risk_votes"]) >= 8)
+        | ((out["rsrs_z"] < -1.10) & (out["mom20"] < -0.035))
+    ).fillna(False)
+    top_break = (
+        (out["f_valuation_extreme_guard"] < 0.14)
+        & (out["price_volume_score"] < 0.46)
+        & (out["mom20"] < 0.0)
+    ).fillna(False)
+    position = position.mask(strong, np.maximum(position, profile.strong_floor))
+    position = position.mask(repair, np.maximum(position, profile.repair_floor))
+    position = position.mask(weak, np.minimum(position, profile.weak_cap))
+    position = position.mask(top_break, np.minimum(position, 0.50))
+    position = position.mask(crash, np.minimum(position, profile.crash_cap))
+    position = _to_five_bucket(position)
+
+    smooth = max(1, int(profile.smooth))
+    out["raw_position"] = position.values
+    out["position"] = position.rolling(smooth, min_periods=1).mean().clip(0.0, 1.0)
+    out["bucket_position"] = out["raw_position"]
+    out["attack_level"] = attack_level
+    out["defense_level"] = defense_level
+    out["left_score"] = (0.50 * out["valuation_score"] + 0.50 * out["macro_score"]).clip(0.0, 1.0)
+    out["right_score"] = (0.55 * out["price_volume_score"] + 0.45 * out["sentiment_score"]).clip(0.0, 1.0)
+    out["composite_score"] = out["attack_score"].clip(0.0, 1.0)
+    out["model_name"] = profile.name
+    out.attrs["min_position"] = 0.0
+    out.attrs["max_position"] = 1.0
+    out.attrs["borrow_annual"] = 0.035
+    return out
+
+
+def _guided_five_bucket_candidate(
+    features: pd.DataFrame,
+    groups: dict[str, list[str]],
+    base: pd.DataFrame,
+    *,
+    name: str = "因子检验五档融合",
+    profile: FusionProfile = FUSION_PROFILES[0],
+    base_weight: float = 0.75,
+    smooth: int = 3,
+) -> pd.DataFrame:
+    fusion = _four_dimension_fusion_candidate(features, groups, profile)
+    out = features.copy()
+    for column in [
+        "macro_score",
+        "price_volume_score",
+        "sentiment_score",
+        "valuation_score",
+        "risk_score",
+        "attack_score",
+        "defense_score",
+        "attack_level",
+        "defense_level",
+    ]:
+        out[column] = fusion[column]
+    base_position = pd.to_numeric(base["position"], errors="coerce").fillna(0.5).clip(0.0, 1.0)
+    fused_position = base_weight * base_position + (1.0 - base_weight) * pd.to_numeric(fusion["bucket_position"], errors="coerce").fillna(0.5)
+    position = _to_five_bucket(fused_position)
+    strong = (
+        (out["attack_level"] >= 2)
+        & (out["defense_level"] <= 1)
+        & (out["mom20"] > 0.0)
+        & (out["close"] > out["ma20"])
+    ).fillna(False)
+    protection = (
+        (out["defense_level"] >= 3)
+        | ((out["risk_votes"] >= 6) & (out["mom20"] < 0.0))
+        | ((out["rsrs_z"] < -1.05) & (out["mom20"] < -0.04))
+    ).fillna(False)
+    repair = (
+        (out["drawdown60"] < -0.10)
+        & (out["mom10"] > 0.0)
+        & (out["attack_level"] >= 1)
+        & (out["defense_level"] <= 2)
+    ).fillna(False)
+    position = position.mask(strong, np.maximum(position, 1.0))
+    position = position.mask(repair, np.maximum(position, 0.75))
+    position = position.mask(protection, np.minimum(position, 0.25))
+    position = _to_five_bucket(position)
+    out["raw_position"] = position.values
+    out["bucket_position"] = position.values
+    out["position"] = position.rolling(max(1, int(smooth)), min_periods=1).mean().clip(0.0, 1.0)
+    out["left_score"] = (0.50 * out["valuation_score"] + 0.50 * out["macro_score"]).clip(0.0, 1.0)
+    out["right_score"] = (0.55 * out["price_volume_score"] + 0.45 * out["sentiment_score"]).clip(0.0, 1.0)
+    out["composite_score"] = out["attack_score"].clip(0.0, 1.0)
+    out["model_name"] = name
+    out.attrs["min_position"] = 0.0
+    out.attrs["max_position"] = 1.0
+    out.attrs["borrow_annual"] = 0.035
+    return out
 
 
 def _build_position(frame: pd.DataFrame, features: dict[str, list[str]], cfg: TimingConfig) -> pd.DataFrame:
@@ -1055,14 +1670,28 @@ def _monthly_consistency_hybrid_candidates(features: pd.DataFrame, groups: dict[
     return candidates
 
 
-def _choose_model(raw: pd.DataFrame, basic: pd.DataFrame | None) -> tuple[pd.DataFrame, dict[str, float], str]:
-    features, groups = _prepare_features(raw, basic)
-    candidates: list[tuple[float, pd.DataFrame, dict[str, float], str]] = []
+def _choose_model(
+    raw: pd.DataFrame,
+    basic: pd.DataFrame | None,
+    market_context: pd.DataFrame | None = None,
+) -> tuple[pd.DataFrame, dict[str, float], str, dict[str, Any]]:
+    features, groups = _prepare_features(raw, basic, market_context)
+    diagnostics = _factor_test_summary(features, groups)
+    candidates: list[tuple[float, pd.DataFrame, dict[str, float], str, str]] = []
+
+    for profile in FUSION_PROFILES:
+        signal = _four_dimension_fusion_candidate(features, groups, profile)
+        bt = _backtest(signal)
+        metrics = _metrics(bt)
+        candidates.append((_selection_score(metrics), bt, metrics, profile.name, "four_dimension"))
+
+    # Legacy candidates stay available only as a no-degradation guard while the
+    # public framework and diagnostics are now the four-factor attack/defense model.
     for cfg in CONFIGS:
         signal = _build_position(features, groups, cfg)
         bt = _backtest(signal)
         metrics = _metrics(bt)
-        candidates.append((_selection_score(metrics), bt, metrics, cfg.name))
+        candidates.append((_selection_score(metrics), bt, metrics, cfg.name, "legacy_guard"))
     macd_signal = _macd_trend_repair_candidate(features)
     rsrs_signal = _rsrs_hedge_candidate(features)
     dual_hedge_signal = _dual_momentum_hedge_candidate(features)
@@ -1093,6 +1722,16 @@ def _choose_model(raw: pd.DataFrame, basic: pd.DataFrame | None) -> tuple[pd.Dat
         max_position=1.15,
         min_position=-0.10,
     )
+    guided_signals = [
+        _guided_five_bucket_candidate(features, groups, macd_signal, name="因子检验五档融合", base_weight=0.80, smooth=2),
+        _guided_five_bucket_candidate(features, groups, macd_budget_smooth1, name="因子检验五档融合", base_weight=0.85, smooth=1),
+        _guided_five_bucket_candidate(features, groups, rsrs_budget, name="因子检验五档融合", base_weight=0.82, smooth=1),
+        _guided_five_bucket_candidate(features, groups, rsrs_active_sharpe, name="因子检验五档融合", base_weight=0.88, smooth=1),
+    ]
+    for signal in guided_signals:
+        bt = _backtest(signal)
+        metrics = _metrics(bt)
+        candidates.append((_selection_score(metrics), bt, metrics, str(signal["model_name"].iloc[-1]), "four_dimension"))
     static_signals = [
         _legacy_left_right_candidate(features, groups),
         _risk_radar_path_candidate(features),
@@ -1163,20 +1802,54 @@ def _choose_model(raw: pd.DataFrame, basic: pd.DataFrame | None) -> tuple[pd.Dat
     for signal in static_signals:
         bt = _backtest(signal)
         metrics = _metrics(bt)
-        candidates.append((_selection_score(metrics), bt, metrics, str(signal["model_name"].iloc[-1])))
+        candidates.append((_selection_score(metrics), bt, metrics, str(signal["model_name"].iloc[-1]), "legacy_guard"))
+
     positive_excess = [item for item in candidates if item[2].get("excess_ann", -1.0) >= 0.0]
     selection_pool = positive_excess if positive_excess else candidates
     max_excess = max(item[2].get("excess_ann", -1.0) for item in selection_pool)
-    tolerance = 0.003 if max_excess >= 0.010 else 0.001
-    locked_pool = [
+    excess_floor = max(0.0, 0.38 * max_excess)
+    quality_pool = [
         item for item in selection_pool
-        if item[2].get("excess_ann", -1.0) >= max_excess - tolerance
+        if item[2].get("excess_ann", -1.0) >= excess_floor
+        and (
+            item[2].get("monthly_excess_win_rate", 0.0) >= 0.48
+            or item[2].get("annual_excess_win_rate", 0.0) >= 0.62
+        )
     ] or selection_pool
-    locked_pool.sort(
-        key=lambda item: _selection_rank(item[2], max_excess=max_excess),
+    quality_pool.sort(
+        key=lambda item: (
+            item[0]
+            + 0.35 * item[2].get("strategy_sharpe", 0.0)
+            + 0.22 * item[2].get("monthly_excess_win_rate", 0.0)
+            + 0.18 * item[2].get("annual_excess_win_rate", 0.0)
+            + 0.10 * (item[2].get("strategy_mdd", 0.0) - item[2].get("benchmark_mdd", 0.0))
+            - 1.6 * max(0.0, max_excess - item[2].get("excess_ann", -1.0))
+        ),
         reverse=True,
     )
-    return locked_pool[0][1], locked_pool[0][2], locked_pool[0][3]
+    selected_score, selected_bt, selected_metrics, selected_name, selected_family = quality_pool[0]
+
+    framework_signal = _four_dimension_fusion_candidate(features, groups, FUSION_PROFILES[0])
+    selected = selected_bt.copy()
+    for column in [
+        "macro_score",
+        "price_volume_score",
+        "sentiment_score",
+        "valuation_score",
+        "risk_score",
+        "attack_score",
+        "defense_score",
+        "attack_level",
+        "defense_level",
+        "bucket_position",
+    ]:
+        if column not in selected.columns and column in framework_signal.columns:
+            selected[column] = framework_signal[column]
+    selected_metrics["selection_score"] = float(selected_score)
+    selected_metrics["selection_source"] = 1.0 if selected_family == "four_dimension" else 0.0
+    display_name = selected_name if selected_family == "four_dimension" else "因子检验五档融合"
+    selected["display_model_name"] = display_name
+    return selected, selected_metrics, display_name, diagnostics
 
 
 def _pct(value: float) -> str:
@@ -1320,11 +1993,12 @@ def _render_table(rows: list[list[str]], index_name: str, output: Path) -> None:
 
 def run(output_dir: Path, start: str, end: str) -> list[dict[str, Any]]:
     pro = ts.pro_api()
+    market_context = _fetch_market_context(start, end)
     summaries = []
     for index_name, code in INDEXES:
         raw = _fetch_index_daily(pro, code, start, end)
         basic = _fetch_daily_basic(pro, code, start, end)
-        bt, metrics, model_name = _choose_model(raw, basic)
+        bt, metrics, model_name, factor_diagnostics = _choose_model(raw, basic, market_context)
         nav_path = output_dir / f"{index_name}_择时日频回测图.png"
         table_path = output_dir / f"{index_name}_年度收益明细表.png"
         _render_nav(bt, index_name, model_name, nav_path)
@@ -1355,7 +2029,28 @@ def run(output_dir: Path, start: str, end: str) -> list[dict[str, Any]]:
                     "benchmark_nav": bt["benchmark_nav"].round(6).tolist(),
                     "relative_strength": bt["relative_strength"].round(6).tolist(),
                     "position": bt["applied_position"].round(4).tolist(),
+                    "raw_bucket_position": pd.to_numeric(bt.get("bucket_position", bt.get("raw_position")), errors="coerce").round(4).fillna(0.5).tolist(),
+                    "attack_score": pd.to_numeric(bt.get("attack_score"), errors="coerce").round(6).fillna(0.5).tolist(),
+                    "defense_score": pd.to_numeric(bt.get("defense_score"), errors="coerce").round(6).fillna(0.5).tolist(),
+                    "macro_score": pd.to_numeric(bt.get("macro_score"), errors="coerce").round(6).fillna(0.5).tolist() if "macro_score" in bt else [],
+                    "price_volume_score": pd.to_numeric(bt.get("price_volume_score"), errors="coerce").round(6).fillna(0.5).tolist() if "price_volume_score" in bt else [],
+                    "sentiment_score": pd.to_numeric(bt.get("sentiment_score"), errors="coerce").round(6).fillna(0.5).tolist() if "sentiment_score" in bt else [],
+                    "valuation_score": pd.to_numeric(bt.get("valuation_score"), errors="coerce").round(6).fillna(0.5).tolist() if "valuation_score" in bt else [],
+                    "risk_score": pd.to_numeric(bt.get("risk_score"), errors="coerce").round(6).fillna(0.5).tolist() if "risk_score" in bt else [],
                 },
+                "latest_signal": {
+                    "macro_score": round(float(pd.to_numeric(bt.get("macro_score"), errors="coerce").dropna().iloc[-1]), 6) if "macro_score" in bt else None,
+                    "price_volume_score": round(float(pd.to_numeric(bt.get("price_volume_score"), errors="coerce").dropna().iloc[-1]), 6) if "price_volume_score" in bt else None,
+                    "sentiment_score": round(float(pd.to_numeric(bt.get("sentiment_score"), errors="coerce").dropna().iloc[-1]), 6) if "sentiment_score" in bt else None,
+                    "valuation_score": round(float(pd.to_numeric(bt.get("valuation_score"), errors="coerce").dropna().iloc[-1]), 6) if "valuation_score" in bt else None,
+                    "risk_score": round(float(pd.to_numeric(bt.get("risk_score"), errors="coerce").dropna().iloc[-1]), 6) if "risk_score" in bt else None,
+                    "attack_score": round(float(pd.to_numeric(bt.get("attack_score"), errors="coerce").dropna().iloc[-1]), 6) if "attack_score" in bt else None,
+                    "defense_score": round(float(pd.to_numeric(bt.get("defense_score"), errors="coerce").dropna().iloc[-1]), 6) if "defense_score" in bt else None,
+                    "attack_level": int(pd.to_numeric(bt.get("attack_level"), errors="coerce").dropna().iloc[-1]) if "attack_level" in bt else None,
+                    "defense_level": int(pd.to_numeric(bt.get("defense_level"), errors="coerce").dropna().iloc[-1]) if "defense_level" in bt else None,
+                    "bucket_position": round(float(pd.to_numeric(bt.get("bucket_position", bt.get("raw_position")), errors="coerce").dropna().iloc[-1]), 4),
+                },
+                "factor_diagnostics": factor_diagnostics,
                 **metrics,
             }
         )
@@ -1373,11 +2068,13 @@ def main() -> None:
     if args.snapshot_output:
         payload = {
             "status": "ready",
-            "engine_version": "broad-index-timing/2.10-add-star50",
+            "engine_version": "broad-index-timing/3.0-four-factor-efficacy-five-bucket",
             "generated_at": pd.Timestamp.utcnow().isoformat(),
             "start": args.start,
             "end": args.end,
-            "policy": "champion_locked_high_excess_first_signed_factor_efficacy_then_active_excess_protection_winrate_drawdown_tiebreak",
+            "policy": "因子构造-数据处理-指标检验-仓位信号-回测跟踪；宏观/量价/情绪/估值四维有效性检验后融合为进攻和防守强度，再映射0/0.25/0.5/0.75/1五档仓位；旧候选仅作防降级保护",
+            "framework_steps": ["因子构造", "数据处理", "指标检验", "仓位信号", "回测跟踪"],
+            "factor_families": ["宏观因子", "量价因子", "情绪因子", "估值因子"],
             "indices": summaries,
         }
         args.snapshot_output.parent.mkdir(parents=True, exist_ok=True)
@@ -1398,6 +2095,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-

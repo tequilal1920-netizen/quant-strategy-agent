@@ -42,9 +42,9 @@
     if (pending.has(path)) return pending.get(path);
     const task = (async () => {
       let lastError = null;
-      for (let attempt = 0; attempt < 2; attempt += 1) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
-          const response = await fetch(endpoint(path), { headers: { Accept: "application/json" } });
+          const response = await fetch(endpoint(path), { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } });
           if (!response.ok) {
             const error = new Error(`HTTP ${response.status}`);
             error.status = response.status;
@@ -56,8 +56,8 @@
         } catch (error) {
           lastError = error;
           const retryable = !error.status || error.status >= 500;
-          if (!retryable || attempt === 1) throw error;
-          await new Promise((resolve) => setTimeout(resolve, 250));
+          if (!retryable || attempt === 2) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 600));
         }
       }
       throw lastError;
@@ -135,7 +135,27 @@
   function drawPlot(target, traces, layout = {}) {
     const element = typeof target === "string" ? $(target) : target;
     if (!element || !window.Plotly) return;
-    Plotly.react(element, traces, plotLayout(layout), plotConfig);
+    const normalized = (Array.isArray(traces) ? traces : []).map((trace) => {
+      const next = { ...trace };
+      const type = String(next.type || "scatter").toLowerCase();
+      if (type === "scatter" || type === "scattergl") {
+        const line = { ...(next.line || {}) };
+        const width = Number(line.width || 1.4);
+        line.width = width === 0 ? 0 : Math.min(width * 1.7, 5.1);
+        next.line = line;
+      }
+      if (type === "bar" && next.orientation === "h" && !next.width) next.width = .42;
+      return next;
+    });
+    const nextLayout = plotLayout(layout);
+    ["xaxis", "xaxis2", "yaxis", "yaxis2"].forEach((axis) => {
+      if (nextLayout[axis]) nextLayout[axis] = { ...nextLayout[axis], showgrid: false, linecolor: colors.ink, tickcolor: colors.ink, ticks: "outside" };
+    });
+    if (nextLayout.legend && Number(nextLayout.legend.y) > .8) {
+      nextLayout.legend = { ...nextLayout.legend, y: -.18, x: 0 };
+      nextLayout.margin = { ...(nextLayout.margin || {}), b: Math.max(Number(nextLayout.margin?.b) || 0, 64), t: Math.min(Number(nextLayout.margin?.t) || 28, 22) };
+    }
+    Plotly.react(element, normalized, nextLayout, plotConfig);
   }
 
   function windowed(rows) {
@@ -230,26 +250,28 @@
     renderRankings();
   }
 
-  function rankTrace(rows) {
+  function rankTrace(rows, limit = 24) {
     const sorted = [...rows].filter((row) => finite(row.diffusion_score_smooth5)).sort((a, b) => Number(a.diffusion_score_smooth5) - Number(b.diffusion_score_smooth5));
+    const half = Math.max(4, Math.floor(limit / 2));
+    const compactRows = sorted.length > limit ? [...sorted.slice(0, half), ...sorted.slice(-half)] : sorted;
     return [{
-      x: sorted.map((row) => row.diffusion_score_smooth5), y: sorted.map((row) => row.industry_name),
-      type: "bar", orientation: "h", marker: { color: sorted.map((row) => scoreColor(row.diffusion_score_smooth5)) },
-      text: sorted.map((row) => fmt(row.diffusion_score_smooth5, 1)), textposition: "auto",
-      customdata: sorted.map((row) => [row.industry_code, row.diffusion_score_chg_20d, row.sample_grade]),
+      x: compactRows.map((row) => row.diffusion_score_smooth5), y: compactRows.map((row) => row.industry_name),
+      type: "bar", orientation: "h", marker: { color: compactRows.map((row) => scoreColor(row.diffusion_score_smooth5)) },
+      text: compactRows.map((row) => fmt(row.diffusion_score_smooth5, 1)), textposition: "auto",
+      customdata: compactRows.map((row) => [row.industry_code, row.diffusion_score_chg_20d, row.sample_grade]),
       hovertemplate: "%{y}<br>扩散 %{x:.1f}<br>20日 %{customdata[1]:+.1f}<br>样本 %{customdata[2]}<extra></extra>",
     }];
   }
   function renderRankings() {
     const all = (state.snapshot.industry_latest || []).filter((row) => !state.reliableOnly || row.is_reliable);
-    drawPlot("#all-rank-chart", rankTrace(all), {
+    drawPlot("#all-rank-chart", rankTrace(all, 24), {
       showlegend: false, margin: { l: 116, r: 16, t: 10, b: 36 },
       xaxis: { range: [0, 100], gridcolor: colors.grid }, yaxis: { automargin: true, gridcolor: "#fff", tickfont: { size: 11 } },
     });
     const selectedCodes = new Set(flatIndustries().map((item) => item.code));
     const selected = all.filter((row) => selectedCodes.has(row.industry_code));
     $("#level1-rank-title").textContent = `${state.selectedLevel1} · 三级行业排名`;
-    drawPlot("#level1-rank-chart", rankTrace(selected), {
+    drawPlot("#level1-rank-chart", rankTrace(selected, 16), {
       showlegend: false, margin: { l: 112, r: 16, t: 10, b: 36 },
       xaxis: { range: [0, 100], gridcolor: colors.grid }, yaxis: { automargin: true, gridcolor: "#fff", tickfont: { size: 11 } },
     });
@@ -358,8 +380,8 @@
   function renderStockAttribution() {
     const rows = filteredStocks();
     const fields = attributionFields();
-    const positive = rows.filter((row) => Number(row[fields.contribution]) > 0).sort((a, b) => Number(b[fields.contribution]) - Number(a[fields.contribution])).slice(0, 12);
-    const negative = rows.filter((row) => Number(row[fields.contribution]) < 0).sort((a, b) => Number(a[fields.contribution]) - Number(b[fields.contribution])).slice(0, 12);
+    const positive = rows.filter((row) => Number(row[fields.contribution]) > 0).sort((a, b) => Number(b[fields.contribution]) - Number(a[fields.contribution])).slice(0, 10);
+    const negative = rows.filter((row) => Number(row[fields.contribution]) < 0).sort((a, b) => Number(a[fields.contribution]) - Number(b[fields.contribution])).slice(0, 10);
     const bars = [...negative.reverse(), ...positive.reverse()];
     drawPlot("#contribution-chart", [{
       x: bars.map((row) => row[fields.contribution]), y: bars.map((row) => row.stock_name), type: "bar", orientation: "h",
@@ -368,7 +390,7 @@
       customdata: bars.map((row) => row.stock_code), hovertemplate: "%{y} %{customdata}<br>贡献 %{x:.3f}pp<extra></extra>",
     }], { showlegend: false, margin: { l: 86, r: 14, t: 10, b: 38 }, xaxis: { title: "百分点", zeroline: true, zerolinecolor: colors.ink, gridcolor: colors.grid }, yaxis: { gridcolor: "#fff", automargin: true } });
 
-    const scatterRows = rows.filter((row) => finite(row[fields.relative]) && finite(row[fields.stockScore]));
+    const scatterRows = bars.filter((row) => finite(row[fields.relative]) && finite(row[fields.stockScore]));
     const maxContribution = Math.max(...scatterRows.map((row) => Math.abs(Number(row[fields.contribution]) || 0)), .001);
     drawPlot("#stock-map-chart", [{
       x: scatterRows.map((row) => row[fields.relative]), y: scatterRows.map((row) => row[fields.stockScore]),
@@ -381,7 +403,7 @@
       { type: "line", x0: 50, x1: 50, y0: 0, y1: 100, line: { color: colors.border, dash: "dot" } },
       { type: "line", x0: 0, x1: 100, y0: 50, y1: 50, line: { color: colors.border, dash: "dot" } },
     ] });
-    const tableRows = [...rows].sort((a, b) => Number(b[fields.stockScore] || -1) - Number(a[fields.stockScore] || -1));
+    const tableRows = bars;
     $("#stock-table-body").innerHTML = tableRows.map((row) => `<tr data-code="${esc(row.stock_code)}">
       <td class="stock-name-cell"><strong>${esc(row.stock_name)}</strong><small>${esc(row.stock_code)}</small></td>
       <td><span class="shape-badge" data-shape="${esc(row.shape_tag)}">${esc(shapeLabel(row.shape_tag))}</span></td>
@@ -472,7 +494,7 @@
     try {
       state.snapshot = await fetchJSON("/api/snapshot");
       state.selectedLevel1 = state.snapshot.industry_tree?.[0]?.name || "电子";
-      $("#latest-date").textContent = state.snapshot.meta?.latest_trade_dt || "-";
+      const latestDateNode = $("#latest-date"); if (latestDateNode) latestDateNode.textContent = state.snapshot.meta?.latest_trade_dt || "-";
       updateDataStatus();
       populateControls(); bindControls();
       renderMarketCharts(); renderIndustryMap();

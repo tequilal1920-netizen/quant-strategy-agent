@@ -44,6 +44,25 @@ def run_lstm(panel, config, progress_path):
     return effective_dsr(_lstm(panel, config, progress_path), panel)
 
 
+def run_gru(panel, config, progress_path):
+    gru_config = dict(config)
+    gru_config["engine"] = "gru"
+    gru_config["recurrent_cell"] = "gru"
+    result = effective_dsr(_lstm(panel, gru_config, progress_path), panel)
+    result["engine"] = "gru"
+    architecture = result.setdefault("architecture", {})
+    architecture["name"] = "PIT-Masked Causal Mixture Residual GRU"
+    components = architecture.get("components") or []
+    architecture["components"] = [
+        "GRU" if str(item).upper() == "LSTM" else item
+        for item in components
+    ]
+    selection = result.setdefault("selection", {})
+    if selection.get("name") == "LSTM":
+        selection["name"] = "GRU"
+    return result
+
+
 def run_rl(panel, config, progress_path):
     result = _rl(panel, config, progress_path)
     trials = int((result.get("selection") or {}).get("candidate_count") or 1) + int((result.get("search") or {}).get("trial_count") or 0)
@@ -81,6 +100,7 @@ v3.v2.ENGINE_VERSION = VERSION
 v3.v2.engine.ENGINE_VERSION = VERSION
 v3.v2._formula_scores = formula_scores
 v3.v2.engine.run_lstm = run_lstm
+v3.v2.engine.run_gru = run_gru
 v3.v2.engine.run_rl_transformer = run_rl
 v3.v2.engine.run_strategy = run_strategy
 v3.v2.engine.run_joint_test = run_joint

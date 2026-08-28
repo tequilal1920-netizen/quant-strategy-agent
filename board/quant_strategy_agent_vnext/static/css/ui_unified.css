@@ -61,7 +61,7 @@ body.is-authenticated .dashboard-main :where(
 }
 
 /* Status dots have only three product meanings. */
-.nav-item i { background: var(--ui-red) !important; }
+.nav-item i { background: var(--ui-green) !important; }
 .nav-item[data-status="ok"] i { background: var(--ui-green) !important; }
 .nav-item[data-status="running"] i { background: var(--ui-blue) !important; }
 .nav-item[data-status="failed"] i { background: var(--ui-red) !important; }
@@ -72,7 +72,7 @@ body.is-authenticated .dashboard-main :where(
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--ui-red);
+  background: var(--ui-green);
   content: "";
 }
 .nav-group[data-status="ok"] > .nav-group-toggle::before { background: var(--ui-green); }
@@ -122,6 +122,7 @@ body.is-authenticated .app-shell tr {
   font-size: 14px !important;
 }
 
+/* 2026-08-18 data dashboard and topic tracking integration r44.11. */
 /* Trump index full research integration v3. */
 .trump-v3-dashboard { display: grid; gap: 16px; }
 .trump-v3-status {
@@ -171,16 +172,6 @@ body.is-authenticated .app-shell tr {
 .strength { display: inline-grid; min-width: 38px; place-items: center; border-radius: 999px; padding: 5px 7px; color:#fff; background:var(--ui-blue); font-weight:800; }
 .strength-中强 { background:#c46a08; }
 .strength-强,.strength-最强 { background:var(--ui-red); }
-.trump-v3-flow { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; padding: 0 13px 12px; }
-.trump-v3-flow article { display:grid; grid-template-columns:42px minmax(0,1fr); gap:9px; padding:12px; border-radius:7px; background:#fff5f3; }
-.trump-v3-flow article+article { background:#f1f8f4; }
-.trump-v3-flow b { display:grid; height:26px; place-items:center; border-radius:4px; color:#fff; background:var(--ui-red); }
-.trump-v3-flow article+article b { background:var(--ui-green); }
-.trump-v3-flow p { margin:0; color:var(--muted); line-height:1.75; }
-.trump-v3-judgement { display:grid; gap:7px; border-top:1px solid var(--soft-border); padding:12px 13px; background:#fbfcfd; }
-.trump-v3-judgement p { margin:0; color:var(--muted); line-height:1.75; }
-.trump-v3-judgement p b { display:inline-block; min-width:68px; color:var(--ui-red); }
-.trump-v3-judgement a { justify-self:start; color:var(--ui-red); font-weight:800; text-decoration:none; }
 .trump-v3-tabs,.trump-v3-filter { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px; }
 .trump-v3-tabs button,.trump-v3-filter button,.trump-v3-truth-controls button {
   border:1px solid var(--ui-border); border-radius:999px; padding:7px 11px; color:var(--muted); background:#fff; cursor:pointer;
@@ -241,9 +232,361 @@ body.is-authenticated .app-shell tr {
   .trump-v3-truth-list{grid-template-columns:1fr}
 }
 @media (max-width:720px){
-  .trump-v3-status,.trump-v3-truth-controls,.trump-v3-ranking,.trump-v3-flow,.trump-v3-approval-summary{grid-template-columns:1fr}
   .trump-v3-factors,.trump-v3-audits,.trump-v3-sources{grid-template-columns:1fr}
   .trump-v3-taco summary{grid-template-columns:1fr auto}
   .trump-v3-taco summary strong{grid-column:1/3}
   .trump-v3-taco summary em{display:none}
+}
+
+/* 2026-08-18 data dashboard and topic tracking integration r44.11. */
+.data-table td.is-conditional { position: relative; color: var(--ink); background-clip: padding-box; }
+.data-table td.is-conditional::before {
+  position: absolute;
+  inset: 2px 4px;
+  width: var(--bar, 0%);
+  max-width: calc(100% - 8px);
+  border-radius: 2px;
+  opacity: .86;
+  content: "";
+  pointer-events: none;
+}
+.data-table td.is-conditional.cond-positive::before,
+.data-table td.is-conditional.r44-red::before { background: linear-gradient(90deg, rgba(192,0,0,.58), rgba(192,0,0,.20)); }
+.data-table td.is-conditional.cond-negative::before,
+.data-table td.is-conditional.r44-green::before { background: linear-gradient(90deg, rgba(0,176,80,.54), rgba(0,176,80,.18)); }
+.data-table td.is-conditional.cond-blue::before,
+.data-table td.is-conditional.r44-blue::before { background: linear-gradient(90deg, rgba(47,117,181,.48), rgba(47,117,181,.16)); }
+.data-table td.is-conditional.cond-positive { box-shadow: none; }
+.data-table td.is-conditional.cond-negative { box-shadow: none; }
+.data-table td.is-conditional.cond-blue { box-shadow: none; }
+.data-table td.is-conditional > span { position: relative; z-index: 1; font-weight: 400; }
+.ai-dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 10px 0; }
+.ai-dual-grid > section { min-width: 0; border: 1px solid var(--ui-border); border-radius: 8px; padding: 12px; background: #fff; box-shadow: var(--ui-shadow); }
+.ai-dual-grid h3 { margin: 0 0 8px; color: var(--ink); }
+.domestic-dashboard { display: grid; gap: 12px; }
+.domestic-image-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.domestic-image-card { min-width: 0; border: 1px solid var(--ui-border); border-radius: 8px; padding: 12px; background: #fff; box-shadow: var(--ui-shadow); }
+.domestic-image-card h3 { margin: 0 0 8px; color: var(--ink); }
+.domestic-image-card img { display: block; width: 100%; height: auto; border: 1px solid var(--soft-border); border-radius: 6px; background: #fff; }
+body[data-workspace-route="data:topic_tracking"][data-workspace-section="ai-monitor"] .conclusion-card, body[data-workspace-route="data:topic_tracking"][data-workspace-section="ai-monitor"] .ai-monitor-status { display: none !important; }
+@media (max-width: 920px) {
+  .ai-dual-grid,
+  .domestic-image-grid { grid-template-columns: 1fr; }
+}
+
+.news-source-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 12px; }
+.news-source-row span { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 10px; border: 1px solid var(--line); border-left: 3px solid var(--brand); border-radius: 7px; background: #fff; color: var(--muted); font-size: 13px; font-weight: 700; }
+
+/* 2026-08-18 r44 liquidity weekly brief */
+.liquidity-brief {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0 0 18px;
+}
+.liquidity-brief > div,
+.liquidity-brief .liquidity-warning {
+  border: 1px solid var(--line, #d0d5dd);
+  border-left: 4px solid var(--accent, #a52a1f);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px 16px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, .08);
+}
+.liquidity-brief span {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--muted, #667085);
+  font-size: 14px;
+  font-weight: 700;
+}
+.liquidity-brief p {
+  margin: 0;
+  color: var(--ink, #101828);
+  line-height: 1.75;
+}
+.liquidity-brief strong { color: var(--accent, #a52a1f); }
+.liquidity-brief .liquidity-warning {
+  grid-column: 1 / -1;
+  border-left-color: #b54708;
+  background: #fffbf3;
+  color: #7a2e0e;
+}
+@media (max-width: 900px) {
+  .liquidity-brief { grid-template-columns: 1fr; }
+}
+
+
+
+
+/* r44.13 visual corrections */
+.data-table td.is-conditional.cond-positive::before,
+.data-table td.is-conditional.r44-red::before {
+  background: linear-gradient(90deg, rgba(192,0,0,.78), rgba(248,203,206,.42)) !important;
+}
+.data-table td.is-conditional.cond-negative::before,
+.data-table td.is-conditional.r44-green::before {
+  background: linear-gradient(90deg, rgba(0,176,80,.78), rgba(198,239,206,.48)) !important;
+}
+.data-table td.is-conditional.cond-blue::before,
+.data-table td.is-conditional.r44-blue::before {
+  background: linear-gradient(90deg, rgba(192,0,0,.78), rgba(248,203,206,.42)) !important;
+}
+.data-table td.is-conditional.cond-positive { box-shadow: inset 0 0 0 999px rgba(192,0,0,.035) !important; }
+.data-table td.is-conditional.cond-negative { box-shadow: inset 0 0 0 999px rgba(0,176,80,.035) !important; }
+.data-table td.is-conditional.cond-blue { box-shadow: inset 0 0 0 999px rgba(192,0,0,.035) !important; }
+.compact-multi-card { padding: 10px 12px !important; }
+.compact-multi-grid { display: grid; grid-template-columns: minmax(260px, 1fr) 180px 180px; gap: 12px; align-items: end; }
+.compact-multi-grid > label { display: grid; gap: 6px; margin: 0; color: var(--muted); font-weight: 700; }
+.compact-multi { position: relative; min-width: 0; }
+.compact-multi-trigger { width: 100%; min-height: 38px; border: 1px solid var(--ui-border); border-radius: 7px; padding: 0 34px 0 11px; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); background: #fff; cursor: pointer; }
+.compact-multi-trigger::after { position: absolute; right: 12px; top: 50%; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: translateY(-70%) rotate(45deg); content: ""; }
+.compact-multi-menu { position: absolute; z-index: 80; left: 0; right: 0; top: calc(100% + 6px); max-height: 320px; overflow: auto; border: 1px solid var(--ui-border); border-radius: 8px; padding: 6px; background: #fff; box-shadow: 0 14px 30px rgba(16,24,40,.14); }
+.compact-multi-menu label { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 5px 7px; border-radius: 6px; color: var(--ink); font-weight: 600; cursor: pointer; }
+.compact-multi-menu label:hover { background: #f6f8fa; }
+.compact-multi-menu input { width: 15px; height: 15px; accent-color: var(--ui-red); }
+.liquidity-top-row { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 12px; align-items: stretch; margin: 0 0 14px; }
+.liquidity-control-card { display: grid; align-content: start; margin: 0 !important; padding: 14px !important; }
+.liquidity-control-card label { display: grid; gap: 7px; color: var(--muted); font-weight: 700; }
+.liquidity-control-card select { min-height: 40px; border: 1px solid var(--ui-border); border-radius: 7px; padding: 0 10px; background: #fff; color: var(--ink); }
+.liquidity-top-row .liquidity-brief { margin: 0 !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.liquidity-top-row .liquidity-brief > div { min-height: 100%; padding: 12px 14px; }
+.liquidity-brief span { margin-bottom: 8px !important; }
+.liquidity-brief p { margin: 0 0 7px !important; line-height: 1.65 !important; }
+.taco-timeline-chart { min-height: 330px !important; }
+.trump-v3-status,
+.trump-v3-kpis { display: none !important; }
+.trump-v3-section > header #trump-v3-refresh { align-self: center; }
+@media (max-width: 1000px) {
+  .compact-multi-grid,
+  .liquidity-top-row,
+  .liquidity-top-row .liquidity-brief { grid-template-columns: 1fr; }
+}
+/* r45.1 data dashboard interaction fixes */
+.compact-multi-trigger { position: relative; }
+.compact-multi-trigger:focus-visible { outline: 2px solid rgba(180,35,24,.22); outline-offset: 2px; }
+.compact-multi-menu { position: fixed !important; right: auto !important; z-index: 2147483000 !important; overflow: auto !important; background: #fff !important; }
+.compact-multi-menu[hidden] { display: none !important; }
+.compact-multi.is-open .compact-multi-trigger { border-color: var(--ui-red); box-shadow: 0 0 0 2px rgba(180,35,24,.10); }
+.taco-timeline-chart { min-height: 430px !important; }
+.trump-v3-section > header small { display: none !important; }
+.liquidity-top-row { grid-template-columns: 260px minmax(0, 1fr) !important; }
+.liquidity-top-row .liquidity-brief { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+@media (max-width: 1000px) {
+  .liquidity-top-row,
+  .liquidity-top-row .liquidity-brief { grid-template-columns: 1fr !important; }
+}
+
+/* r45.3 final dashboard refinements */
+.control-card,
+.compact-multi-card,
+.compact-multi-grid,
+.compact-multi { overflow: visible !important; }
+.compact-multi-menu {
+  position: fixed !important;
+  z-index: 2147483000 !important;
+  min-width: 260px !important;
+  max-height: min(360px, calc(100vh - 20px)) !important;
+  background: #fff !important;
+}
+.trump-v3-truth-controls { grid-template-columns: minmax(260px, 1fr) 180px !important; }
+.trump-v3-truth-controls > div { display: none !important; }
+.trump-v3-chart.taco-timeline-chart { min-height: 430px !important; }
+.trump-v3-section#trump-index-taco .plot-container,
+.trump-v3-section#trump-index-taco .svg-container { overflow: visible !important; }
+.liquidity-top-row { grid-template-columns: 240px minmax(0, 1fr) !important; align-items: start !important; }
+.liquidity-control-card { align-self: start !important; min-height: 0 !important; }
+.liquidity-top-row .liquidity-brief { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; align-items: stretch !important; }
+.liquidity-top-row .liquidity-brief > div { min-height: 0 !important; }
+@media (max-width: 1000px) {
+  .liquidity-top-row,
+  .liquidity-top-row .liquidity-brief,
+  .trump-v3-truth-controls { grid-template-columns: 1fr !important; }
+}
+/* r45.11 conditional-format bars only */
+.data-table td.is-conditional,
+.data-table td.is-conditional.cond-positive,
+.data-table td.is-conditional.cond-negative,
+.data-table td.is-conditional.cond-blue,
+.data-table td.is-conditional.r44-red,
+.data-table td.is-conditional.r44-green,
+.data-table td.is-conditional.r44-blue {
+  color: var(--subtle-ink) !important;
+  box-shadow: none !important;
+}
+.data-table td.is-conditional > span {
+  position: relative;
+  z-index: 1;
+  font-weight: inherit !important;
+}
+/* r45.12 Excel-style signed data bars: positive grows right, negative grows left. */
+.data-table td.is-conditional::before {
+  inset: auto !important;
+  top: 2px !important;
+  bottom: 2px !important;
+  left: var(--bar-left, 0%) !important;
+  width: var(--bar-width, var(--bar, 0%)) !important;
+  max-width: 100% !important;
+}
+.data-table td.is-conditional.cond-positive::before,
+.data-table td.is-conditional.r44-red::before {
+  background: linear-gradient(90deg, rgba(255,0,0,.86), rgba(255,199,206,.56)) !important;
+}
+.data-table td.is-conditional.cond-negative::before,
+.data-table td.is-conditional.r44-green::before {
+  background: linear-gradient(90deg, rgba(198,239,206,.58), rgba(0,176,80,.92)) !important;
+}
+
+/* r45.16 Excel RGB conditional-format data bars. */
+.data-table td.is-conditional.cond-positive::before,
+.data-table td.is-conditional.r44-red::before {
+  background: linear-gradient(90deg, rgb(255,0,0) 0%, rgb(255,199,206) 100%) !important;
+  border: 1px solid rgb(255,0,0) !important;
+}
+.data-table td.is-conditional.cond-negative::before,
+.data-table td.is-conditional.r44-green::before {
+  background: linear-gradient(270deg, rgb(0,176,80) 0%, rgb(198,239,206) 100%) !important;
+  border: 1px solid rgb(0,176,80) !important;
+}
+.data-table td.is-conditional::before { opacity: 1 !important; box-sizing: border-box !important; }
+.data-table td.is-conditional > span { font-weight: 400 !important; }
+.data-table td.is-conditional.has-zero-axis::after {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: var(--bar-zero, 0%);
+  width: 1px;
+  background: #000;
+  content: "";
+  pointer-events: none;
+  transform: translateX(-.5px);
+}
+
+
+/* r64 asset-allocation hard override: keep Excel-style data bars only.
+   No whole-cell tint and no bold numbers in conditional-format cells. */
+.data-table td.is-conditional,
+.data-table td.is-conditional.cond-positive,
+.data-table td.is-conditional.cond-negative,
+.data-table td.is-conditional.cond-blue,
+.data-table td.is-conditional.r44-red,
+.data-table td.is-conditional.r44-green,
+.data-table td.is-conditional.r44-blue {
+  background: transparent !important;
+  box-shadow: none !important;
+  font-weight: 400 !important;
+}
+.data-table td.is-conditional > span {
+  font-weight: 400 !important;
+}
+/* data_dashboard_table_report_v1: scoped table skin for Data Dashboard only. */
+body[data-workspace-route^="data:"] .table-panel {
+  border-color: #d8e0e7 !important;
+  background: #fff !important;
+  box-shadow: 0 1px 4px rgba(16, 24, 40, .08) !important;
+}
+body[data-workspace-route^="data:"] .table-scroll {
+  border: 1px solid #e2e6eb !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+}
+body[data-workspace-route^="data:"] .data-table {
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+body[data-workspace-route^="data:"] .data-table thead th {
+  background: #c00000 !important;
+  color: #fff !important;
+  font-weight: 800 !important;
+  border-right: 1px solid rgba(255, 255, 255, .62) !important;
+  border-bottom: 1px solid #c00000 !important;
+}
+body[data-workspace-route^="data:"] .data-table thead th:first-child {
+  border-top-left-radius: 4px !important;
+}
+body[data-workspace-route^="data:"] .data-table thead th:last-child {
+  border-right: 0 !important;
+  border-top-right-radius: 4px !important;
+}
+body[data-workspace-route^="data:"] .data-table tbody tr:nth-child(odd) td {
+  background: #e8e8e8 !important;
+}
+body[data-workspace-route^="data:"] .data-table tbody tr:nth-child(even) td {
+  background: #f6f6f6 !important;
+}
+body[data-workspace-route^="data:"] .data-table tbody td {
+  border-right: 1px solid #fff !important;
+  border-bottom: 1px solid #fff !important;
+}
+body[data-workspace-route^="data:"] .data-table tbody td:first-child {
+  background: #f2ece6 !important;
+}
+body[data-workspace-route^="data:"] .data-table tbody tr:hover td {
+  background: #efeae5 !important;
+}
+body[data-workspace-route^="data:"] .data-table tbody tr:hover td:first-child {
+  background: #eee4dc !important;
+}
+body[data-workspace-route^="data:"] .data-table td.is-conditional {
+  box-shadow: none !important;
+  font-weight: 400 !important;
+}
+body[data-workspace-route^="data:"] .data-table td.is-conditional > span {
+  font-weight: 400 !important;
+}
+
+/* data_dashboard_stock_report_panel_v1: latest research reports match the news frame. */
+body[data-workspace-route^="data:"] .stock-report-panel .panel-header {
+  margin-bottom: 7px !important;
+}
+body[data-workspace-route^="data:"] .stock-report-ticker {
+  height: 320px !important;
+  overflow: auto !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  background: #fff !important;
+  box-shadow: var(--shadow) !important;
+}
+body[data-workspace-route^="data:"] .stock-report-list {
+  display: grid !important;
+  gap: 0 !important;
+}
+body[data-workspace-route^="data:"] .stock-report-item {
+  display: block !important;
+  min-height: 74px !important;
+  padding: 12px 14px !important;
+  border-bottom: 1px solid var(--soft-border) !important;
+  color: var(--subtle-ink) !important;
+  text-decoration: none !important;
+}
+body[data-workspace-route^="data:"] .stock-report-item:hover {
+  background: #fafbfc !important;
+}
+body[data-workspace-route^="data:"] .stock-report-title {
+  display: block !important;
+  margin-bottom: 6px !important;
+  color: var(--ink) !important;
+  font-weight: 800 !important;
+  line-height: 1.45 !important;
+}
+body[data-workspace-route^="data:"] .stock-report-summary {
+  margin: 0 0 7px !important;
+  color: var(--muted) !important;
+  line-height: 1.65 !important;
+}
+body[data-workspace-route^="data:"] .stock-report-meta,
+body[data-workspace-route^="data:"] .stock-report-empty {
+  color: var(--muted) !important;
+}
+body[data-workspace-route^="data:"] .stock-report-empty {
+  padding: 14px !important;
+}
+
+
+/* data_dashboard_table_first_col_v1: keep the first data-dashboard table column in the reference neutral band. */
+body[data-workspace-route^="data:"] .data-table tbody tr > td:first-child:not(.is-conditional) {
+  background: #f2ece6 !important;
+}
+body[data-workspace-route^="data:"] .data-table tbody tr:hover > td:first-child:not(.is-conditional) {
+  background: #eee5dc !important;
 }

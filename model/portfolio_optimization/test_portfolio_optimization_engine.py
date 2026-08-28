@@ -18,9 +18,84 @@ class PortfolioOptimizationEngineTests(unittest.TestCase):
 
     def test_candidate_grid_is_predeclared_and_unique(self):
         candidates = engine.candidate_grid()
-        self.assertEqual(len(candidates), 192)
-        self.assertEqual(len({row.candidate_id for row in candidates}), 192)
-        self.assertEqual(sum(row.expected_return_method == "risk_adjusted_trend" for row in candidates), 64)
+        self.assertEqual(len(candidates), 288)
+        self.assertEqual(len({row.candidate_id for row in candidates}), 288)
+        self.assertEqual(sum(row.expected_return_method == "risk_adjusted_trend" for row in candidates), 96)
+
+    def test_etf_classification_handles_current_vendor_names(self):
+        cases = {
+            "\u534e\u5b9d\u6dfb\u76caETF": "bond_cash",
+            "\u94f6\u534e\u65e5\u5229ETF": "bond_cash",
+            "\u6d77\u5bcc\u901a\u4e0a\u8bc1\u57ce\u6295\u503aETF": "bond_cash",
+            "\u6caa\u6df1300ETF\u534e\u6cf0\u67cf\u745e": "broad_equity",
+            "\u4e2d\u6982\u4e92\u8054\u7f51ETF\u6613\u65b9\u8fbe": "overseas_equity",
+            "\u9ec4\u91d1ETF\u534e\u5b89": "commodity",
+            "\u94f6\u884cETF\u534e\u5b9d": "sector_equity",
+        }
+        for name, expected in cases.items():
+            self.assertEqual(engine.classify_etf(name), expected)
+        self.assertEqual(engine.classify_etf_role("\u94f6\u534e\u8d27\u5e01ETF-A"), "cash_equivalent")
+        self.assertEqual(engine.classify_etf_role("\u56fd\u6cf0\u4e0a\u8bc110\u5e74\u671f\u56fd\u503aETF"), "bond_duration")
+        self.assertEqual(engine.classify_etf_role("\u6caa\u6df1300ETF"), "risk_asset")
+
+    def test_role_specific_position_caps_are_vectorized(self):
+        roles = ["cash_equivalent", "bond_duration"] + ["risk_asset"] * 13
+        solver = engine.ConvexPortfolioSolver(self.groups, roles)
+        config = engine.CandidateSpec("role_caps", "ewma", "risk_adjusted_trend", 504, 80.0, 0.08, 0.20)
+        caps = solver._position_caps(config)
+        self.assertEqual(caps.shape, (15,))
+        self.assertAlmostEqual(float(caps[0]), 0.60)
+        self.assertAlmostEqual(float(caps[1]), 0.45)
+        self.assertTrue(np.allclose(caps[2:], 0.20))
+
+    def test_constraint_labels_are_chinese_and_clean(self):
+        roles = ["cash_equivalent", "bond_duration"] + ["risk_asset"] * 13
+        weights = np.ones(15) / 15
+        config = engine.CandidateSpec("labels", "ewma", "risk_adjusted_trend", 504, 80.0, 0.08, 0.20)
+        diagnostics = engine.constraint_diagnostics(weights, weights, self.groups, config, roles)
+        labels = [row["constraint"] for row in diagnostics["rows"]]
+        self.assertEqual(
+            labels[:4],
+            [
+                "\u9884\u7b97\u7b49\u5f0f",
+                "\u975e\u8d1f\u6743\u91cd",
+                "\u5355\u4e00\u8d44\u4ea7\u4e0a\u9650",
+                "\u5355\u6b21\u6362\u624b\u4e0a\u9650",
+            ],
+        )
+        self.assertNotIn("?", "".join(labels))
+        self.assertNotIn("_", "".join(labels))
+
+    def test_family_shortlist_retains_each_risk_model_and_incumbent(self):
+
+        rows = []
+        for index, spec in enumerate(engine.candidate_grid()):
+            rows.append({
+                "candidate_id": spec.candidate_id,
+                "covariance_method": spec.covariance_method,
+                "expected_return_method": spec.expected_return_method,
+                "lookback_days": spec.lookback_days,
+                "risk_aversion": spec.risk_aversion,
+                "turnover_l2": spec.turnover_l2,
+                "position_cap": spec.position_cap,
+                "train_selection_score": float(index),
+                "train_absolute_percentile": float(index),
+                "train_active_percentile": float(index),
+            })
+        selected = engine._family_balanced_shortlist_ids(rows)
+        by_id = {row["candidate_id"]: row for row in rows}
+        selected_families = {
+            by_id[candidate_id]["covariance_method"]
+            for candidate_id in selected
+        }
+        self.assertEqual(selected_families, {"lw", "ewma", "barra_robust"})
+        self.assertIn("C188", selected)
+        for family in selected_families:
+            self.assertGreaterEqual(
+                sum(by_id[candidate_id]["covariance_method"] == family for candidate_id in selected),
+                8,
+            )
+
 
     def test_train_selection_prefers_balanced_absolute_and_active_quality(self):
         def row(candidate_id, absolute, active):
@@ -49,7 +124,7 @@ class PortfolioOptimizationEngineTests(unittest.TestCase):
     def test_covariance_is_positive_semidefinite(self):
         rng = np.random.default_rng(7)
         history = rng.normal(0.0002, 0.01, size=(504, 15))
-        for method in ("lw", "ewma", "pca", "downside"):
+        for method in ("lw", "ewma", "barra_robust", "pca", "downside"):
             covariance = engine.covariance_estimate(history, method)
             self.assertGreaterEqual(float(np.linalg.eigvalsh(covariance).min()), -1e-10)
 
@@ -135,8 +210,8 @@ class PortfolioOptimizationEngineTests(unittest.TestCase):
             (row["group"], row["parameter"]): row["value"]
             for row in engine.parameter_registry()
         }
-        self.assertEqual(registry[("验证治理", "candidate_count")], 192)
-        self.assertEqual(registry[("验证治理", "dsr_trials")], 192)
+        self.assertEqual(registry[("验证治理", "candidate_count")], 288)
+        self.assertEqual(registry[("验证治理", "dsr_trials")], 288)
         self.assertEqual(registry[("求解器", "conic_primary")], "Clarabel")
         self.assertEqual(
             registry[("求解器", "constrained_fallback")],

@@ -108,20 +108,20 @@ class CanonicalAppTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.get_json()
         champion = payload["champion"]
-        self.assertEqual(payload["engine_version"], "factor-lab/3.2-inverse-volatility-rank-execution")
+        self.assertEqual(payload["engine_version"], "factor-lab/3.5-stable-development-selection")
         self.assertEqual(champion["status"], "ok")
         self.assertEqual(champion["selection_basis"], "train_and_validation_only")
         self.assertEqual(champion["test_usage"], "report_only")
-        self.assertEqual(champion["candidate_count"], 39)
-        self.assertEqual(champion["gate_summary"]["passed"], 9)
+        self.assertEqual(champion["candidate_count"], 48)
+        self.assertEqual(champion["gate_summary"]["passed"], 10)
         self.assertEqual(champion["gate_summary"]["total"], 10)
-        self.assertFalse(champion["gate_summary"]["all_passed"])
+        self.assertTrue(champion["gate_summary"]["all_passed"])
         metrics = {row["split"]: row for row in champion["splits"]}
-        self.assertAlmostEqual(metrics["valid"]["sharpe"], 1.1258799248439653)
-        self.assertAlmostEqual(metrics["test"]["sharpe"], 2.4657836700650093)
-        self.assertAlmostEqual(metrics["test"]["max_drawdown"], -0.028151793434887717)
+        self.assertAlmostEqual(metrics["valid"]["sharpe"], 0.8199760424013568)
+        self.assertAlmostEqual(metrics["test"]["sharpe"], 2.89372502999757)
+        self.assertAlmostEqual(metrics["test"]["max_drawdown"], -0.033796103362012886)
         turnover = next(row for row in champion["gates"] if row["gate"] == "turnover")
-        self.assertFalse(turnover["passed"])
+        self.assertTrue(turnover["passed"])
         js = (APP_ROOT / "static" / "js" / "factor_lab.js").read_text(encoding="utf-8")
         self.assertIn("function championHtml(champion)", js)
         self.assertIn("训练集与验证集选择，测试集仅作一次性报告", js)
@@ -235,21 +235,23 @@ class CanonicalAppTest(unittest.TestCase):
             targets,
             [
                 "home:overview",
-                "data:macro", "data:global_markets", "data:sw_industries",
-                "data:commodities", "data:stock", "data:news_events", "data:ai_monitor",
+                "data:market_monitor", "data:topic_tracking",
                 "allocation:cycle", "allocation:strategy",
-                "liquidity:retail", "liquidity:public", "liquidity:private",
-                "liquidity:foreign", "liquidity:etf", "liquidity:primary", "liquidity:margin",
-                "rotation:industry", "rotation:style", "rotation:allocation",
+                "rotation:prosperity", "rotation:industry", "rotation:style",
                 "factorlab:dashboard", "factorlab:mining", "factorlab:strategy",
-                "technical:learning", "technical:strategy",
-                "portfolio:solve", "portfolio:strategy",
+                "technical:factors", "technical:learning",
+                "portfolio:solve", "portfolio:timing", "portfolio:index",
             ],
         )
         for target, label in (
-            ("rotation:industry", "行业景气度"),
+            ("rotation:prosperity", "行业景气度"),
+            ("rotation:industry", "行业轮动"),
             ("rotation:style", "风格轮动"),
-            ("rotation:allocation", "配置策略"),
+            ("technical:factors", "技术因子"),
+            ("technical:learning", "K线学习"),
+            ("portfolio:solve", "优化求解器"),
+            ("portfolio:timing", "宽基择时"),
+            ("portfolio:index", "指数增强"),
         ):
             self.assertIn(f'data-target="{target}">{label}', template)
         self.assertNotIn('data-target="rotation:home"', template)
@@ -261,9 +263,9 @@ class CanonicalAppTest(unittest.TestCase):
             "rotation:home", "rotation:backtest",
             "factor:home", "factor:expression", "factor:report", "factor:score", "factor:memory",
             "index:home", "index:universe", "index:alpha", "index:smartbeta",
-            "index:risk", "index:tracking",
+            "index:timing", "index:risk", "index:tracking",
             "kline:home", "kline:learn", "kline:history", "kline:backtest",
-            "portfolio:home", "portfolio:pool", "portfolio:risk", "portfolio:backtest",
+            "portfolio:home", "portfolio:pool", "portfolio:timing", "portfolio:risk", "portfolio:backtest",
         ):
             self.assertIn(preserved_view, app_js)
         self.assertIn("WORKSPACE_CONFIG", app_js)
@@ -306,8 +308,8 @@ class CanonicalAppTest(unittest.TestCase):
             "data:macro", "data:global_markets", "data:sw_industries",
             "data:commodities", "data:stock", "data:news_events",
             "allocation:home", "allocation:cycle", "allocation:strategy", "allocation:backtest",
-            "portfolio:home", "portfolio:pool", "portfolio:risk", "portfolio:solve", "portfolio:backtest",
-            "index:home", "index:universe", "index:alpha", "index:smartbeta", "index:risk", "index:tracking",
+            "portfolio:home", "portfolio:pool", "portfolio:timing", "portfolio:risk", "portfolio:solve", "portfolio:backtest",
+            "index:home", "index:universe", "index:alpha", "index:smartbeta", "index:timing", "index:risk", "index:tracking",
             "rotation:home", "rotation:industry", "rotation:style", "rotation:allocation", "rotation:backtest",
             "liquidity:home", "liquidity:retail", "liquidity:public", "liquidity:etf",
             "liquidity:margin", "liquidity:primary", "liquidity:private", "liquidity:foreign",

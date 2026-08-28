@@ -13,13 +13,14 @@ from app import APP_VERSION as BASE_VERSION
 from app import PUBLIC_HOST, USERNAME, app
 
 
-APP_VERSION = f"{BASE_VERSION}-rotation-r3"
+APP_VERSION = f"{BASE_VERSION}-rotation-r4-industry-style-v129"
 ROOT = Path(__file__).resolve().parent
 ROTATION_SNAPSHOT = ROOT / "data" / "rotation_snapshot.json"
 ROTATION_TRACKING = ROOT / "data" / "rotation_tracking.json"
 ROTATION_FINAL_FIGURES = ROOT / "data" / "rotation_final_figures.json"
 ROTATION_FINAL_FIGURES_STATIC = ROOT / "static" / "rotation_figures" / "manifest.json"
 ROTATION_RESEARCH_DASHBOARD = ROOT / "data" / "industry_research_dashboard.json"
+ROTATION_STYLE_RESEARCH = ROOT / "data" / "style_six_dimension_monthly.json"
 _CACHE_LOCK = threading.RLock()
 _CACHE: dict[str, dict[str, Any]] = {}
 
@@ -34,6 +35,32 @@ def _load_json(path: Path) -> dict[str, Any]:
         payload = json.loads(path.read_text(encoding="utf-8"))
         _CACHE[key] = {"mtime_ns": stat.st_mtime_ns, "payload": payload}
         return payload
+
+
+def _overlay_style_research_figures(payload: dict[str, Any]) -> dict[str, Any]:
+    """Expose web-static figure paths while keeping model JSON as the data source."""
+    public_payload = dict(payload)
+    strategies = dict(public_payload.get("strategies") or {})
+    try:
+        manifest_source = ROTATION_FINAL_FIGURES if ROTATION_FINAL_FIGURES.exists() else ROTATION_FINAL_FIGURES_STATIC
+        manifest = _load_json(manifest_source)
+        figures = manifest.get("figures", {})
+    except Exception:  # noqa: BLE001
+        figures = {}
+    patched: dict[str, Any] = {}
+    for key, strategy in strategies.items():
+        local = dict(strategy or {})
+        figure_row = figures.get(key, {}) if isinstance(figures, dict) else {}
+        if figure_row:
+            local["figures"] = {
+                "annual_table": figure_row.get("annual_table"),
+                "daily_nav": figure_row.get("daily_nav"),
+            }
+            if figure_row.get("long_short"):
+                local["long_short_figures"] = figure_row.get("long_short")
+        patched[key] = local
+    public_payload["strategies"] = patched
+    return public_payload
 
 
 def _snapshot_contract(payload: dict[str, Any]) -> dict[str, Any]:
@@ -306,6 +333,47 @@ def rotation_research_dashboard():
         return jsonify({"status": "failed", "message": str(exc)}), 503
 
 
+@app.get("/api/rotation/style-research-dashboard")
+def rotation_style_research_dashboard():
+    """Return the full five-factor style rotation research dashboard."""
+    try:
+        payload = _overlay_style_research_figures(_load_json(ROTATION_STYLE_RESEARCH))
+        strategies = payload.get("strategies", {})
+        errors: list[str] = []
+        if payload.get("schema_version") != "1.2":
+            errors.append("style_schema_version_not_1_2")
+        expected = {"style12": 12, "size3": 3, "style4": 4}
+        if set(strategies) != set(expected):
+            errors.append("style_strategy_keys_contract")
+        for key, count in expected.items():
+            strategy = strategies.get(key, {})
+            if len(strategy.get("groups", [])) != count:
+                errors.append(f"{key}_group_count_contract")
+            if len(strategy.get("factor_table", [])) < 100:
+                errors.append(f"{key}_factor_table_too_short")
+            if not strategy.get("factor_details"):
+                errors.append(f"{key}_factor_details_missing")
+            if not strategy.get("efficient_factors"):
+                errors.append(f"{key}_efficient_factors_missing")
+            if not strategy.get("ytd_top_bottom"):
+                errors.append(f"{key}_ytd_top_bottom_missing")
+            if not strategy.get("annual_attribution"):
+                errors.append(f"{key}_annual_attribution_missing")
+            for figure_group, label in ((strategy.get("figures", {}), "long"), (strategy.get("long_short_figures", {}), "long_short")):
+                for field in ("annual_table", "daily_nav"):
+                    value = str(figure_group.get(field) or "")
+                    if not value.startswith("/static/rotation_figures/"):
+                        errors.append(f"{key}_{label}_{field}_path_contract")
+                    elif not (ROOT / value.lstrip("/")).exists():
+                        errors.append(f"{key}_{label}_{field}_missing")
+        if errors:
+            return jsonify({"status": "failed", "errors": errors}), 503
+        payload["status"] = "ok"
+        return jsonify(payload)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"status": "failed", "message": str(exc)}), 503
+
+
 @app.get("/api/rotation/tracking")
 def rotation_tracking():
     try:
@@ -328,13 +396,16 @@ def rotation_final_figures():
         if set(figures) != expected:
             return jsonify({"status": "failed", "message": "rotation_final_figures_contract"}), 503
         for key, row in figures.items():
-            for field in ("annual_table", "daily_nav"):
-                value = str(row.get(field) or "")
-                if not value.startswith("/static/rotation_figures/"):
-                    return jsonify({"status": "failed", "message": f"{key}_{field}_path_contract"}), 503
-                if not (ROOT / value.lstrip("/")).exists():
-                    return jsonify({"status": "failed", "message": f"{key}_{field}_missing"}), 503
+            figure_groups = [(row, "")]
+            if isinstance(row.get("long_short"), dict):
+                figure_groups.append((row["long_short"], "long_short_"))
+            for figure_group, prefix in figure_groups:
+                for field in ("annual_table", "daily_nav"):
+                    value = str(figure_group.get(field) or "")
+                    if not value.startswith("/static/rotation_figures/"):
+                        return jsonify({"status": "failed", "message": f"{key}_{prefix}{field}_path_contract"}), 503
+                    if not (ROOT / value.lstrip("/")).exists():
+                        return jsonify({"status": "failed", "message": f"{key}_{prefix}{field}_missing"}), 503
         return jsonify(payload)
     except Exception as exc:  # noqa: BLE001
         return jsonify({"status": "failed", "message": str(exc)}), 503
-

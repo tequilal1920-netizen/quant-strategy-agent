@@ -203,8 +203,6 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.overview-grid > article:first-child,
-.overview-grid > article:nth-child(2),
 .panel-grid .span-2 {
   grid-column: 1 / -1;
 }
@@ -292,4 +290,81 @@
   .plot-rank {
     height: 620px;
   }
+}
+
+/* r44.13 AI monitor compact layout */
+.ai-monitor-native { gap: 10px !important; }
+.primary-controls { grid-template-columns: repeat(3, minmax(140px, 1fr)) !important; gap: 8px !important; padding: 8px 10px !important; }
+.control-field { gap: 4px !important; }
+.control-field select,
+.segmented-control,
+.toggle-field { min-height: 36px !important; }
+.segmented-control button { min-height: 34px !important; padding: 0 10px !important; }
+.overview-grid > article:first-child,
+.overview-grid > article:nth-child(2) { grid-column: auto !important; }
+.panel-grid .span-2 { grid-column: 1 / -1; }
+.plot-rank-all { height: 430px !important; }
+.plot-rank { height: 360px !important; }
+.rank-panel .plot-frame { min-height: 320px !important; }
+.stock-table-wrap { max-height: 520px; overflow: auto; }
+@media (max-width: 1100px) {
+  .primary-controls { grid-template-columns: repeat(2, minmax(140px, 1fr)) !important; }
+  .overview-grid > article:first-child,
+  .overview-grid > article:nth-child(2) { grid-column: 1 !important; }
+}
+@media (max-width: 720px) {
+  .primary-controls { grid-template-columns: 1fr !important; }
+  .plot-rank-all,
+  .plot-rank { height: 400px !important; }
+}
+/* r45.1 AI monitor requested layout */
+@media (min-width: 1101px) {
+  .ai-monitor-native .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .ai-monitor-native .overview-grid > article:first-child,
+  .ai-monitor-native .overview-grid > article:nth-child(2) { grid-column: auto !important; }
+}
+.weight-control-panel { grid-template-columns: minmax(0, 1fr) auto !important; gap: 6px 10px !important; margin: 0 0 10px !important; padding: 8px 10px !important; }
+.weight-control-title { display: none !important; }
+.weight-input-grid { grid-column: 1 !important; grid-row: 1 / span 2 !important; grid-template-columns: repeat(3, minmax(150px, 1fr)) !important; gap: 6px !important; }
+.weight-input { min-height: 34px !important; padding: 0 7px !important; }
+.weight-actions { grid-column: 2 !important; grid-row: 1 / span 2 !important; align-self: center !important; }
+@media (max-width: 1100px) {
+  .weight-input-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 720px) {
+  .weight-control-panel { grid-template-columns: 1fr !important; }
+  .weight-input-grid,
+  .weight-actions { grid-column: 1 !important; grid-row: auto !important; }
+}
+/* r45.3 AI monitor layout refinements */
+.ai-monitor-native { gap: 8px !important; }
+.primary-controls { margin-bottom: 0 !important; }
+@media (min-width: 760px) {
+  .ai-monitor-native .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .ai-monitor-native .overview-grid > article:first-child,
+  .ai-monitor-native .overview-grid > article:nth-child(2) { grid-column: auto !important; }
+}
+.weight-control-panel {
+  margin: 0 0 8px !important;
+  padding: 6px 8px !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 4px 8px !important;
+}
+.weight-control-title { display: none !important; }
+.weight-input-grid {
+  grid-column: 1 !important;
+  grid-row: 1 / span 2 !important;
+  grid-template-columns: repeat(3, minmax(120px, 1fr)) !important;
+  gap: 4px !important;
+}
+.weight-input { min-height: 30px !important; padding: 0 6px !important; gap: 5px !important; }
+.weight-input input { min-height: 26px !important; }
+.weight-actions { grid-column: 2 !important; grid-row: 1 / span 2 !important; align-self: center !important; }
+.dashboard-section { margin-top: 0 !important; }
+.overview-grid { gap: 10px !important; }
+@media (max-width: 759px) {
+  .weight-control-panel,
+  .weight-input-grid,
+  .weight-actions { grid-column: 1 !important; grid-row: auto !important; }
+  .weight-input-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 }

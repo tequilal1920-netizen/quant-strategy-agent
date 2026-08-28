@@ -102,9 +102,9 @@ class FactorCatalogEvaluationTests(unittest.TestCase):
             result = backend.champion_payload()
             self.assertEqual(result["status"], "ok")
             self.assertEqual(result["gate_summary"], {
-                "passed": 9,
+                "passed": 10,
                 "total": 10,
-                "all_passed": False,
+                "all_passed": True,
             })
         finally:
             backend.CHAMPION_MANIFEST = original

@@ -3,7 +3,7 @@
   "use strict";
   const $ = (id) => document.getElementById(id);
   const BASE = ((window.APP_BOOT||{}).basePath||"").replace(/\/$/,"");
-  const S = {active:"data:macro", services:null, snapshot:null, seriesCache:{}, globalSupp:null, sw:null, cmdty:null, stockCode:null, stockOverride:null, kline:{health:null,history:[],historyLoaded:false,historyAudit:null,stocks:[],dates:[],job:null,selectedJob:null}, factor:{status:null,history:null,detail:null,job:null,selectedJob:null}};
+  const S = {active:"data:market_monitor", services:null, snapshot:null, seriesCache:{}, globalSupp:null, sw:null, cmdty:null, stockCode:null, stockOverride:null, kline:{health:null,history:[],historyLoaded:false,historyAudit:null,stocks:[],dates:[],job:null,selectedJob:null}, factor:{status:null,history:null,detail:null,job:null,selectedJob:null}};
   let seq = 0;
   const TXT = {
     core:"\u6838\u5fc3\u7ed3\u8bba", loading:"\u6b63\u5728\u8f7d\u5165", noData:"\u6682\u65e0\u8db3\u591f\u8fde\u7eed\u6570\u636e", update:"\u66f4\u65b0", reset:"\u6062\u590d", open:"\u6253\u5f00",
@@ -266,7 +266,7 @@
   async function news(){ const rows=arr(table('news_events','news_feed').rows).sort((a,b)=>String(b.published_at).localeCompare(String(a.published_at))); const week=newsRowsWeek(rows); const latest=rows[0]||{}; conclusion(`截至 ${esc(latest.published_at||'--')}, 最新事件：“${esc(latest.title||'暂无标题')}”，来源 ${esc(latest.source||'--')}；最近一周纳入 ${week.length||rows.length} 条事件，重点观察31个申万行业与个股热度集中度。`); const p1=pid('n'),p2=pid('n'); const ih=industryHeat31(week.length?week:rows), sh=stockHeatTop(week.length?week:rows); root(cardHTML([{label:'近一周新闻',value:week.length||rows.length,unit:'',as_of:String(latest.published_at||'').slice(0,10)},{label:'行业覆盖',value:ih.length,unit:'个申万行业'},{label:'个股TOP10',value:sh.length,unit:'个股'},{label:'最新来源',value:rows.length,as_of:latest.source}])+`<div class="panel-grid"><section class="chart-panel wide"><div class="panel-header"><div><h3>新闻滚动</h3><p>最近一周，鼠标可直接上下滚动查看；不再自动快速跑马</p></div></div><div class="news-ticker"><div class="news-list">${(week.length?week:rows).map(newsItem).join('')}</div></div></section>${panel(p1,'行业龙虎榜热度排名','31个申万一级行业，从高到低',false)}${panel(p2,'个股龙虎榜热度TOP10','最近一周事件计数/异动热度',false)}</div>`+tableHTML('新闻明细',week.length?week:rows,['published_at','event_type','code','title','source','url'])); bar(p1,ih); bar(p2,sh) }
   async function aiFillMode(module,subject,context,target,mode){ const el=$(target); if(!el)return; el.innerHTML='<p>AI分析生成中...</p>'; try{ const r=await api('/api/ai/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({module,subject,context,mode})}); el.innerHTML=r.html||'<p>暂无AI分析结果。</p>' }catch(e){ el.innerHTML='<p class="ai-red">AI暂不可用：'+esc(e.message)+'</p>' } }
   async function drawStockKline(id,code){ try{ const p=await api('/api/stock/ohlc/'+encodeURIComponent(code)+'?limit=180'); const rows=arr(p.rows); const x=rows.map(r=>r.date); plot(id,rows.length?[{type:'candlestick',x,open:rows.map(r=>r.open),high:rows.map(r=>r.high),low:rows.map(r=>r.low),close:rows.map(r=>r.close),name:'日K',increasing:{line:{color:'#c00000'},fillcolor:'#c00000'},decreasing:{line:{color:'#168a47'},fillcolor:'#168a47'}},{type:'bar',x,y:rows.map(r=>r.volume),name:'成交量',yaxis:'y2',marker:{color:'rgba(47,117,181,.22)'}}]:[],{xaxis:{rangeslider:{visible:false},showgrid:false},yaxis:{domain:[.25,1],gridcolor:'#edf0f2'},yaxis2:{domain:[0,.16],showgrid:false},legend:{orientation:'h',y:-.18},hovermode:'x unified'}) }catch(e){ $(id).innerHTML=`<div class="chart-fallback">K线加载失败：${esc(e.message)}</div>` } }
-  async function stock(){ const base=S.stockOverride||mod('stock'), rows=arr(table('stock','stock_watchlist').rows); if(!S.stockCode)S.stockCode=(rows[0]&&rows[0].code)||'000001'; const activeRows=arr((arr(base.tables).find(x=>x.id==='stock_watchlist')||{}).rows||rows), r=activeRows[0]||rows[0]||{}; const newsRows=relatedNews(arr(table('news_events','news_feed').rows),r.code||S.stockCode,r.name); const asof=r.as_of||maxDate(activeRows); conclusion(`截至 ${asof}, ${esc(r.name||S.stockCode)} 日涨跌 ${signed(r.ret_1d)}%，周涨跌 ${signed(r.ret_5d)}%，20日涨跌 ${signed(r.ret_20d)}%，20日回撤 ${signed(r.mdd_20d)}%；相关新闻 ${newsRows.length}，最新 ${esc((newsRows[0]||{}).published_at||'--')}。`); const p1=pid('s'),p2=pid('s'); root(`<section class="control-card"><div class="control-grid"><label>${TXT.stockPick}<select id="stock-preset">${rows.map(x=>`<option value="${esc(x.code)}" ${String(x.code)===String(S.stockCode)?'selected':''}>${esc(cnText(x.code))} ${esc(x.name)}</option>`).join('')}</select></label><label style="grid-column:span 2;">${TXT.inputCode}<input id="stock-input" value="${esc(S.stockCode)}"></label><button id="stock-load" class="action-button" type="button">${TXT.loadStock}</button><div class="ai-actions"><button id="stock-ai" class="ghost-button" type="button">智能分析</button><button id="stock-deep" class="ghost-button" type="button">深度报告</button></div></div></section>`+cardHTML([{label:'收盘价',value:r.close??r.qfq_close,unit:'元',as_of:asof},{label:'1周涨跌',value:r.ret_5d,unit:'%'},{label:'20日涨跌',value:r.ret_20d,unit:'%'},{label:'20日回撤',value:r.mdd_20d,unit:'%'}])+`<div id="stock-ai-result" class="ai-panel is-compact"></div><div class="panel-grid">${panel(p1,'个股K线行情','东方财富日K：开高低收与成交量',true)}${panel(p2,'自选股风险收益','横轴20日波动，纵轴20日收益',false)}</div><section class="chart-panel wide"><div class="panel-header"><div><h3>个股新闻滚动</h3><p>按代码/名称匹配，鼠标可直接上下滚动</p></div></div><div class="news-ticker stock-news"><div class="news-list">${(newsRows.length?newsRows:arr(table('news_events','news_feed').rows).slice(0,8)).map(newsItem).join('')}</div></div></section>`+tableHTML('个股行情',activeRows,['code','name','close','qfq_close','ret_1d','ret_5d','ret_20d','vol_20d','mdd_20d','turnover','as_of'])+tableHTML('相关个股新闻',newsRows,['published_at','event_type','code','title','source','url'])); $('stock-preset').onchange=()=>{$('stock-input').value=$('stock-preset').value}; $('stock-load').onclick=async()=>{const c=$('stock-input').value.trim(); if(!c)return; S.stockCode=c; try{const p=await api('/api/board/stock/'+encodeURIComponent(c)); S.stockOverride=p.data||null}catch(e){S.stockOverride=null; conclusion('个股加载失败：'+esc(e.message))} await stock()}; const ctx={quote:r,news:newsRows.slice(0,12),watchlist:rows.slice(0,20)}; $('stock-ai').onclick=()=>aiFill('stock',`${r.code||S.stockCode} ${r.name||''}`,ctx,'stock-ai-result'); $('stock-deep').onclick=()=>aiFillMode('stock',`${r.code||S.stockCode} ${r.name||''}`,ctx,'stock-ai-result','deep_report'); drawStockKline(p1,r.code||S.stockCode); scatter(p2,rows.map(x=>({label:x.name||x.code,x:x.vol_20d,y:x.ret_20d}))) }
+  async function stock(){ const base=S.stockOverride||mod('stock'), rows=arr(table('stock','stock_watchlist').rows); if(!S.stockCode)S.stockCode=(rows[0]&&rows[0].code)||'000001'; const activeRows=arr((arr(base.tables).find(x=>x.id==='stock_watchlist')||{}).rows||rows), r=activeRows[0]||rows[0]||{}; const newsRows=relatedNews(arr(table('news_events','news_feed').rows),r.code||S.stockCode,r.name); const asof=r.as_of||maxDate(activeRows); conclusion(`截至 ${asof}, ${esc(r.name||S.stockCode)} 日涨跌 ${signed(r.ret_1d)}%，周涨跌 ${signed(r.ret_5d)}%，20日涨跌 ${signed(r.ret_20d)}%，20日回撤 ${signed(r.mdd_20d)}%；相关新闻 ${newsRows.length}，最新 ${esc((newsRows[0]||{}).published_at||'--')}。`); const p1=pid('s'),p2=pid('s'); root(`<section class="control-card"><div class="control-grid"><label>${TXT.stockPick}<select id="stock-preset">${rows.map(x=>`<option value="${esc(x.code)}" ${String(x.code)===String(S.stockCode)?'selected':''}>${esc(cnText(x.code))} ${esc(x.name)}</option>`).join('')}</select></label><label style="grid-column:span 2;">${TXT.inputCode}<input id="stock-input" value="${esc(S.stockCode)}"></label><button id="stock-load" class="action-button" type="button">${TXT.loadStock}</button><div class="ai-actions"><button id="stock-ai" class="ghost-button" type="button">智能分析</button><button id="stock-deep" class="ghost-button" type="button">深度报告</button></div></div></section>`+cardHTML([{label:'收盘价',value:r.close??r.qfq_close,unit:'元',as_of:asof},{label:'1周涨跌',value:r.ret_5d,unit:'%'},{label:'20日涨跌',value:r.ret_20d,unit:'%'},{label:'20日回撤',value:r.mdd_20d,unit:'%'}])+`<div id="stock-ai-result" class="ai-panel is-compact"></div><div class="panel-grid">${panel(p1,'个股K线行情','东方财富日K：开高低收与成交量',true)}${panel(p2,'自选股风险收益','横轴20日波动，纵轴20日收益',false)}</div><section class="chart-panel wide"><div class="panel-header"><div><h3>个股新闻</h3><p>按代码/名称匹配，鼠标可直接上下滚动</p></div></div><div class="news-ticker stock-news"><div class="news-list">${(newsRows.length?newsRows:arr(table('news_events','news_feed').rows).slice(0,8)).map(newsItem).join('')}</div></div></section>`+tableHTML('个股行情',activeRows,['code','name','close','qfq_close','ret_1d','ret_5d','ret_20d','vol_20d','mdd_20d','turnover','as_of'])+tableHTML('相关个股新闻',newsRows,['published_at','event_type','code','title','source','url'])); $('stock-preset').onchange=()=>{$('stock-input').value=$('stock-preset').value}; $('stock-load').onclick=async()=>{const c=$('stock-input').value.trim(); if(!c)return; S.stockCode=c; try{const p=await api('/api/board/stock/'+encodeURIComponent(c)); S.stockOverride=p.data||null}catch(e){S.stockOverride=null; conclusion('个股加载失败：'+esc(e.message))} await stock()}; const ctx={quote:r,news:newsRows.slice(0,12),watchlist:rows.slice(0,20)}; $('stock-ai').onclick=()=>aiFill('stock',`${r.code||S.stockCode} ${r.name||''}`,ctx,'stock-ai-result'); $('stock-deep').onclick=()=>aiFillMode('stock',`${r.code||S.stockCode} ${r.name||''}`,ctx,'stock-ai-result','deep_report'); drawStockKline(p1,r.code||S.stockCode); scatter(p2,rows.map(x=>({label:x.name||x.code,x:x.vol_20d,y:x.ret_20d}))) }
 
 
 
@@ -322,7 +322,7 @@
 
   function factorExpression(){ const rs=reports(), x=selectedFactor(), formula=x.latex_formula||x.formula||x.expression||'', vars=variableRows(formula); conclusion('当前因子 '+esc(x.chinese_name||x.name||'--')+'，状态 '+esc(fmStatus(x.status||x.lifecycle_state))+'，部署置信度 '+fmPct(x.lifecycle_deployment_confidence)+'。'); root(`<section class="workbench-panel"><h2>${esc(x.chinese_name||x.name||x.factor||'暂无因子')}</h2><div class="pill-row">${pill('状态',x.status||x.lifecycle_state)}${pill('置信度',x.lifecycle_deployment_confidence)}${pill('复杂度',x.complexity)}${pill('来源通道',x.channel)}</div><div class="formula-box rendered-formula">${formulaHTML(formula)||'暂无公式'}</div><details class="source-box"><summary>查看LaTeX源码</summary><pre>${esc(formula)}</pre></details></section>`+tableHTML('中文变量解释表',vars,['name','formula','logic'])+tableHTML('候选因子池',rs,['chinese_name','name','status','channel','test_rank_ic','rank_ic','lifecycle_deployment_confidence','redundancy_max_abs_corr'])); }
 
-  async function stock(){ const base=S.stockOverride||mod('stock'), rows=arr(table('stock','stock_watchlist').rows); if(!S.stockCode)S.stockCode=(rows[0]&&rows[0].code)||'000001'; const baseRows=arr((arr(base.tables).find(x=>x.id==='stock_watchlist')||{}).rows||rows); const record=obj(base.record||{}); const selectedCode=digits(S.stockCode); const r=(record.code?record:baseRows.find(x=>digits(x.code)===selectedCode)||rows.find(x=>digits(x.code)===selectedCode)||baseRows[0]||rows[0]||{}); const newsRows=relatedNews(arr(table('news_events','news_feed').rows),r.code||S.stockCode,r.name); const asof=r.as_of||maxDate(baseRows.length?baseRows:rows); conclusion(`截至 ${asof}, ${esc(r.name||S.stockCode)} 日涨跌 ${signed(r.ret_1d)}%，周涨跌 ${signed(r.ret_5d)}%，20日涨跌 ${signed(r.ret_20d)}%，20日回撤 ${signed(r.mdd_20d)}%；相关新闻 ${newsRows.length}，最新 ${esc((newsRows[0]||{}).published_at||'--')}。`); const p1=pid('s'),p2=pid('s'); root(`<section class="control-card"><div class="control-grid"><label>${TXT.stockPick}<select id="stock-preset">${rows.map(x=>`<option value="${esc(x.code)}" ${digits(x.code)===selectedCode?'selected':''}>${esc(cnText(x.code))} ${esc(x.name)}</option>`).join('')}</select></label><label style="grid-column:span 2;">${TXT.inputCode}<input id="stock-input" value="${esc(S.stockCode)}"></label><button id="stock-load" class="action-button" type="button">${TXT.loadStock}</button><div class="ai-actions"><button id="stock-ai" class="ghost-button" type="button">智能分析</button><button id="stock-deep" class="ghost-button" type="button">深度报告</button></div></div></section>`+cardHTML([{label:'收盘价',value:r.close??r.qfq_close,unit:'元',as_of:asof},{label:'1周涨跌',value:r.ret_5d,unit:'%'},{label:'20日涨跌',value:r.ret_20d,unit:'%'},{label:'20日回撤',value:r.mdd_20d,unit:'%'}])+`<div id="stock-ai-result" class="ai-panel is-compact"></div><div class="panel-grid">${panel(p1,'个股K线行情','日K开高低收与成交量',true)}${panel(p2,'自选股风险收益','横轴20日波动，纵轴20日收益',false)}</div><section class="chart-panel wide"><div class="panel-header"><div><h3>个股新闻滚动</h3><p>按代码/名称匹配，鼠标可直接上下滚动</p></div></div><div class="news-ticker stock-news"><div class="news-list">${(newsRows.length?newsRows:arr(table('news_events','news_feed').rows).slice(0,8)).map(newsItem).join('')}</div></div></section>`+tableHTML('个股行情',baseRows.length?baseRows:rows,['code','name','close','qfq_close','ret_1d','ret_5d','ret_20d','vol_20d','mdd_20d','turnover','as_of'])+tableHTML('相关个股新闻',newsRows,['published_at','event_type','code','title','source','url'])); $('stock-preset').onchange=()=>{$('stock-input').value=$('stock-preset').value}; $('stock-load').onclick=async()=>{const c=$('stock-input').value.trim(); if(!c)return; S.stockCode=c; try{const p=await api('/api/board/stock/'+encodeURIComponent(c)); S.stockOverride=p.data||null}catch(e){S.stockOverride=null; conclusion('个股加载失败：'+esc(e.message))} await stock()}; const ctx={quote:r,news:newsRows.slice(0,12),watchlist:rows.slice(0,20)}; $('stock-ai').onclick=()=>aiFill('stock',`${r.code||S.stockCode} ${r.name||''}`,ctx,'stock-ai-result'); $('stock-deep').onclick=()=>aiFillMode('stock',`${r.code||S.stockCode} ${r.name||''}`,ctx,'stock-ai-result','deep_report'); await drawStockKline(p1,r.code||S.stockCode); scatter(p2,rows.map(x=>({label:x.name||x.code,x:x.vol_20d,y:x.ret_20d}))); }
+  async function stock(){ const base=S.stockOverride||mod('stock'), rows=arr(table('stock','stock_watchlist').rows); if(!S.stockCode)S.stockCode=(rows[0]&&rows[0].code)||'000001'; const baseRows=arr((arr(base.tables).find(x=>x.id==='stock_watchlist')||{}).rows||rows); const record=obj(base.record||{}); const selectedCode=digits(S.stockCode); const r=(record.code?record:baseRows.find(x=>digits(x.code)===selectedCode)||rows.find(x=>digits(x.code)===selectedCode)||baseRows[0]||rows[0]||{}); const newsRows=relatedNews(arr(table('news_events','news_feed').rows),r.code||S.stockCode,r.name); const asof=r.as_of||maxDate(baseRows.length?baseRows:rows); conclusion(`截至 ${asof}, ${esc(r.name||S.stockCode)} 日涨跌 ${signed(r.ret_1d)}%，周涨跌 ${signed(r.ret_5d)}%，20日涨跌 ${signed(r.ret_20d)}%，20日回撤 ${signed(r.mdd_20d)}%；相关新闻 ${newsRows.length}，最新 ${esc((newsRows[0]||{}).published_at||'--')}。`); const p1=pid('s'),p2=pid('s'); root(`<section class="control-card"><div class="control-grid"><label>${TXT.stockPick}<select id="stock-preset">${rows.map(x=>`<option value="${esc(x.code)}" ${digits(x.code)===selectedCode?'selected':''}>${esc(cnText(x.code))} ${esc(x.name)}</option>`).join('')}</select></label><label style="grid-column:span 2;">${TXT.inputCode}<input id="stock-input" value="${esc(S.stockCode)}"></label><button id="stock-load" class="action-button" type="button">${TXT.loadStock}</button><div class="ai-actions"><button id="stock-ai" class="ghost-button" type="button">智能分析</button><button id="stock-deep" class="ghost-button" type="button">深度报告</button></div></div></section>`+cardHTML([{label:'收盘价',value:r.close??r.qfq_close,unit:'元',as_of:asof},{label:'1周涨跌',value:r.ret_5d,unit:'%'},{label:'20日涨跌',value:r.ret_20d,unit:'%'},{label:'20日回撤',value:r.mdd_20d,unit:'%'}])+`<div id="stock-ai-result" class="ai-panel is-compact"></div><div class="panel-grid">${panel(p1,'个股K线行情','日K开高低收与成交量',true)}${panel(p2,'自选股风险收益','横轴20日波动，纵轴20日收益',false)}</div><section class="chart-panel wide"><div class="panel-header"><div><h3>个股新闻</h3><p>按代码/名称匹配，鼠标可直接上下滚动</p></div></div><div class="news-ticker stock-news"><div class="news-list">${(newsRows.length?newsRows:arr(table('news_events','news_feed').rows).slice(0,8)).map(newsItem).join('')}</div></div></section>`+tableHTML('个股行情',baseRows.length?baseRows:rows,['code','name','close','qfq_close','ret_1d','ret_5d','ret_20d','vol_20d','mdd_20d','turnover','as_of'])+tableHTML('相关个股新闻',newsRows,['published_at','event_type','code','title','source','url'])); $('stock-preset').onchange=()=>{$('stock-input').value=$('stock-preset').value}; $('stock-load').onclick=async()=>{const c=$('stock-input').value.trim(); if(!c)return; S.stockCode=c; try{const p=await api('/api/board/stock/'+encodeURIComponent(c)); S.stockOverride=p.data||null}catch(e){S.stockOverride=null; conclusion('个股加载失败：'+esc(e.message))} await stock()}; const ctx={quote:r,news:newsRows.slice(0,12),watchlist:rows.slice(0,20)}; $('stock-ai').onclick=()=>aiFill('stock',`${r.code||S.stockCode} ${r.name||''}`,ctx,'stock-ai-result'); $('stock-deep').onclick=()=>aiFillMode('stock',`${r.code||S.stockCode} ${r.name||''}`,ctx,'stock-ai-result','deep_report'); await drawStockKline(p1,r.code||S.stockCode); scatter(p2,rows.map(x=>({label:x.name||x.code,x:x.vol_20d,y:x.ret_20d}))); }
 
   function klineCandle(id,j){ const sum=obj(j.summary), daily=arr(obj(sum.chart_data).daily).slice(-380), allNodes=arr(sum.signal_nodes); const x=daily.map(r=>String(r[0]).replace(/(\d{4})(\d{2})(\d{2})/,'$1-$2-$3')); const start=x[0]||''; const nodes=allNodes.filter(n=>String(n.execution_date||n.date).replace(/(\d{4})(\d{2})(\d{2})/,'$1-$2-$3')>=start); const trace={type:'candlestick',x,open:daily.map(r=>+r[1]),high:daily.map(r=>+r[2]),low:daily.map(r=>+r[3]),close:daily.map(r=>+r[4]),name:'K线',increasing:{line:{color:'#c00000'},fillcolor:'#c00000'},decreasing:{line:{color:'#168a47'},fillcolor:'#168a47'}}; const vol={type:'bar',x,y:daily.map(r=>+r[6]),name:'成交量',yaxis:'y2',marker:{color:'rgba(47,117,181,.20)'}}; const nodeDate=n=>String(n.execution_date||n.date).replace(/(\d{4})(\d{2})(\d{2})/,'$1-$2-$3'); const buys=nodes.filter(n=>/buy|add|买入|加仓/.test(String(n.action))).slice(-25), sells=nodes.filter(n=>/sell|reduce|卖出|减仓/.test(String(n.action))).slice(-25); const mk=(arrs,name,color,sym)=>({type:'scatter',mode:'markers',name,x:arrs.map(nodeDate),y:arrs.map(n=>n.execution_price||n.price),marker:{symbol:sym,size:10,color,line:{width:1,color:'#fff'}}}); plot(id,daily.length?[trace,vol,mk(buys,'买入/加仓','#168a47','triangle-up'),mk(sells,'卖出/减仓','#c46a08','triangle-down')]:[],{xaxis:{rangeslider:{visible:false},showgrid:false},yaxis:{domain:[.24,1],gridcolor:'#edf0f2'},yaxis2:{domain:[0,.16],showgrid:false},legend:{orientation:'h',y:-.18,font:{size:10}},hovermode:'x unified',margin:{l:44,r:18,t:12,b:44}}); }
 
@@ -571,14 +571,14 @@
 
   const VIEW_BREADCRUMBS={
     data:{title:'数据看板',views:{macro:'宏观',global_markets:'全球市场',sw_industries:'一级行业',commodities:'大宗商品',stock:'个股',news_events:'新闻事件'}},
-    allocation:{title:'资产配置',views:{home:'主页',cycle:'周期跟踪',strategy:'配置策略',backtest:'回测检验'}},
-    rotation:{title:'行业景气度',views:{prosperity:'行业景气度',industry:'行业轮动',style:'风格轮动'}},
+    allocation:{title:'资产配置',views:{cycle:'周期跟踪',strategy:'资产配置'}},
+    rotation:{title:'行业风格',views:{prosperity:'行业景气度',industry:'行业轮动',style:'风格轮动'}},
     liquidity:{title:'资金面跟踪',views:{home:'主页',retail:'散户资金',public:'公募基金',etf:'ETF资金',margin:'融资资金',primary:'一级市场',private:'私募基金',foreign:'外资资金'}},
     kline:{title:'K线记忆学习',views:{home:'主页',learn:'学习记忆',backtest:'策略回测',history:'历史记录'}},
     factor:{title:'LLM因子挖掘',views:{home:'主页',expression:'因子表达式',report:'因子检验结果',score:'综合打分',memory:'历史记忆'}}
   };
   function viewBreadcrumb(key){
-    const parts=String(key||'data:macro').split(':'),group=VIEW_BREADCRUMBS[parts[0]]||VIEW_BREADCRUMBS.data;
+    const parts=String(key||'data:market_monitor').split(':'),group=VIEW_BREADCRUMBS[parts[0]]||VIEW_BREADCRUMBS.data;
     return group.title+' > '+(group.views[parts[1]]||parts[1]||'主页')+' >';
   }
   function header(title,sub,eye){
@@ -1561,7 +1561,7 @@
   Object.assign(HEAD,{
     'allocation:home':['资产配置主页','多周期研判、风险预算与当前权重'],
     'allocation:cycle':['周期跟踪','因子轨迹、状态概率与历史复盘'],
-    'allocation:strategy':['配置策略','全天候、风险平价与多模型求解'],
+    'allocation:strategy':['资产配置','BL、宏观因子与风险预算模型'],
     'allocation:backtest':['回测检验','训练验证测试、成本后净值与过拟合审计']
   });
   Object.assign(COL,{
@@ -1579,7 +1579,7 @@
   });
   const ALLOC_ASSETS_V4=['equity','bond','commodity','cash'];
   const ALLOC_ASSET_CN={equity:'权益',bond:'债券',gold:'黄金',commodity:'商品',cash:'现金'};
-  const ALLOC_STRATEGY_CN={equal_weight:'等权',risk_parity:'风险平价',all_weather:'全天候',hrp:'层次风险平价',macro_risk_budget:'宏观风险预算',robust_bl:'稳健Black-Litterman',pring_stage:'普林格阶段配置',hmm_risk_parity:'HMM风险平价',cycle_risk_parity:'周期风险预算',recommended:'推荐组合'};
+  const ALLOC_STRATEGY_CN={equal_weight:'等权',risk_parity:'风险预算模型',all_weather:'全天候',hrp:'层次风险平价',macro_risk_budget:'宏观因子模型',robust_bl:'BL模型',pring_stage:'普林格阶段配置',hmm_risk_parity:'HMM风险平价',cycle_risk_parity:'周期风险预算',recommended:'推荐组合'};
   const ALLOC_COLORS={equity:'#c00000',bond:'#2f75b5',gold:'#d4a72c',commodity:'#ed7d31',cash:'#808080'};
   const PHASE_COLORS={1:'rgba(47,117,181,.10)',2:'rgba(192,0,0,.08)',3:'rgba(237,125,49,.10)',4:'rgba(255,192,0,.12)',5:'rgba(112,48,160,.09)',6:'rgba(0,176,80,.09)'};
   const SAMPLE_COLORS={train:'rgba(128,128,128,.08)',validation:'rgba(237,125,49,.08)',test:'rgba(0,176,80,.07)'};
@@ -1688,9 +1688,162 @@
     $('alloc-backtest-window').value=S.allocation.backtestWindow;$('alloc-nav-mode').value=S.allocation.navMode;allocDrawBacktest(c1,c2,c3,data,chosen,S.allocation.backtestWindow,S.allocation.navMode);
     $('alloc-backtest-strategies').onchange=function(){const values=Array.from(this.selectedOptions).map(function(o){return o.value;}).slice(0,5);S.allocation.backtest=values.length?values:['recommended'];allocationBacktest();};$('alloc-backtest-window').onchange=function(){S.allocation.backtestWindow=this.value;allocationBacktest();};$('alloc-nav-mode').onchange=function(){S.allocation.navMode=this.value;allocationBacktest();};$('alloc-gpt-report').onclick=allocationGenerateReport;
   }
-  async function renderAllocation(view){const data=await needAllocation();if(allocIsV5(data)){if(view==='cycle')return await allocationCycleV5(data);if(view==='strategy')return await allocationStrategyV5(data);if(view==='backtest')return await allocationBacktestV5(data);return await allocationHomeV5(data);}if(view==='cycle')return await allocationCycle();if(view==='strategy')return await allocationStrategy();if(view==='backtest')return await allocationBacktest();return await allocationHome();}
-
-
+  async function renderAllocation(view){
+    const data=await needAllocation();
+    if(allocIsV5(data)){
+      if(view==='cycle'||view==='cycle_merrill')return await allocationCycleV65(data,'merrill');
+      if(view==='cycle_pring')return await allocationCycleV65(data,'pring');
+      if(view==='strategy'||view==='strategy_bl'||view==='home')return await allocationStrategyV65(data,'bl');
+      if(view==='strategy_macro')return await allocationStrategyV65(data,'macro');
+      if(view==='strategy_risk'||view==='backtest')return await allocationStrategyV65(data,'risk');
+      return await allocationCycleV65(data,'merrill');
+    }
+    if(view==='cycle')return await allocationCycle();
+    if(view==='strategy')return await allocationStrategy();
+    if(view==='backtest')return await allocationBacktest();
+    return await allocationHome();
+  }
+  const ASSET_V66_ENDPOINT='/api/asset-allocation/interactive';
+  const ASSET_V66_MODEL_KEY={bl:'black_litterman',macro:'macro_factor',risk:'risk_budget'};
+  const ASSET_V66_MODEL_LABEL={black_litterman:'BL模型',macro_factor:'宏观因子模型',risk_budget:'风险预算模型',merrill_clock:'美林时钟配置',pring_cycle:'普林格周期配置'};
+  const ASSET_V66_ASSETS=['equity','bond','gold','commodity'];
+  const ASSET_V66_ASSET_CN={equity:'股票',bond:'债券',gold:'黄金',commodity:'商品'};
+  const ASSET_V66_COLORS={benchmark:'#FFC000',strategy:'#BFBFBF',relative:'#C00000',equity:'#C00000',bond:'#808080',gold:'#FFC000',commodity:'#2F75B5',growth:'#C00000',inflation:'#FFC000',money:'#C00000',credit:'#FFC000',blue:'#2F75B5',green:'#00B050'};
+  Object.assign(COL,{module:'模块',input:'输入',method:'处理/优化',validation:'检验',output:'输出',stage:'阶段',cycle_model:'周期模型',equity:'股票',bond:'债券',gold:'黄金',commodity:'商品',logic:'配置逻辑',confidence_rule:'置信规则',equity_score:'股票得分',bond_score:'债券得分',gold_score:'黄金得分',commodity_score:'商品得分',param:'参数',value:'取值',role:'作用',component:'组件',weight_in_model:'模型占比',data_process:'数据处理',alpha_map:'资产Alpha映射',factor_group:'因子大类',factor_name:'核心指标',meaning:'含义',current_weight:'当前权重',note:'说明',year:'年份',strategy_return:'策略收益',benchmark_return:'等权基准',excess_return:'超额收益',max_drawdown:'最大回撤',coverage:'覆盖率',transform:'处理方式',production_admitted:'有效入选',selected_axes:'入选轴',model:'模型',source:'来源',strength:'优势',boundary:'边界'});
+  async function assetV66Data(){
+    S.allocation.v66=S.allocation.v66||null;
+    if(S.allocation.v66&&S.allocation.v66.schema_version)return S.allocation.v66;
+    S.allocation.v66=await api(ASSET_V66_ENDPOINT+'?v='+encodeURIComponent(String((window.APP_BOOT||{}).version||'asset-v66')));
+    return S.allocation.v66;
+  }
+  function assetV66Title(kind){return kind==='merrill'?'美林时钟':'普林格周期';}
+  function assetV66Pct(value,digits){const n=Number(value);return Number.isFinite(n)?(n*100).toFixed(digits==null?2:digits)+'%':esc(value==null?'--':value);}
+  function assetV66Num(value,digits){const n=Number(value);return Number.isFinite(n)?n.toFixed(digits==null?3:digits):esc(value==null?'--':value);}
+  function assetV66Format(value,col){
+    if(value==null||value==='')return '--';
+    const n=Number(value), isAsset=ASSET_V66_ASSETS.includes(col);
+    if(Number.isFinite(n)&&(isAsset||/return|drawdown|weight|confidence|coverage/.test(col)))return assetV66Pct(n, col==='coverage'?1:2);
+    if(Number.isFinite(n)&&/(score|growth|inflation|money|credit|liquidity|rate|fx)/.test(col))return n.toFixed(3);
+    return esc(value);
+  }
+  function assetV66HeatClass(value,scale){
+    const n=Number(value);
+    if(!Number.isFinite(n))return {cls:'',style:''};
+    const pct=Math.round(Math.max(6,Math.min(100,Math.abs(n)/(scale||0.35)*100)));
+    return {cls:' is-conditional '+(n>=0?'cond-positive':'cond-negative'),style:' style="--bar:'+pct+'%;"'};
+  }
+  function assetV66Cell(row,col,opts){
+    row=obj(row);const value=row[col];let mark={cls:'',style:''};
+    if(opts&&arr(opts.heat).includes(col))mark=assetV66HeatClass(value,opts.scale||0.35);
+    return '<td class="asset-v66-cell'+mark.cls+'"'+mark.style+'><span>'+assetV66Format(value,col)+'</span></td>';
+  }
+  function assetV66Table(title,rows,cols,opts){
+    rows=arr(rows);cols=cols&&cols.length?cols:Object.keys(obj(rows[0]||{}));
+    return '<section class="table-panel asset-v66-table-panel '+(opts&&opts.wide?'wide':'')+'"><div class="panel-header"><div><h3>'+esc(title)+'</h3></div></div><div class="table-scroll"><table class="data-table asset-v66-table"><thead><tr>'+cols.map(function(c){return '<th>'+esc(COL[c]||c)+'</th>';}).join('')+'</tr></thead><tbody>'+rows.map(function(row){return '<tr>'+cols.map(function(c){return assetV66Cell(row,c,opts||{});}).join('')+'</tr>';}).join('')+'</tbody></table></div></section>';
+  }
+  function assetV66Panel(id,title,wide,compact){return '<section class="chart-panel asset-v66-panel '+(wide?'wide':'')+'"><div class="panel-header"><div><h3>'+esc(title)+'</h3></div></div><div id="'+id+'" class="plot-frame asset-v66-plot '+(compact?'is-compact':'')+'"></div></section>';}
+  function assetV66Grid(items){return '<div class="panel-grid asset-v66-grid">'+items.join('')+'</div>';}
+  function assetV66Shell(title,group){return '<div class="asset-v66-page"><div class="section-heading"><div><span class="eyebrow">'+esc(group)+'</span><h2>'+esc(title)+'</h2><p>图表为日度净值展示，调仓信号按月频生成。</p></div></div>'}
+  function assetV66Flow(kind){
+    const steps=kind==='merrill'?
+      [['增长通胀','PMI、CPI、PPI'],['因子优化','变化率、分位数、HP周期、FFT低频择优'],['因子检验','IC、方向命中率、覆盖率、滚动标准化'],['资产回测','四资产月频映射，日度净值回放']]:
+      kind==='pring'?
+      [['货币','M1、M2、利率'],['信用','社融存量、增量、信用扩张'],['增长','PMI-CPI剪刀差'],['周期映射','六阶段资产权重，日度回放']]:
+      kind==='macro'?
+      [['参数设置','25%政策基准、协方差收缩'],['宏观因子','增长、通胀、利率、信用、汇率、流动性'],['因子检验','IC、命中率、覆盖率'],['优化求解','CVXPY + CLARABEL凸二次优化']]:
+      kind==='risk'?
+      [['参数设置','25%政策基准、协方差收缩'],['风险预算','迭代 + 线搜索求风险贡献'],['预算增强','底仓、周期/宏观、趋势确认'],['资产回测','月频权重，日度净值回放']]:
+      [['参数设置','25%政策基准、协方差收缩'],['周期映射','50%美林 + 50%普林格'],['后验收益','观点置信中性化为周期Alpha'],['优化求解','收益、风险、换手统一约束']];
+    return '<section class="chart-panel asset-v66-flow-panel"><div class="panel-header"><div><h3>原理图</h3></div></div><div class="asset-v66-flow">'+steps.map(function(s,i){return '<div class="asset-v66-step"><strong>'+String(i+1).padStart(2,'0')+' '+esc(s[0])+'</strong><span>'+esc(s[1])+'</span></div>';}).join('<i></i>')+'</div></section>';
+  }
+  function assetV66Plot(id,traces,layout){
+    const el=$(id);if(!el||!window.Plotly)return;
+    const base={paper_bgcolor:'#fff',plot_bgcolor:'#fff',font:{family:'KaiTi, Arial, sans-serif',size:13,color:'#102033'},margin:{l:58,r:58,t:18,b:84},legend:{orientation:'h',x:0.5,xanchor:'center',y:-0.22,yanchor:'top',font:{size:13}},hovermode:'x unified',xaxis:{showgrid:false,tickangle:-90,automargin:true},yaxis:{gridcolor:'rgba(191,191,191,.45)',zeroline:false,automargin:true}};
+    Plotly.react(el,traces||[],Object.assign(base,layout||{}),{displayModeBar:false,responsive:true});
+  }
+  function assetV66Pick(row,keys){row=obj(row);for(let i=0;i<keys.length;i++){const n=Number(row[keys[i]]);if(Number.isFinite(n))return n;}return null;}
+  function assetV66NavTrace(series,keys,name,color,yaxis){return {type:'scatter',mode:'lines',name:name,x:series.map(function(r){return r.date;}),y:series.map(function(r){return assetV66Pick(r,keys);}),connectgaps:false,line:{color:color,width:keys.indexOf('relative')>=0||keys.indexOf('relative_strength')>=0?2.7:3.1},yaxis:yaxis||'y',hovertemplate:'%{x}<br>'+name+'：%{y:.4f}<extra></extra>'};}
+  function assetV66DrawNav(id,payload,key){
+    const pack=obj(obj(payload.nav_series)[key]),rows=arr(pack.series);
+    const traces=[
+      assetV66NavTrace(rows,['benchmark','benchmark_nav'],'等权基准',ASSET_V66_COLORS.benchmark),
+      assetV66NavTrace(rows,['strategy','strategy_nav'],pack.label||ASSET_V66_MODEL_LABEL[key]||key,ASSET_V66_COLORS.strategy),
+      assetV66NavTrace(rows,['relative','relative_strength'],'相对强度（右轴）',ASSET_V66_COLORS.relative,'y2')
+    ].filter(function(trace){return trace.y.some(function(v){return Number.isFinite(Number(v));});});
+    assetV66Plot(id,traces,{height:340,yaxis:{gridcolor:'rgba(191,191,191,.45)',zeroline:false,automargin:true},yaxis2:{overlaying:'y',side:'right',showgrid:false,zeroline:false,automargin:true},legend:{orientation:'h',x:0.5,xanchor:'center',y:-0.23,yanchor:'top'},margin:{l:58,r:62,t:16,b:80}});
+  }
+  function assetV66ClipSignal(value){const n=Number(value);return Number.isFinite(n)?Math.max(-1,Math.min(1,n)):null;}
+  function assetV66DrawOneSignal(id,payload,spec){
+    const rows=arr(payload.cycle_history), x=rows.map(function(r){return r.date;});
+    const color=spec.color||ASSET_V66_COLORS.relative, barColor=spec.barColor||'rgba(225,172,112,.72)';
+    const traces=[
+      {type:'bar',name:'方向信号（±1）',x:x,y:rows.map(function(r){return Number(r[spec.dirKey]);}),marker:{color:barColor,line:{color:'rgba(255,255,255,.95)',width:1}},width:22*24*60*60*1000,hovertemplate:'%{x}<br>方向信号：%{y:.0f}<extra></extra>'},
+      {type:'scatter',mode:'lines',name:spec.name,x:x,y:rows.map(function(r){return assetV66ClipSignal(r[spec.valueKey]);}),line:{color:color,width:2.7},yaxis:'y2',hovertemplate:'%{x}<br>'+spec.name+'：%{y:.3f}<extra></extra>'}
+    ];
+    assetV66Plot(id,traces,{height:320,barmode:'overlay',bargap:0.08,showlegend:false,margin:{l:56,r:56,t:8,b:58},xaxis:{type:'date',showgrid:false,tickangle:0,automargin:true},yaxis:{range:[-1.05,1.05],tickvals:[-1,0,1],gridcolor:'rgba(191,191,191,.45)',zeroline:true,zerolinecolor:'rgba(30,30,30,.58)',automargin:true},yaxis2:{overlaying:'y',side:'right',range:[-1.05,1.05],tickvals:[-1,0,1],showgrid:false,zeroline:false,automargin:true}});
+  }
+  function assetV66MerrillSignalSpecs(){
+    return [
+      {name:'增长因子：多指标聚合后的增长方向',valueKey:'merrill_growth',dirKey:'merrill_growth_direction',color:ASSET_V66_COLORS.growth},
+      {name:'通胀因子：CPI/PPI/商品确认后的通胀方向',valueKey:'merrill_inflation',dirKey:'merrill_inflation_direction',color:ASSET_V66_COLORS.inflation}
+    ];
+  }
+  function assetV66PringSignalSpecs(){
+    return [
+      {name:'货币因子：M1/M2/利率确认后的货币方向',valueKey:'pring_money',dirKey:'pring_money_direction',color:ASSET_V66_COLORS.growth},
+      {name:'信用因子：社融与信用扩张确认后的信用方向',valueKey:'pring_credit',dirKey:'pring_credit_direction',color:ASSET_V66_COLORS.inflation},
+      {name:'增长因子：PMI-CPI剪刀差确认后的增长方向',valueKey:'pring_growth',dirKey:'pring_growth_direction',color:ASSET_V66_COLORS.blue}
+    ];
+  }
+  function assetV66DrawStage(id,payload,kind){
+    const rows=arr(payload.cycle_history), x=rows.map(function(r){return r.date;});
+    const stageKey=kind==='merrill'?'merrill_stage':'pring_stage', labelKey=kind==='merrill'?'merrill_stage_label':'pring_stage_label';
+    const maxStage=kind==='merrill'?4:6;
+    const fallback=kind==='merrill'?['复苏期','过热期','滞胀期','衰退期']:['阶段I','阶段II','阶段III','阶段IV','阶段V','阶段VI'];
+    const labelByStage={};
+    rows.forEach(function(r){const s=Number(r[stageKey]);if(Number.isFinite(s)&&r[labelKey]&&!labelByStage[s])labelByStage[s]=String(r[labelKey]);});
+    const tickvals=Array.from({length:maxStage},function(_,i){return i+1;});
+    const ticktext=tickvals.map(function(v){return labelByStage[v]||fallback[v-1]||('阶段'+v);});
+    assetV66Plot(id,[{type:'scatter',mode:'lines+markers',name:'周期划分',x:x,y:rows.map(function(r){return Number(r[stageKey]);}),text:rows.map(function(r){return r[labelKey]||('阶段'+r[stageKey]);}),line:{color:'#c00000',width:2.2,shape:'hv'},marker:{color:'#c00000',size:4},hovertemplate:'%{x}<br>%{text}<extra></extra>'}],{height:330,margin:{l:96,r:28,t:10,b:70},xaxis:{type:'date',showgrid:false,tickangle:-90,automargin:true},yaxis:{tickmode:'array',tickvals:tickvals,ticktext:ticktext,range:[0.5,maxStage+0.5],showgrid:true,gridcolor:'rgba(191,191,191,.22)',zeroline:false,automargin:true},showlegend:false});
+  }
+  function assetV66DrawCorr(id,payload){const c=obj(payload.asset_correlation), labels=arr(c.labels);assetV66Plot(id,[{type:'heatmap',x:labels,y:labels,z:arr(c.matrix),colorscale:[[0,'#2F75B5'],[0.5,'#fff'],[1,'#C00000']],zmin:-1,zmax:1,text:arr(c.matrix).map(function(row){return arr(row).map(function(v){return Number(v).toFixed(2);});}),texttemplate:'%{text}',textfont:{size:13},hovertemplate:'%{y} / %{x}<br>相关性：%{z:.3f}<extra></extra>',showscale:true,colorbar:{thickness:12}}],{height:340,showlegend:false,margin:{l:68,r:48,t:10,b:62},xaxis:{showgrid:false},yaxis:{showgrid:false}});}
+  function assetV66DrawMacro(id,payload){const rows=arr(payload.macro_series), x=rows.map(function(r){return r.date;}), names={growth:'增长',inflation:'通胀',rate:'利率',credit:'信用',fx:'汇率',liquidity:'流动性'}, colors={growth:'#C00000',inflation:'#FFC000',rate:'#808080',credit:'#2F75B5',fx:'#7030A0',liquidity:'#00B050'};assetV66Plot(id,Object.keys(names).map(function(k){return {type:'scatter',mode:'lines',name:names[k],x:x,y:rows.map(function(r){return Number(r[k]);}),line:{color:colors[k],width:2.1},hovertemplate:'%{x}<br>'+names[k]+'：%{y:.3f}<extra></extra>'};}),{margin:{l:58,r:36,t:16,b:86}});}
+  function assetV66DrawBar(id,rows){assetV66Plot(id,ASSET_V66_ASSETS.map(function(asset){return {type:'bar',name:ASSET_V66_ASSET_CN[asset],x:arr(rows).map(function(r){return r.stage||r.component||r.model;}),y:arr(rows).map(function(r){return Number(r[asset]);}),marker:{color:ASSET_V66_COLORS[asset]},hovertemplate:'%{x}<br>'+ASSET_V66_ASSET_CN[asset]+'：%{y:.2%}<extra></extra>'};}),{barmode:'group',height:360,yaxis:{tickformat:'.0%',gridcolor:'rgba(191,191,191,.45)'},xaxis:{tickangle:-18,automargin:true},margin:{l:58,r:30,t:16,b:98}});}
+  function assetV66DrawAttribution(id,payload){const rows=arr(payload.risk_budget_decomposition).filter(function(r){return r.component!=='最终风险预算模型';});assetV66DrawBar(id,rows);}
+  function assetV66WeightRows(payload,key){return arr(payload.model_current_weights).filter(function(r){return key==='all'||r.model===ASSET_V66_MODEL_LABEL[key];});}
+  function assetV66AnnualRows(payload,key){return arr(obj(payload.annual_tables)[key]).slice(-10);}
+  async function allocationCycleV65(data,kind){
+    const payload=await assetV66Data();await loadPlotly();clearConclusion();const merrill=kind==='merrill',title=assetV66Title(kind),asof=allocMonth(obj(data.data_as_of).market);header('周期跟踪 / '+title,'日度净值 / 月频调仓','资产配置');setText('as-of',asof);setText('generated-at',String(payload.generated_at||data.generated_at||'--').replace('T',' ').replace('Z',''));
+    const navId=pid('asset-v66-nav'),stageId=pid('asset-v66-stage'),corrId=pid('asset-v66-corr'),stageBarId=pid('asset-v66-stage-bar');
+    const mapping=arr(obj(payload.asset_mapping)[kind]);
+    const stageReturns=arr(obj(payload.stage_returns)[kind]);
+    let signalSpecs=merrill?assetV66MerrillSignalSpecs():assetV66PringSignalSpecs();
+    signalSpecs=signalSpecs.map(function(spec){return Object.assign({id:pid('asset-v66-signal')},spec);});
+    let body=assetV66Shell(title,'周期跟踪')+assetV66Flow(kind)+assetV66Table('资产映射权重',mapping,['stage','equity','bond','gold','commodity'],{heat:['equity','bond','gold','commodity'],scale:0.55,wide:true});
+    if(merrill){
+      body+=assetV66Grid([assetV66Panel(corrId,'资产相关性图',false,false)].concat(signalSpecs.map(function(spec){return assetV66Panel(spec.id,spec.valueKey==='merrill_growth'?'增长信号':'通胀信号',false,false);}),[assetV66Panel(stageId,'历史四阶段图',false,false),assetV66Table('各资产收益',stageReturns,['stage','equity','bond','gold','commodity'],{heat:['equity','bond','gold','commodity'],scale:0.45})]));
+    }else{
+      body+=assetV66Grid(signalSpecs.map(function(spec){const label=spec.valueKey==='pring_money'?'货币信号':(spec.valueKey==='pring_credit'?'信用信号':'增长信号');return assetV66Panel(spec.id,label,false,false);}).concat([assetV66Panel(stageId,'历史六阶段图',false,false),assetV66Panel(stageBarId,'各阶段各资产收益表现',false,false),assetV66Table('各资产收益',stageReturns,['stage','equity','bond','gold','commodity'],{heat:['equity','bond','gold','commodity'],scale:0.45})]));
+    }
+    body+=assetV66Grid([assetV66Table('年度收益表',assetV66AnnualRows(payload,merrill?'merrill_clock':'pring_cycle'),['year','strategy_return','benchmark_return','excess_return','max_drawdown'],{heat:['strategy_return','benchmark_return','excess_return','max_drawdown'],scale:0.25}),assetV66Panel(navId,'资产回测表',false,false)])+'</div>';
+    root(body);if(merrill)assetV66DrawCorr(corrId,payload);signalSpecs.forEach(function(spec){assetV66DrawOneSignal(spec.id,payload,spec);});assetV66DrawStage(stageId,payload,kind);if(!merrill)assetV66DrawBar(stageBarId,stageReturns);assetV66DrawNav(navId,payload,merrill?'merrill_clock':'pring_cycle');
+  }
+  async function allocationStrategyV65(data,kind){
+    const payload=await assetV66Data();await loadPlotly();clearConclusion();const key=ASSET_V66_MODEL_KEY[kind]||'black_litterman',title=ASSET_V66_MODEL_LABEL[key],asof=allocMonth(obj(data.data_as_of).market);header('资产配置 / '+title,'日度净值 / 月频调仓','资产配置');setText('as-of',asof);setText('generated-at',String(payload.generated_at||data.generated_at||'--').replace('T',' ').replace('Z',''));
+    const navId=pid('asset-v66-nav'),macroId=pid('asset-v66-macro'),stageBarId=pid('asset-v66-stage-bar'),attrId=pid('asset-v66-attr');
+    let body=assetV66Shell(title,'资产配置')+assetV66Flow(kind)+assetV66Table(title+'当前权重',assetV66WeightRows(payload,key),['model','equity','bond','gold','commodity'],{heat:['equity','bond','gold','commodity'],scale:0.45})+assetV66Table('参数设置与优化求解',arr(obj(payload.optimizer_rows)[key]),['param','value','role'],{});
+    if(kind==='bl'){
+      body+=assetV66Table('周期观点转换表',payload.cycle_score_rows,['cycle_model','stage','equity_score','bond_score','gold_score','commodity_score','confidence_rule'],{heat:['equity_score','bond_score','gold_score','commodity_score'],scale:1.0,wide:true});
+      body+=assetV66Grid([assetV66Panel(stageBarId,'资产映射权重',false,false),assetV66Table('年度收益表',assetV66AnnualRows(payload,key),['year','strategy_return','benchmark_return','excess_return','max_drawdown'],{heat:['strategy_return','benchmark_return','excess_return','max_drawdown'],scale:0.25}),assetV66Panel(navId,'资产回测表',true,false)]);
+    }else if(kind==='macro'){
+      body+=assetV66Table('宏观因子全部罗列表格',payload.macro_factor_rows,['factor_group','factor_name','meaning','data_process','alpha_map'],{wide:true});
+      body+=assetV66Grid([assetV66Panel(macroId,'宏观因子走势',false,false),assetV66Table('高效因子检验表格',payload.factor_test_rows,['factor_group','factor_name','transform','coverage','production_admitted','selected_axes'],{heat:['coverage']}),assetV66Table('年度收益表',assetV66AnnualRows(payload,key),['year','strategy_return','benchmark_return','excess_return','max_drawdown'],{heat:['strategy_return','benchmark_return','excess_return','max_drawdown'],scale:0.25}),assetV66Panel(navId,'资产回测表',false,false)]);
+    }else{
+      body+=assetV66Table('风险预算增强权重分解',payload.risk_budget_decomposition,['component','weight_in_model','equity','bond','gold','commodity','source'],{heat:['weight_in_model','equity','bond','gold','commodity'],scale:0.75,wide:true});
+      body+=assetV66Grid([assetV66Panel(attrId,'因子归因',false,false),assetV66Table('多策略效果对比表',payload.model_comparison,['model','logic','strength','boundary'],{}),assetV66Table('年度收益表',assetV66AnnualRows(payload,key),['year','strategy_return','benchmark_return','excess_return','max_drawdown'],{heat:['strategy_return','benchmark_return','excess_return','max_drawdown'],scale:0.25}),assetV66Panel(navId,'资产回测表',false,false)]);
+    }
+    root(body+'</div>');if(kind==='bl')assetV66DrawBar(stageBarId,arr(obj(payload.asset_mapping).merrill).concat(arr(obj(payload.asset_mapping).pring)));if(kind==='macro')assetV66DrawMacro(macroId,payload);if(kind==='risk')assetV66DrawAttribution(attrId,payload);assetV66DrawNav(navId,payload,key);
+  }
   /* Portfolio optimization r42: exact five-page research-to-production contract. */
   S.portfolio=S.portfolio||{snapshot:null,assetType:'ETF',riskFamily:'全部',constraintCategory:'全部',parameterGroup:'全部',strategies:['selected','equal_weight','inverse_volatility','hrp'],window:'full'};
   VIEW_BREADCRUMBS.portfolio={title:'组合优化',views:{home:'主页',pool:'资产池',risk:'风险约束',solve:'优化求解',backtest:'组合回测'}};
@@ -1845,16 +1998,22 @@
     charts.forEach(function(chart,index){drawLiquidityChart(ids[index],chart);});
   }
 
+  function navDotStatus(record){
+    const raw=String((record&&record.status)||(record&&record.snapshot_status)||'').toLowerCase();
+    if(['failed','fail','error','blocked','unavailable'].includes(raw))return 'failed';
+    if(['queued','running','cancelling'].includes(raw))return 'running';
+    return 'ok';
+  }
   function applyNavStatuses(){
     const services=(S.services&&S.services.services)||{};
     const map={home:'board',data:'board',allocation:'allocation',portfolio:'portfolio',index:'index_enhancement',rotation:'rotation',liquidity:'liquidity',technical:'kline',kline:'kline',factorlab:'factor_lab',factor:'factor'};
     document.querySelectorAll('.nav-item').forEach(function(item){
       const target=String(item.dataset.target||''),prefix=target.split(':')[0],service=target==='data:ai_monitor'?'ai_monitor':map[prefix],record=services[service]||{};
-      item.dataset.status=st(record.status||record.snapshot_status);
+      item.dataset.status=navDotStatus(record);
     });
     document.querySelectorAll('.nav-group').forEach(function(group){
       const first=group.querySelector('.nav-item');
-      group.dataset.status=first?String(first.dataset.status||'failed'):'failed';
+      group.dataset.status=first?String(first.dataset.status||'ok'):'ok';
     });
   }
   function serviceBadges(){
@@ -3036,7 +3195,7 @@ function allocV5RecentRelativeChart(id,data){
 }
 Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权年化',annual_excess_return:'年化超额',information_ratio:'信息比率',diagnosis:'诊断',used_for_selection:'参与选模'});
 
-  async function allocationHomeV5(data){if(data.status==='blocked')return allocV5Blocked(data,'资产配置主页','两周期研判、BL/风险平价/宏观因子与当前权重');const current=allocV5Current(data),weights=obj(obj(data.allocations).recommended).weights,promotion=obj(obj(data.quality).promotion_gate),cards=Object.keys(ALLOC_V5_CYCLE_CN).map(function(model){const payload=allocV5Cycle(data,model,current);return {label:ALLOC_V5_CYCLE_CN[model],value:allocV5CycleName(model,payload),note:(payload.eligible_for_views?'已准入':'仅展示/阻断')+' · '+allocPct(allocV5CycleConfidence(payload)),tone:payload.eligible_for_views?'ok':'muted'};});header('资产配置主页','多周期研判、风险预算与当前权重','资产配置');setText('as-of',allocMonth(obj(data.data_as_of).market));setText('generated-at',String(data.generated_at||'--').replace('T',' ').replace('Z',''));conclusion('当前四资产推荐权重：'+allocWeightSummary(data,weights)+'生产晋级门为'+(promotion.status==='passed'?'通过':'阻断')+'；周期仅保留美林时钟与普林格，商品口径严格排除黄金。');const c1=pid('av5h'),c2=pid('av5h'),c3=pid('av5h'),factorRows=Object.keys(ALLOC_V5_CYCLE_CN).flatMap(function(model){return allocV5VisibleFactorRows(data,model,current);});root(allocStateCards(cards)+'<div class="panel-grid">'+panel(c1,'推荐组合','权益 / 国债 / 黄金 / 非黄金商品')+panel(c2,'四类模型权重对照','风险平价、风险预算与BL统一口径')+'</div>'+panel(c3,'两周期准入与当前阶段','美林按增长/通胀，普林格按货币/信用/增长',true)+tableHTML('两周期当前状态',allocV5CycleRows(data),['cycle','state','confidence','available','status'])+tableHTML('周期因子可用性与PIT证据',factorRows,['cycle','factor','available','provider','pit_status','latest_value','observation_period','release_time','available_time','vintage','admission_reason'])+tableHTML('周期对BL相对观点的贡献与冲突',allocV5ContributionRows(data),['cycle','view','contribution','conflict','detail'])+tableHTML('四资产数据血缘',allocV5SourceRows(data),['asset','provider','code','status','available_time','vintage','observations','observation_period'])+tableHTML('权威数据与生产门禁',allocV5QualityRows(data),['check','passed','detail']));allocWeightDonut(c1,data,weights,'推荐权重');allocV5WeightCompare(c2,data);const cycleRows=allocV5CycleRows(data);plot(c3,[{type:'bar',x:cycleRows.map(function(row){return row.cycle;}),y:cycleRows.map(function(row){return Number(String(row.confidence).replace('%',''));}),marker:{color:cycleRows.map(function(row){return row.available.includes('进入')?'#c00000':'#98a2b3';})},text:cycleRows.map(function(row){return row.state;}),textposition:'outside',hovertemplate:'%{x}<br>%{text}<br>置信度 %{y:.2f}%<extra></extra>'}],{height:340,yaxis:{title:'最高阶段概率（%）',range:[0,105]},xaxis:{showgrid:false}});}
+  async function allocationHomeV5(data){if(data.status==='blocked')return allocV5Blocked(data,'资产配置主页','两周期研判、BL/风险预算/宏观因子与当前权重');const current=allocV5Current(data),weights=obj(obj(data.allocations).recommended).weights,promotion=obj(obj(data.quality).promotion_gate),cards=Object.keys(ALLOC_V5_CYCLE_CN).map(function(model){const payload=allocV5Cycle(data,model,current);return {label:ALLOC_V5_CYCLE_CN[model],value:allocV5CycleName(model,payload),note:(payload.eligible_for_views?'已准入':'仅展示/阻断')+' · '+allocPct(allocV5CycleConfidence(payload)),tone:payload.eligible_for_views?'ok':'muted'};});header('资产配置主页','多周期研判、风险预算与当前权重','资产配置');setText('as-of',allocMonth(obj(data.data_as_of).market));setText('generated-at',String(data.generated_at||'--').replace('T',' ').replace('Z',''));conclusion('当前四资产推荐权重：'+allocWeightSummary(data,weights)+'生产晋级门为'+(promotion.status==='passed'?'通过':'阻断')+'；周期仅保留美林时钟与普林格，商品口径严格排除黄金。');const c1=pid('av5h'),c2=pid('av5h'),c3=pid('av5h'),factorRows=Object.keys(ALLOC_V5_CYCLE_CN).flatMap(function(model){return allocV5VisibleFactorRows(data,model,current);});root(allocStateCards(cards)+'<div class="panel-grid">'+panel(c1,'推荐组合','权益 / 国债 / 黄金 / 非黄金商品')+panel(c2,'四类模型权重对照','风险预算模型、宏观因子模型与BL统一口径')+'</div>'+panel(c3,'两周期准入与当前阶段','美林按增长/通胀，普林格按货币/信用/增长',true)+tableHTML('两周期当前状态',allocV5CycleRows(data),['cycle','state','confidence','available','status'])+tableHTML('周期因子可用性与PIT证据',factorRows,['cycle','factor','available','provider','pit_status','latest_value','observation_period','release_time','available_time','vintage','admission_reason'])+tableHTML('周期对BL相对观点的贡献与冲突',allocV5ContributionRows(data),['cycle','view','contribution','conflict','detail'])+tableHTML('四资产数据血缘',allocV5SourceRows(data),['asset','provider','code','status','available_time','vintage','observations','observation_period'])+tableHTML('权威数据与生产门禁',allocV5QualityRows(data),['check','passed','detail']));allocWeightDonut(c1,data,weights,'推荐权重');allocV5WeightCompare(c2,data);const cycleRows=allocV5CycleRows(data);plot(c3,[{type:'bar',x:cycleRows.map(function(row){return row.cycle;}),y:cycleRows.map(function(row){return Number(String(row.confidence).replace('%',''));}),marker:{color:cycleRows.map(function(row){return row.available.includes('进入')?'#c00000':'#98a2b3';})},text:cycleRows.map(function(row){return row.state;}),textposition:'outside',hovertemplate:'%{x}<br>%{text}<br>置信度 %{y:.2f}%<extra></extra>'}],{height:340,yaxis:{title:'最高阶段概率（%）',range:[0,105]},xaxis:{showgrid:false}});}
   async function allocationCycleV5(data){
     const model=S.allocation.cycleModel||'merrill';
     const lookback=S.allocation.lookback||'84';
@@ -3056,7 +3215,7 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
     allocV5ProbabilityChart(cids[1],data,model,lookback);
     allocV5CycleStageChart(cids[2],data,model,lookback);
   }
-  async function allocationStrategyV5(data){if(data.status==='blocked')return allocV5Blocked(data,'配置策略','全天候、风险平价与多模型求解');const supported=['recommended','risk_parity','macro_risk_budget','robust_bl'].filter(function(key){return Object.keys(obj(obj(data.allocations)[key]).weights).length;}),strategy=supported.includes(S.allocation.strategy)?S.allocation.strategy:'recommended',portfolio=obj(obj(data.allocations)[strategy]),weights=obj(portfolio.weights),meta=obj(portfolio.metadata),optimizer=obj(meta.optimizer);S.allocation.strategy=strategy;header('配置策略','全天候、风险平价与多模型求解','资产配置');setText('as-of',allocMonth(obj(data.data_as_of).market));setText('generated-at',String(data.generated_at||'--').replace('T',' ').replace('Z',''));conclusion((ALLOC_STRATEGY_CN[strategy]||strategy)+'当前权重：'+allocWeightSummary(data,weights)+'求解状态 '+esc(optimizer.status||meta.status||'--')+'，硬约束'+(obj(optimizer.diagnostics).hard_constraints_relaxed?'曾被放宽（异常）':'未静默放宽')+'。');const ids=[pid('av5s'),pid('av5s'),pid('av5s'),pid('av5s'),pid('av5s')],controls='<section class="control-card"><div class="control-grid"><label>配置策略<select id="alloc-strategy">'+supported.map(function(key){return '<option value="'+key+'">'+(ALLOC_STRATEGY_CN[key]||key)+'</option>';}).join('')+'</select></label><div class="control-readout">资产范围<strong>权益 / 国债 / 黄金 / 商品</strong></div><div class="control-readout">BL观点<strong>三组相对观点＋完整Ω</strong></div><div class="control-readout">求解状态<strong>'+esc(optimizer.status||meta.status||'--')+'</strong></div></div></section>';root(controls+'<div class="panel-grid">'+panel(ids[0],'求解后四资产权重','资本权重')+panel(ids[1],'风险预算锚与最终风险贡献','Richard–Roncalli约束风险预算')+'</div><div class="panel-grid">'+panel(ids[2],'Black–Litterman观点与后验','权益/商品/黄金分别相对国债')+panel(ids[3],'完整观点误差协方差Ω','非对角项保留观点相关性')+'</div>'+panel(ids[4],'推荐组合历史动态权重','月末信号用于下一月',true)+tableHTML('四资产权重、风险预算锚与资产风险贡献',allocV5RiskRows(data,strategy),['asset','capital_weight','target_budget','anchor_weight','risk_contribution','budget_error','detail'])+tableHTML('BL相对观点、均衡先验与后验',allocV5ViewRows(data),['view','prior_view','value','posterior_view','omega_diagonal'])+tableHTML('完整Omega矩阵',allocV5OmegaRows(data),['view','omega_1','omega_2','omega_3'])+tableHTML('各周期对BL观点贡献及冲突',allocV5ContributionRows(data),['cycle','view','contribution','conflict','detail'])+tableHTML('宏观因子风险贡献',allocV5FactorRiskRows(data),['factor','factor_risk_contribution','detail'])+tableHTML('硬约束与可行域残差',allocV5ConstraintRows(data,strategy),['constraint','value','status','detail'])+tableHTML('交易成本与目标函数惩罚',allocV5CostRows(data,strategy),['asset','objective_term','cost_value'])+tableHTML('样本外与晋级门禁',allocV5GateRows(data),['check','passed','detail']));$('alloc-strategy').value=strategy;allocWeightDonut(ids[0],data,weights,ALLOC_STRATEGY_CN[strategy]);allocV5RiskChart(ids[1],data,strategy);allocV5ViewChart(ids[2],data);allocV5OmegaChart(ids[3],data);allocDynamicWeights(ids[4],data,'recommended');$('alloc-strategy').onchange=function(){S.allocation.strategy=this.value;allocationStrategyV5(data);};}
+  async function allocationStrategyV5(data){if(data.status==='blocked')return allocV5Blocked(data,'配置策略','BL、宏观因子与风险预算模型');const supported=['recommended','risk_parity','macro_risk_budget','robust_bl'].filter(function(key){return Object.keys(obj(obj(data.allocations)[key]).weights).length;}),strategy=supported.includes(S.allocation.strategy)?S.allocation.strategy:'recommended',portfolio=obj(obj(data.allocations)[strategy]),weights=obj(portfolio.weights),meta=obj(portfolio.metadata),optimizer=obj(meta.optimizer);S.allocation.strategy=strategy;header('配置策略','全天候、风险平价与多模型求解','资产配置');setText('as-of',allocMonth(obj(data.data_as_of).market));setText('generated-at',String(data.generated_at||'--').replace('T',' ').replace('Z',''));conclusion((ALLOC_STRATEGY_CN[strategy]||strategy)+'当前权重：'+allocWeightSummary(data,weights)+'求解状态 '+esc(optimizer.status||meta.status||'--')+'，硬约束'+(obj(optimizer.diagnostics).hard_constraints_relaxed?'曾被放宽（异常）':'未静默放宽')+'。');const ids=[pid('av5s'),pid('av5s'),pid('av5s'),pid('av5s'),pid('av5s')],controls='<section class="control-card"><div class="control-grid"><label>配置策略<select id="alloc-strategy">'+supported.map(function(key){return '<option value="'+key+'">'+(ALLOC_STRATEGY_CN[key]||key)+'</option>';}).join('')+'</select></label><div class="control-readout">资产范围<strong>权益 / 国债 / 黄金 / 商品</strong></div><div class="control-readout">BL观点<strong>三组相对观点＋完整Ω</strong></div><div class="control-readout">求解状态<strong>'+esc(optimizer.status||meta.status||'--')+'</strong></div></div></section>';root(controls+'<div class="panel-grid">'+panel(ids[0],'求解后四资产权重','资本权重')+panel(ids[1],'风险预算锚与最终风险贡献','Richard–Roncalli约束风险预算')+'</div><div class="panel-grid">'+panel(ids[2],'Black–Litterman观点与后验','权益/商品/黄金分别相对国债')+panel(ids[3],'完整观点误差协方差Ω','非对角项保留观点相关性')+'</div>'+panel(ids[4],'推荐组合历史动态权重','月末信号用于下一月',true)+tableHTML('四资产权重、风险预算锚与资产风险贡献',allocV5RiskRows(data,strategy),['asset','capital_weight','target_budget','anchor_weight','risk_contribution','budget_error','detail'])+tableHTML('BL相对观点、均衡先验与后验',allocV5ViewRows(data),['view','prior_view','value','posterior_view','omega_diagonal'])+tableHTML('完整Omega矩阵',allocV5OmegaRows(data),['view','omega_1','omega_2','omega_3'])+tableHTML('各周期对BL观点贡献及冲突',allocV5ContributionRows(data),['cycle','view','contribution','conflict','detail'])+tableHTML('宏观因子风险贡献',allocV5FactorRiskRows(data),['factor','factor_risk_contribution','detail'])+tableHTML('硬约束与可行域残差',allocV5ConstraintRows(data,strategy),['constraint','value','status','detail'])+tableHTML('交易成本与目标函数惩罚',allocV5CostRows(data,strategy),['asset','objective_term','cost_value'])+tableHTML('样本外与晋级门禁',allocV5GateRows(data),['check','passed','detail']));$('alloc-strategy').value=strategy;allocWeightDonut(ids[0],data,weights,ALLOC_STRATEGY_CN[strategy]);allocV5RiskChart(ids[1],data,strategy);allocV5ViewChart(ids[2],data);allocV5OmegaChart(ids[3],data);allocDynamicWeights(ids[4],data,'recommended');$('alloc-strategy').onchange=function(){S.allocation.strategy=this.value;allocationStrategyV5(data);};}
   async function allocationBacktestV5(data){
     const windowName=S.allocation.backtestWindow||'all';
     const mode=S.allocation.returnMode||'net';
@@ -3251,7 +3410,7 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
   async function stock(){
     const base=S.stockOverride||mod('stock'),watch=arr(table('stock','stock_watchlist').rows);if(!S.stockCode)S.stockCode=(watch[0]&&watch[0].code)||'000001';const baseRows=arr((arr(base.tables).find(function(item){return item.id==='stock_watchlist';})||{}).rows||watch),record=obj(base.record||{}),selected=digits(S.stockCode),quote=record.code?record:(baseRows.find(function(row){return digits(row.code)===selected;})||watch.find(function(row){return digits(row.code)===selected;})||baseRows[0]||watch[0]||{}),cachedSina=R44_SINA&&R44_SINA.payload?R44_SINA.payload:{rows:[]},cachedWechat=R44_WECHAT&&R44_WECHAT.payload?R44_WECHAT.payload:{rows:[]},allNews=r45NewsRows(r27MergeNews(arr(cachedWechat.rows),arr(cachedSina.rows),arr(table('news_events','news_feed').rows))),stockNews=relatedNews(allNews,quote.code||S.stockCode,quote.name),asof=quote.as_of||maxDate(baseRows.length?baseRows:watch),p1=pid('s'),p2=pid('s');
     clearConclusion();
-    root('<section class="control-card"><div class="control-grid"><label>'+TXT.stockPick+'<select id="stock-preset">'+watch.map(function(row){return '<option value="'+esc(row.code)+'" '+(digits(row.code)===selected?'selected':'')+'>'+esc(cnText(row.code))+' '+esc(row.name)+'</option>';}).join('')+'</select></label><label style="grid-column:span 2;">'+TXT.inputCode+'<input id="stock-input" value="'+esc(S.stockCode)+'"></label><button id="stock-load" class="action-button" type="button">'+TXT.loadStock+'</button><div class="ai-actions"><button id="stock-ai" class="ghost-button" type="button">智能分析</button><button id="stock-deep" class="ghost-button" type="button">深度报告</button></div></div></section>'+cardHTML([{label:'收盘价',value:quote.close??quote.qfq_close,unit:'元',as_of:asof},{label:'一周涨跌',value:quote.ret_5d,unit:'%'},{label:'二十日涨跌',value:quote.ret_20d,unit:'%'},{label:'二十日回撤',value:quote.mdd_20d,unit:'%'}])+'<div class="ai-dual-grid"><section><h3>智能分析</h3><div id="stock-ai-result" class="ai-panel is-compact"></div></section><section><h3>深度报告</h3><div id="stock-deep-result" class="ai-panel is-compact"></div></section></div><div class="panel-grid">'+panel(p1,'个股K线行情','',true)+panel(p2,'自选股风险收益','',false)+'</div><section class="chart-panel wide"><div class="panel-header"><div><h3>个股新闻滚动</h3></div></div><div class="news-ticker stock-news" id="stock-news-r27"><div class="news-list">'+(stockNews.length?stockNews:allNews.slice(0,20)).map(newsItem).join('')+'</div></div></section>'+tableHTML('个股行情',baseRows.length?baseRows:watch,['code','name','close','qfq_close','ret_1d','ret_5d','ret_20d','vol_20d','mdd_20d','turnover','as_of']));
+    root('<section class="control-card"><div class="control-grid"><label>'+TXT.stockPick+'<select id="stock-preset">'+watch.map(function(row){return '<option value="'+esc(row.code)+'" '+(digits(row.code)===selected?'selected':'')+'>'+esc(cnText(row.code))+' '+esc(row.name)+'</option>';}).join('')+'</select></label><label style="grid-column:span 2;">'+TXT.inputCode+'<input id="stock-input" value="'+esc(S.stockCode)+'"></label><button id="stock-load" class="action-button" type="button">'+TXT.loadStock+'</button><div class="ai-actions"><button id="stock-ai" class="ghost-button" type="button">智能分析</button><button id="stock-deep" class="ghost-button" type="button">深度报告</button></div></div></section>'+cardHTML([{label:'收盘价',value:quote.close??quote.qfq_close,unit:'元',as_of:asof},{label:'一周涨跌',value:quote.ret_5d,unit:'%'},{label:'二十日涨跌',value:quote.ret_20d,unit:'%'},{label:'二十日回撤',value:quote.mdd_20d,unit:'%'}])+'<div class="ai-dual-grid"><section><h3>智能分析</h3><div id="stock-ai-result" class="ai-panel is-compact"></div></section><section><h3>深度报告</h3><div id="stock-deep-result" class="ai-panel is-compact"></div></section></div><div class="panel-grid">'+panel(p1,'个股K线行情','',true)+panel(p2,'自选股风险收益','',false)+'</div><section class="chart-panel wide"><div class="panel-header"><div><h3>个股新闻</h3></div></div><div class="news-ticker stock-news" id="stock-news-r27"><div class="news-list">'+(stockNews.length?stockNews:allNews.slice(0,20)).map(newsItem).join('')+'</div></div></section>'+tableHTML('个股行情',baseRows.length?baseRows:watch,['code','name','close','qfq_close','ret_1d','ret_5d','ret_20d','vol_20d','mdd_20d','turnover','as_of']));
     $('stock-preset').onchange=function(){$('stock-input').value=$('stock-preset').value;};$('stock-load').onclick=async function(){const code=$('stock-input').value.trim();if(!code)return;S.stockCode=code;try{const payload=await api('/api/board/stock/'+encodeURIComponent(code));S.stockOverride=payload.data||payload;}catch(error){S.stockOverride=null;conclusion('个股加载失败：'+esc(error.message));}await stock();};const context={quote:quote,news:stockNews.slice(0,20),watchlist:watch.slice(0,20)};$('stock-ai').onclick=function(){return aiFillMode('stock',(quote.code||S.stockCode)+' '+(quote.name||''),context,'stock-ai-result','analysis');};$('stock-deep').onclick=function(){return aiFillMode('stock',(quote.code||S.stockCode)+' '+(quote.name||''),context,'stock-deep-result','deep_report');};drawStockKline(p1,quote.code||S.stockCode);scatter(p2,watch.map(function(row){return {label:row.name||row.code,x:row.vol_20d,y:row.ret_20d};}));r27AutoScroll($('stock-news-r27'));
   }
 
@@ -3306,10 +3465,10 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
   Object.assign(VIEW_BREADCRUMBS,{
     home:{title:'主页',views:{overview:'综合研判'}},
     data:{title:'数据看板',views:{macro:'宏观',global_markets:'全球市场',sw_industries:'行业',commodities:'大宗商品',stock:'个股',news_events:'新闻事件',ai_monitor:'AI监控'}},
-    allocation:{title:'资产配置',views:{cycle:'周期跟踪',strategy:'配置策略'}},
+    allocation:{title:'资产配置',views:{cycle:'周期跟踪',strategy:'资产配置'}},
     liquidity:{title:'资金面跟踪',views:{retail:'散户',public:'公募',private:'私募',foreign:'外资',etf:'ETF',primary:'一级市场',margin:'融资资金'}},
-    rotation:{title:'行业景气度',views:{prosperity:'行业景气度',industry:'行业轮动',style:'风格轮动'}},
-    factorlab:{title:'因子实验室',views:{dashboard:'因子看板',mining:'因子挖掘',strategy:'配置策略'}},
+    rotation:{title:'行业风格',views:{prosperity:'行业景气度',industry:'行业轮动',style:'风格轮动'}},
+    factorlab:{title:'因子实验室',views:{dashboard:'因子看板',mining:'LLM因子挖掘',strategy:'模型层'}},
     technical:{title:'技术分析',views:{learning:'K线学习',strategy:'配置策略'}},
     portfolio:{title:'组合优化',views:{solve:'优化求解',strategy:'配置策略'}}
   });
@@ -3325,8 +3484,8 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
     'data:stock':{group:'数据看板',title:'个股',subtitle:'行情、风险收益、新闻与智能分析',sections:[{id:'stock',label:'个股',kind:'data',page:'stock'}]},
     'data:news_events':{group:'数据看板',title:'新闻事件',subtitle:'行业与个股事件流',sections:[{id:'news',label:'新闻事件',kind:'data',page:'news_events'}]},
     'data:ai_monitor':{group:'数据看板',title:'AI监控',subtitle:'五维技术扩散、申万三级行业图谱、行业时序与个股归因',sections:[{id:'overview',label:'综合总览',kind:'ai-monitor'},{id:'industry-map',label:'三级行业图谱',kind:'ai-monitor'},{id:'industry-series',label:'行业时序',kind:'ai-monitor'},{id:'stock-attribution',label:'个股归因',kind:'ai-monitor'}]},
-    'allocation:cycle':{group:'资产配置',title:'周期跟踪',subtitle:'美林时钟与普林格',sections:[{id:'cycle',label:'周期跟踪',kind:'allocation',page:'cycle'}]},
-    'allocation:strategy':{group:'资产配置',title:'配置策略',subtitle:'综合配置、权重方案与回测审计',sections:[{id:'overview',label:'综合配置',kind:'allocation',page:'home'},{id:'weights',label:'权重方案',kind:'allocation',page:'strategy'},{id:'backtest',label:'回测检验',kind:'allocation',page:'backtest'}]},
+    'allocation:cycle':{group:'资产配置',title:'周期跟踪',subtitle:'美林时钟与普林格周期',sections:[{id:'merrill',label:'美林时钟',kind:'allocation',page:'cycle_merrill'},{id:'pring',label:'普林格周期',kind:'allocation',page:'cycle_pring'}]},
+    'allocation:strategy':{group:'资产配置',title:'资产配置',subtitle:'BL模型、宏观因子模型与风险预算模型',sections:[{id:'bl',label:'BL模型',kind:'allocation',page:'strategy_bl'},{id:'macro',label:'宏观因子模型',kind:'allocation',page:'strategy_macro'},{id:'risk',label:'风险预算模型',kind:'allocation',page:'strategy_risk'}]},
     'liquidity:retail':{group:'资金面跟踪',title:'散户',subtitle:'资金总览、小单流、开户与参与度',sections:[{id:'overview',label:'资金总览',kind:'liquidity',page:'home'},{id:'retail',label:'散户',kind:'liquidity',page:'retail'}]},
     'liquidity:public':{group:'资金面跟踪',title:'公募',subtitle:'新发、仓位、报会与清算',sections:[{id:'public',label:'公募',kind:'liquidity',page:'public'}]},
     'liquidity:private':{group:'资金面跟踪',title:'私募',subtitle:'仓位、净流入与策略指数',sections:[{id:'private',label:'私募',kind:'liquidity',page:'private'}]},
@@ -3334,20 +3493,20 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
     'liquidity:etf':{group:'资金面跟踪',title:'ETF',subtitle:'份额申赎、资金流与结构分解',sections:[{id:'etf',label:'ETF',kind:'liquidity',page:'etf'}]},
     'liquidity:primary':{group:'资金面跟踪',title:'一级市场',subtitle:'IPO、定增与可转债融资供给',sections:[{id:'primary',label:'一级市场',kind:'liquidity',page:'primary'}]},
     'liquidity:margin':{group:'资金面跟踪',title:'融资资金',subtitle:'净买入、余额、活跃度与担保结构',sections:[{id:'margin',label:'融资资金',kind:'liquidity',page:'margin'}]},
-    'rotation:prosperity':{group:'行业景气度',title:'行业景气度',subtitle:'高频景气指标、财务锚、工业锚、五大检验与景气合成',sections:[{id:'prosperity',label:'行业景气度',kind:'rotation',page:'prosperity'}]},
-    'rotation:industry':{group:'行业景气度',title:'行业轮动',subtitle:'六维因子构造、因子检验、打分、回测与归因',sections:[{id:'industry',label:'行业轮动',kind:'rotation',page:'industry'}]},
-    'rotation:style':{group:'行业景气度',title:'风格轮动',subtitle:'大/中/小盘 × 成长/均衡/价值/红利 · 季度个股标签',sections:[{id:'style',label:'风格轮动',kind:'rotation',page:'style'}]},
-    'rotation:allocation':{group:'行业景气度',title:'配置策略',subtitle:'综合状态、行业Top10（月/周）、风格Top3（季度）与策略回测',sections:[{id:'overview',label:'综合状态',kind:'rotation',page:'home'},{id:'weights',label:'配置权重',kind:'rotation',page:'allocation'},{id:'backtest',label:'策略回测',kind:'rotation',page:'backtest'}]},
+    'rotation:prosperity':{group:'行业风格',title:'行业景气度',subtitle:'高频景气指标、财务锚、工业锚、五大检验与景气合成',sections:[{id:'prosperity',label:'行业景气度',kind:'rotation',page:'prosperity'}]},
+    'rotation:industry':{group:'行业风格',title:'行业轮动',subtitle:'六维因子构造、因子检验、打分、回测与归因',sections:[{id:'industry',label:'行业轮动',kind:'rotation',page:'industry'}]},
+    'rotation:style':{group:'行业风格',title:'风格轮动',subtitle:'大/中/小盘 × 成长/均衡/价值/红利 · 季度个股标签',sections:[{id:'style',label:'风格轮动',kind:'rotation',page:'style'}]},
+    'rotation:allocation':{group:'行业风格',title:'配置策略',subtitle:'综合状态、行业Top10（月/周）、风格Top3（季度）与策略回测',sections:[{id:'overview',label:'综合状态',kind:'rotation',page:'home'},{id:'weights',label:'配置权重',kind:'rotation',page:'allocation'},{id:'backtest',label:'策略回测',kind:'rotation',page:'backtest'}]},
     'factorlab:dashboard':{group:'因子实验室',title:'因子看板',subtitle:'因子状态、联合检验与历史任务',sections:[{id:'overview',label:'实验室总览',kind:'factorlab',page:'home'},{id:'dashboard',label:'因子看板',kind:'factorlab',page:'dashboard'},{id:'testing',label:'联合检验',kind:'factorlab',page:'testing'},{id:'history',label:'历史任务',kind:'factorlab',page:'history'}]},
-    'factorlab:mining':{group:'因子实验室',title:'因子挖掘',subtitle:'实验挖掘与LLM假设—表达—检验—记忆闭环',sections:[{id:'laboratory',label:'实验挖掘',kind:'factorlab',page:'mining'},{id:'llm-home',label:'LLM挖掘',kind:'factor',page:'home'},{id:'expression',label:'因子表达式',kind:'factor',page:'expression'},{id:'report',label:'检验结果',kind:'factor',page:'report'},{id:'score',label:'综合打分',kind:'factor',page:'score'},{id:'memory',label:'历史记忆',kind:'factor',page:'memory'}]},
-    'factorlab:strategy':{group:'因子实验室',title:'配置策略',subtitle:'因子研究结果与配置策略',sections:[{id:'factor-strategy',label:'因子策略',kind:'factorlab',page:'strategy'}]},
+    'factorlab:mining':{group:'因子实验室',title:'LLM因子挖掘',subtitle:'实验挖掘与LLM假设—表达—检验—记忆闭环',sections:[{id:'laboratory',label:'实验挖掘',kind:'factorlab',page:'mining'},{id:'llm-home',label:'LLM挖掘',kind:'factor',page:'home'},{id:'expression',label:'因子表达式',kind:'factor',page:'expression'},{id:'report',label:'检验结果',kind:'factor',page:'report'},{id:'score',label:'综合打分',kind:'factor',page:'score'},{id:'memory',label:'历史记忆',kind:'factor',page:'memory'}]},
+    'factorlab:strategy':{group:'因子实验室',title:'模型层',subtitle:'因子研究结果与配置策略',sections:[{id:'factor-strategy',label:'模型层',kind:'factorlab',page:'strategy'}]},
     'technical:learning':{group:'技术分析',title:'K线学习',subtitle:'任务设置、同类学习、情境记忆与历史记录',sections:[{id:'setup',label:'任务设置',kind:'kline',page:'home'},{id:'learning',label:'学习记忆',kind:'kline',page:'learn'},{id:'history',label:'历史记录',kind:'kline',page:'history'}]},
     'technical:strategy':{group:'技术分析',title:'配置策略',subtitle:'学习后策略、信号K线与回测归因',sections:[{id:'backtest',label:'策略回测',kind:'kline',page:'backtest'}]},
     'portfolio:solve':{group:'组合优化',title:'优化求解',subtitle:'历史得分、可控约束、求解任务与结果审计',sections:[{id:'basic',label:'基础优化器',kind:'optimizer',page:'basic'},{id:'llm',label:'LLM约束',kind:'optimizer',page:'llm'},{id:'results',label:'结果对比',kind:'optimizer',page:'results'}]},
     'portfolio:strategy':{group:'组合优化',title:'配置策略',subtitle:'组合优化与指数增强统一配置链',sections:[{id:'home',label:'主页',kind:'optimizer-strategy',page:'home'},{id:'universe',label:'资产池',kind:'optimizer-strategy',page:'universe'},{id:'alpha',label:'Alpha模型',kind:'optimizer-strategy',page:'alpha'},{id:'smartbeta',label:'SmartBeta模型',kind:'optimizer-strategy',page:'smartbeta'},{id:'risk',label:'风险模型',kind:'optimizer-strategy',page:'risk'},{id:'tracking',label:'组合跟踪',kind:'optimizer-strategy',page:'tracking'}]}
   };
   const LEGACY_ROUTE_ALIAS={
-    'allocation:home':['allocation:strategy','overview'],'allocation:backtest':['allocation:strategy','backtest'],
+    'allocation:home':['allocation:strategy','bl'],'allocation:backtest':['allocation:strategy','risk'],
     'liquidity:home':['liquidity:retail','overview'],
     'rotation:home':['rotation:prosperity','prosperity'],'rotation:backtest':['rotation:industry','industry'],'rotation:allocation':['rotation:industry','industry'],
     'portfolio:home':['portfolio:strategy','home','portfolio'],'portfolio:pool':['portfolio:strategy','universe','portfolio'],'portfolio:timing':['portfolio:strategy','timing','portfolio'],'portfolio:risk':['portfolio:strategy','risk','portfolio'],'portfolio:backtest':['portfolio:strategy','tracking','portfolio'],
@@ -3357,7 +3516,7 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
     'kline:home':['technical:learning','setup'],'kline:learn':['technical:learning','learning'],'kline:history':['technical:learning','history'],'kline:backtest':['technical:strategy','backtest']
   };
 
-  function workspaceConfig(){return WORKSPACE_CONFIG[S.active]||WORKSPACE_CONFIG['home:overview'];}
+  function workspaceConfig(){return WORKSPACE_CONFIG[S.active]||WORKSPACE_CONFIG['data:market_monitor']||WORKSPACE_CONFIG['home:overview'];}
   function workspaceSection(config){
     const wanted=S.workspace.section[S.active];
     return config.sections.find(function(item){return item.id===wanted;})||config.sections[0];
@@ -3617,12 +3776,72 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
     clearConclusion();
     const presetMap=new Map();[quote].concat(baseRows,watch,allStocks).forEach(function(row){const code=digits(row&&row.code);if(/^\d{6}$/.test(code)&&!presetMap.has(code))presetMap.set(code,r45MergeStock({code:code},r45ResolveStock(allStocks,code),row));});const presetRows=Array.from(presetMap.values()),options=presetRows.map(function(row){const label=row.code+' '+(row.name||'');return '<option value="'+esc(row.code)+'" '+(digits(row.code)===selected?'selected':'')+'>'+esc(label)+'</option>';}).join(''),dataList=allStocks.map(function(row){return '<option value="'+esc(row.code+' '+(row.name||''))+'"></option>';}).join(''),tableRows=r45StockTableRows(baseRows,watch,allStocks,quote);
     if(!r45RouteLive(renderScope))return;
-    root('<section class="control-card"><div class="control-grid"><label>'+TXT.stockPick+'<select id="stock-preset">'+options+'</select></label><label style="grid-column:span 2;">'+TXT.inputCode+'<input id="stock-input" list="stock-universe-list" value="'+esc((quote.code||S.stockCode)+' '+(quote.name||''))+'"><datalist id="stock-universe-list">'+dataList+'</datalist></label><button id="stock-load" class="action-button" type="button">'+TXT.loadStock+'</button><div class="ai-actions"><button id="stock-ai" class="ghost-button" type="button">智能分析</button><button id="stock-deep" class="ghost-button" type="button">深度报告</button></div></div></section>'+cardHTML([{label:'收盘价',value:quote.close??quote.qfq_close,unit:'元',as_of:asof},{label:'一周涨跌',value:quote.ret_5d,unit:'%'},{label:'二十日涨跌',value:quote.ret_20d,unit:'%'},{label:'二十日回撤',value:quote.mdd_20d,unit:'%'}])+'<div class="ai-dual-grid"><section><h3>智能分析</h3><div id="stock-ai-result" class="ai-panel is-compact"></div></section><section><h3>深度报告</h3><div id="stock-deep-result" class="ai-panel is-compact"></div></section></div><div class="panel-grid">'+panel(p1,'个股K线行情','',true)+'</div><section class="chart-panel wide"><div class="panel-header"><div><h3>个股新闻滚动</h3></div></div><div class="news-ticker stock-news" id="stock-news-r44"><div class="news-list">'+(stockNews.length?stockNews:allNews.slice(0,20)).map(newsItem).join('')+'</div></div></section>'+tableHTML('个股行情',tableRows,['code','name','close','qfq_close','ret_1d','ret_5d','ret_20d','vol_20d','mdd_20d','turnover','as_of']));
+    root('<section class="control-card"><div class="control-grid"><label>'+TXT.stockPick+'<select id="stock-preset">'+options+'</select></label><label style="grid-column:span 2;">'+TXT.inputCode+'<input id="stock-input" list="stock-universe-list" value="'+esc((quote.code||S.stockCode)+' '+(quote.name||''))+'"><datalist id="stock-universe-list">'+dataList+'</datalist></label><button id="stock-load" class="action-button" type="button">'+TXT.loadStock+'</button><div class="ai-actions"><button id="stock-ai" class="ghost-button" type="button">智能分析</button><button id="stock-deep" class="ghost-button" type="button">深度报告</button></div></div></section>'+cardHTML([{label:'收盘价',value:quote.close??quote.qfq_close,unit:'元',as_of:asof},{label:'一周涨跌',value:quote.ret_5d,unit:'%'},{label:'二十日涨跌',value:quote.ret_20d,unit:'%'},{label:'二十日回撤',value:quote.mdd_20d,unit:'%'}])+'<div class="ai-dual-grid"><section><h3>智能分析</h3><div id="stock-ai-result" class="ai-panel is-compact"></div></section><section><h3>深度报告</h3><div id="stock-deep-result" class="ai-panel is-compact"></div></section></div><div class="panel-grid">'+panel(p1,'个股K线行情','',true)+'</div><section class="chart-panel wide"><div class="panel-header"><div><h3>个股新闻</h3></div></div><div class="news-ticker stock-news" id="stock-news-r44"><div class="news-list">'+(stockNews.length?stockNews:allNews.slice(0,20)).map(newsItem).join('')+'</div></div></section>'+tableHTML('个股行情',tableRows,['code','name','close','qfq_close','ret_1d','ret_5d','ret_20d','vol_20d','mdd_20d','turnover','as_of']));
     $('stock-preset').onchange=function(){$('stock-input').value=$('stock-preset').value+' '+(r45ResolveStock(allStocks,$('stock-preset').value).name||'');};$('stock-load').onclick=async function(){const picked=r45ResolveStock(allStocks,$('stock-input').value.trim()||$('stock-preset').value);if(!picked.code||!r45RouteLive(renderScope))return;S.stockCode=picked.code;try{const payload=await api('/api/board/stock/'+encodeURIComponent(picked.code));S.stockOverride=payload.data||payload;}catch(error){S.stockOverride={record:picked,tables:[{id:'stock_watchlist',rows:[picked]}]};}if(!r45RouteLive(renderScope))return;await stock();};
     const runStockAi=function(target,mode){const el=$(target);if(el)el.innerHTML='<p>正在刷新个股行情、画像和新闻上下文...</p>';return r45PrepareStockAiContext(base,quote,allStocks,tableRows,stockNewsState,allNewsState).then(function(context){if(!r45RouteLive(renderScope))return null;return aiFillMode('stock',(quote.code||S.stockCode)+' '+(quote.name||''),context,target,mode);});};$('stock-ai').onclick=function(){return runStockAi('stock-ai-result','analysis');};$('stock-deep').onclick=function(){return runStockAi('stock-deep-result','deep_report');};
     const refreshStockNews=function(){Promise.allSettled([r44Wechat(),r44Sina()]).then(function(results){if(!r45RouteLive(renderScope))return;const wechat=results[0].status==='fulfilled'?results[0].value:{rows:[]},sina=results[1].status==='fulfilled'?results[1].value:{rows:[]},freshAll=r45NewsRows(r27MergeNews(arr(wechat.rows),arr(sina.rows),arr(table('news_events','news_feed').rows))),freshStock=relatedNews(freshAll,quote.code||S.stockCode,quote.name);allNewsState=freshAll;stockNewsState=freshStock;const node=$('stock-news-r44'),list=node&&node.querySelector('.news-list');if(list){list.innerHTML=(freshStock.length?freshStock:freshAll.slice(0,20)).map(newsItem).join('');r27AutoScroll(node);}}).catch(function(){});};
     if(!r45RouteLive(renderScope))return;refreshStockNews();await drawStockKline(p1,quote.code||S.stockCode);if(!r45RouteLive(renderScope))return;r27AutoScroll($('stock-news-r44'));
   };
+
+  /* data_dashboard_stock_reports_v1: restore stock news and latest-report panel after deployment overlays. */
+  async function r45StockNews(code){
+    const clean=digits(code||S.stockCode);
+    if(!clean)return {status:'failed',rows:[]};
+    try{return await api('/api/stock/news/'+encodeURIComponent(clean)+'?limit=20');}
+    catch(error){return {status:'failed',rows:[],message:error.message};}
+  }
+  async function r45StockReports(code){
+    const clean=digits(code||S.stockCode);
+    if(!clean)return {status:'failed',reports:[],rows:[]};
+    try{return await api('/api/stock/reports/'+encodeURIComponent(clean)+'?limit=5');}
+    catch(error){return {status:'failed',reports:[],rows:[],message:error.message};}
+  }
+  function r45StockNewsPlaceholder(text){return [{published_at:'',event_type:'个股新闻',title:text,source:'',url:'#'}];}
+  function r45ReportItem(row){
+    row=obj(row);
+    const href=String(row.pdf_url||row.url||'').trim()||'#';
+    const meta=[row.broker||row.source||'',row.published_at||''].filter(Boolean).join(' · ');
+    return '<a class="stock-report-item" href="'+esc(href)+'" target="_blank" rel="noreferrer"><strong class="stock-report-title">'+esc(row.title||'未命名研报')+'</strong><p class="stock-report-summary">'+esc(row.summary||row.abstract||row.title||'')+'</p><small class="stock-report-meta">'+esc(meta)+'</small></a>';
+  }
+  function r45RenderReports(node,payload){
+    if(!node)return;
+    const rows=arr(obj(payload).reports).length?arr(obj(payload).reports):arr(obj(payload).rows);
+    const list=node.querySelector('.stock-report-list')||node;
+    list.innerHTML=rows.length?rows.map(r45ReportItem).join(''):'<div class="stock-report-empty">暂未匹配到该个股的最新研报。</div>';
+  }
+  async function r45PrepareStockAiContext(base,quote,allStocks,tableRows,stockNewsState,allNewsState){
+    let freshAll=arr(allNewsState),freshStock=arr(stockNewsState);
+    const direct=await r45StockNews(quote.code||S.stockCode);
+    const results=await Promise.allSettled([r44Wechat(),r44Sina()]);
+    const wechat=results[0].status==='fulfilled'?results[0].value:{rows:[]},sina=results[1].status==='fulfilled'?results[1].value:{rows:[]};
+    freshAll=r45NewsRows(r27MergeNews(arr(wechat.rows),arr(sina.rows),arr(table('news_events','news_feed').rows)));
+    const directRows=arr(obj(direct).rows),related=relatedNews(freshAll,quote.code||S.stockCode,quote.name);
+    freshStock=directRows.length?directRows:related;
+    return r45StockContextForAi(base,quote,freshStock.length?freshStock:arr(stockNewsState),freshAll.length?freshAll:arr(allNewsState),allStocks,tableRows);
+  }
+  stock=async function(){
+    const renderScope=r45RouteScope();
+    const base=S.stockOverride||mod('stock'),watch=arr(table('stock','stock_watchlist').rows),universe=await r45StockUniverse(),allStocks=r45StockRows(watch,universe);
+    if(!r45RouteLive(renderScope))return;
+    if(!S.stockCode)S.stockCode=(allStocks[0]&&allStocks[0].code)||(watch[0]&&watch[0].code)||'000001';
+    const selected=digits(S.stockCode),baseRows=arr((arr(base.tables).find(function(item){return item.id==='stock_watchlist';})||{}).rows||watch),record=obj(base.record||{}),lookup=r45ResolveStock(allStocks,selected),fallback=baseRows.find(function(row){return digits(row.code)===selected;})||watch.find(function(row){return digits(row.code)===selected;})||{},quote=r45MergeStock({code:selected},lookup,fallback,record.code?record:null);
+    const cachedSina=R44_SINA&&R44_SINA.payload?R44_SINA.payload:{rows:[]},cachedWechat=R44_WECHAT&&R44_WECHAT.payload?R44_WECHAT.payload:{rows:[]},allNews=r45NewsRows(r27MergeNews(arr(cachedWechat.rows),arr(cachedSina.rows),arr(table('news_events','news_feed').rows)));let stockNews=arr(obj(base).news);if(!stockNews.length)stockNews=relatedNews(allNews,quote.code||S.stockCode,quote.name);
+    const asof=quote.as_of||maxDate(baseRows.length?baseRows:watch),p1=pid('s');let stockNewsState=stockNews,allNewsState=allNews;
+    clearConclusion();
+    const presetMap=new Map();[quote].concat(baseRows,watch,allStocks).forEach(function(row){const code=digits(row&&row.code);if(/^\d{6}$/.test(code)&&!presetMap.has(code))presetMap.set(code,r45MergeStock({code:code},r45ResolveStock(allStocks,code),row));});
+    const presetRows=Array.from(presetMap.values()),options=presetRows.map(function(row){const label=row.code+' '+(row.name||'');return '<option value="'+esc(row.code)+'" '+(digits(row.code)===selected?'selected':'')+'>'+esc(label)+'</option>';}).join(''),dataList=allStocks.map(function(row){return '<option value="'+esc(row.code+' '+(row.name||''))+'"></option>';}).join(''),tableRows=r45StockTableRows(baseRows,watch,allStocks,quote);
+    if(!r45RouteLive(renderScope))return;
+    root('<section class="control-card"><div class="control-grid"><label>'+TXT.stockPick+'<select id="stock-preset">'+options+'</select></label><label style="grid-column:span 2;">'+TXT.inputCode+'<input id="stock-input" list="stock-universe-list" value="'+esc((quote.code||S.stockCode)+' '+(quote.name||''))+'"><datalist id="stock-universe-list">'+dataList+'</datalist></label><button id="stock-load" class="action-button" type="button">'+TXT.loadStock+'</button><div class="ai-actions"><button id="stock-ai" class="ghost-button" type="button">智能分析</button><button id="stock-deep" class="ghost-button" type="button">深度报告</button></div></div></section>'+cardHTML([{label:'收盘价',value:quote.close??quote.qfq_close,unit:'元',as_of:asof},{label:'一周涨跌',value:quote.ret_5d,unit:'%'},{label:'二十日涨跌',value:quote.ret_20d,unit:'%'},{label:'二十日回撤',value:quote.mdd_20d,unit:'%'}])+'<div class="ai-dual-grid"><section><h3>智能分析</h3><div id="stock-ai-result" class="ai-panel is-compact"></div></section><section><h3>深度报告</h3><div id="stock-deep-result" class="ai-panel is-compact"></div></section></div><div class="panel-grid">'+panel(p1,'个股K线行情','',true)+'</div><section class="chart-panel wide"><div class="panel-header"><div><h3>个股新闻</h3></div></div><div class="news-ticker stock-news" id="stock-news-r44"><div class="news-list">'+(stockNews.length?stockNews:r45StockNewsPlaceholder('正在加载个股新闻与公告...')).map(newsItem).join('')+'</div></div></section><section class="chart-panel wide stock-report-panel"><div class="panel-header"><div><h3>最新研报</h3></div></div><div class="news-ticker stock-report-ticker" id="stock-reports-r45"><div class="stock-report-list"><div class="stock-report-empty">正在加载最新研报...</div></div></div></section>'+tableHTML('个股行情',tableRows,['code','name','close','qfq_close','ret_1d','ret_5d','ret_20d','vol_20d','mdd_20d','turnover','as_of']));
+    $('stock-preset').onchange=function(){$('stock-input').value=$('stock-preset').value+' '+(r45ResolveStock(allStocks,$('stock-preset').value).name||'');};
+    $('stock-load').onclick=async function(){const picked=r45ResolveStock(allStocks,$('stock-input').value.trim()||$('stock-preset').value);if(!picked.code||!r45RouteLive(renderScope))return;S.stockCode=picked.code;try{const payload=await api('/api/board/stock/'+encodeURIComponent(picked.code));S.stockOverride=payload.data||payload;}catch(error){S.stockOverride={record:picked,tables:[{id:'stock_watchlist',rows:[picked]}]};}if(!r45RouteLive(renderScope))return;await stock();};
+    const runStockAi=function(target,mode){const el=$(target);if(el)el.innerHTML='<p>正在刷新个股行情、画像和新闻上下文...</p>';return r45PrepareStockAiContext(base,quote,allStocks,tableRows,stockNewsState,allNewsState).then(function(context){if(!r45RouteLive(renderScope))return null;return aiFillMode('stock',(quote.code||S.stockCode)+' '+(quote.name||''),context,target,mode);});};
+    $('stock-ai').onclick=function(){return runStockAi('stock-ai-result','analysis');};
+    $('stock-deep').onclick=function(){return runStockAi('stock-deep-result','deep_report');};
+    const refreshStockNews=function(){r45StockNews(quote.code||S.stockCode).then(function(payload){if(!r45RouteLive(renderScope))return;const freshStock=arr(obj(payload).rows);stockNewsState=freshStock;const node=$('stock-news-r44'),list=node&&node.querySelector('.news-list');if(list){list.innerHTML=(freshStock.length?freshStock:r45StockNewsPlaceholder('暂未匹配到该个股的最新新闻或公告')).map(newsItem).join('');r27AutoScroll(node);}}).catch(function(){});};
+    const refreshReports=function(){r45StockReports(quote.code||S.stockCode).then(function(payload){if(r45RouteLive(renderScope))r45RenderReports($('stock-reports-r45'),payload);}).catch(function(){if(r45RouteLive(renderScope))r45RenderReports($('stock-reports-r45'),{reports:[]});});};
+    refreshStockNews();refreshReports();await drawStockKline(p1,quote.code||S.stockCode);if(!r45RouteLive(renderScope))return;r27AutoScroll($('stock-news-r44'));
+  };
+
   workspaceAiMonitor=async function(){const renderScope=r45RouteScope();header('AI监控','','专题跟踪');clearConclusion();await loadPlotly();if(!r45RouteLive(renderScope))return;root('<div id="ai-monitor-host" class="ai-monitor-native-host" aria-label="AI技术扩散监控"><div class="loading-card">正在载入科技扩散数据、行业图谱与个股归因。</div></div>');const host=$('ai-monitor-host');if(!host||!window.AIMonitorUI)throw new Error('AI监控前端模块未加载');try{await window.AIMonitorUI.mount(host);}catch(error){if(window.AIMonitorUI.invalidate)window.AIMonitorUI.invalidate();host.innerHTML='<div class="loading-card">正在载入科技扩散数据、行业图谱与个股归因。</div>';await sleep(900);if(!r45RouteLive(renderScope))return;await window.AIMonitorUI.mount(host);}};
   function r44DomesticNum(row,key){const value=obj(row)[key];if(value===null||value===undefined||value==='')return null;const n=Number(String(value).replace(/,/g,'').replace('%',''));return Number.isFinite(n)?n:null;}
   function r44DomesticDate(row){
@@ -3842,18 +4061,48 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
   };
   render=renderWorkspace;
   /* end r44 data dashboard final overrides */
-  S.active='home:overview';
+  S.active='data:market_monitor';
+  S.workspace=S.workspace||{};
+  S.workspace.section=S.workspace.section||{};
+  S.workspace.section['data:market_monitor']='macro';
   render=renderWorkspace;
 
   /* 2026-08-24 LLM K-line learning final workspace override */
   S.klineLLM=S.klineLLM||{snapshot:null,context:null,stock:null};
+  S.technicalFactor=S.technicalFactor||{snapshot:null,factor:null,benchmark:null};
   Object.assign(VIEW_BREADCRUMBS,{technical:{title:'技术分析',views:{factors:'技术因子',learning:'K线学习'}}});
   Object.assign(WORKSPACE_CONFIG,{
-    'technical:factors':{group:'技术分析',title:'技术因子',subtitle:'纯技术因子模型预留位；当前按你的要求先留空，不混入K线学习。',sections:[{id:'technical-factor-empty',label:'技术因子',kind:'technical-factor-empty'}]},
+    'technical:factors':{group:'技术分析',title:'技术因子',subtitle:'OHLCV量价因子 + 数据处理 + 因子检验 + 截面打分 + 多股轮动',sections:[{id:'technical-factor-dashboard',label:'技术因子',kind:'technical-factor'}]},
     'technical:learning':{group:'技术分析',title:'K线学习',subtitle:'K线形态库 + 风格×市值分域 + 记忆检索 + LLM进化修正 + 个股择时',sections:[{id:'kline-learning',label:'K线学习',kind:'kline-llm',page:'dashboard'}]}
   });
   Object.assign(LEGACY_ROUTE_ALIAS,{'technical:strategy':['technical:learning','kline-learning'],'kline:home':['technical:learning','kline-learning'],'kline:learn':['technical:learning','kline-learning'],'kline:history':['technical:learning','kline-learning'],'kline:backtest':['technical:learning','kline-learning']});
-  function kllmPatchNav(){
+  Object.assign(VIEW_BREADCRUMBS,{portfolio:{title:'组合优化',views:{solve:'优化求解器',timing:'宽基择时',index:'指数增强'}}});
+  Object.assign(WORKSPACE_CONFIG,{
+    'portfolio:solve':{group:'组合优化',title:'优化求解器',subtitle:'默认参数 + 约束解释 + 人工确认 + HiGHS选股 + Clarabel求权',sections:[{id:'optimizer-solver',label:'优化求解器',kind:'optimizer',page:'learning'}]},
+    'portfolio:timing':{group:'组合优化',title:'宽基择时',subtitle:'宏观因子 + 量价因子 + 情绪因子 + 估值因子 + 五档仓位',sections:[{id:'broad-timing',label:'宽基择时',kind:'optimizer-strategy',page:'timing'}]},
+    'portfolio:index':{group:'组合优化',title:'指数增强',subtitle:'默认参数 + Beta行业轮动 + Alpha个股得分 + 约束加强 + 两阶段求解 + 回测跟踪',sections:[{id:'index-enhancement',label:'指数增强',kind:'optimizer-strategy',page:'index'}]}
+  });
+  delete LEGACY_ROUTE_ALIAS['portfolio:timing'];
+  Object.assign(LEGACY_ROUTE_ALIAS,{'portfolio:strategy':['portfolio:index','index','index'],'portfolio:home':['portfolio:index','index','index'],'portfolio:pool':['portfolio:index','index','index'],'portfolio:risk':['portfolio:index','index','index'],'portfolio:backtest':['portfolio:index','index','index'],'index:home':['portfolio:index','index','index'],'index:universe':['portfolio:index','index','index'],'index:alpha':['portfolio:index','index','index'],'index:smartbeta':['portfolio:index','index','index'],'index:risk':['portfolio:index','index','index'],'index:tracking':['portfolio:index','index','index']});
+  function optimizerPatchPortfolioNav(){
+    const items=Array.from(document.querySelectorAll('.portfolio-optimization-nav .nav-item'));
+    const defs=[['portfolio:solve','优化求解器'],['portfolio:timing','宽基择时'],['portfolio:index','指数增强']];
+    defs.forEach(function(def,index){
+      let item=items[index];
+      if(!item){
+        const host=document.querySelector('.portfolio-optimization-nav .nav-children');
+        if(!host)return;
+        item=document.createElement('button');item.className='nav-item';item.innerHTML='<span></span><i></i>';host.appendChild(item);
+      }
+      item.dataset.target=def[0];
+      const label=item.querySelector('.nav-label,span,strong')||item;
+      label.textContent=def[1];
+    });
+    items.slice(3).forEach(function(item){item.remove();});
+  }
+  const optimizerOldWorkspaceSyncNav=workspaceSyncNav;
+  workspaceSyncNav=function(){optimizerPatchPortfolioNav();return optimizerOldWorkspaceSyncNav();};
+  optimizerPatchPortfolioNav();  function kllmPatchNav(){
     const items=Array.from(document.querySelectorAll('.nav-item')).filter(function(item){return String(item.dataset.target||'').indexOf('technical:')===0;});
     if(items[0]){items[0].dataset.target='technical:factors';const label=items[0].querySelector('.nav-label,span,strong')||items[0];label.textContent='技术因子';}
     if(items[1]){items[1].dataset.target='technical:learning';const label=items[1].querySelector('.nav-label,span,strong')||items[1];label.textContent='K线学习';}
@@ -3985,20 +4234,106 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
     if(ctx.stock)await kllmLoadStock(ctx.stock,rule,false);
     if(llmMode)conclusion('K线学习已按 <strong>'+esc(data.domain_axis)+'</strong> 构建域级记忆池；LLM进化模式：<strong>'+esc(llmMode)+'</strong>。'+esc(data.research_boundary||''));
   }
-  async function renderTechnicalFactorEmpty(){
-    header('技术因子','纯技术因子模型预留位','技术分析');
-    setText('as-of','--');setText('generated-at','--');
-    conclusion('该二级板块按你的要求暂时留空，避免把纯技术因子模型和K线学习记忆进化混在一起。');
-    root('<section class="chart-panel wide"><div class="panel-header"><div><h3>技术因子</h3></div></div><div class="empty-state">暂不展示内容。</div></section>');
+
+  function tfPct(value,digits){const n=Number(value);return Number.isFinite(n)?(n*100).toFixed(digits||1)+'%':'--';}
+  function tfNum(value,digits){const n=Number(value);return Number.isFinite(n)?n.toFixed(digits||2):'--';}
+  function tfPlain(value){if(Array.isArray(value))return value.join('；');return value==null?'--':String(value);}
+  async function tfSnapshot(refresh){
+    if(S.technicalFactor.snapshot&&!refresh)return S.technicalFactor.snapshot;
+    const data=await api('/api/technical-factor/dashboard'+(refresh?'?refresh=1&_='+Date.now():''));
+    S.technicalFactor.snapshot=data;return data;
+  }
+  function tfFactorOptions(data,selected){
+    const rows=arr(data.efficient_factors), seen=new Set();
+    return rows.map(function(row){const name=row['一级因子'];if(!name||seen.has(name))return '';seen.add(name);return '<option value="'+esc(name)+'" '+(name===selected?'selected':'')+'>'+esc(name)+'</option>';}).join('');
+  }
+  function tfBenchmarkOptions(data,selected){
+    return arr(data.universe_options).map(function(name){return '<option value="'+esc(name)+'" '+(name===selected?'selected':'')+'>'+esc(name)+'</option>';}).join('');
+  }
+  function tfFlowHtml(data){
+    return '<section class="chart-panel wide tf-flow-panel"><div class="panel-header"><div><h3>流程图</h3></div></div><div class="tf-flow">'+arr(data.flow).map(function(step,index){return '<article><small>'+String(index+1).padStart(2,'0')+'</small><strong>'+esc(step)+'</strong></article>';}).join('<i></i>')+'</div></section>';
+  }
+  function tfFigure(title,url){
+    return '<section class="chart-panel tf-figure-panel"><div class="panel-header"><div><h3>'+esc(title)+'</h3></div></div>'+(url?'<img class="tf-report-img" src="'+esc(apiPath(url))+'" alt="'+esc(title)+'">':'<div class="chart-fallback">暂无图表</div>')+'</section>';
+  }
+  function tfDrawCorr(id,data){
+    data=obj(data);const labels=arr(data.labels),z=arr(data.z);
+    plot(id,labels.length?[{type:'heatmap',x:labels,y:labels,z:z,colorscale:[[0,'#f7fbff'],[.5,'#dbe5f1'],[1,'#2f5597']],zmin:-1,zmax:1,showscale:true,text:z,texttemplate:'%{text:.2f}',hovertemplate:'%{y} / %{x}: %{z:.3f}<extra></extra>'}]:[],{height:380,margin:{l:110,r:24,t:12,b:80},xaxis:{tickangle:-25},yaxis:{autorange:'reversed'}});
+  }
+  function tfDrawRankIC(id,detail){
+    const rows=arr(obj(detail).rank_ic),x=rows.map(function(r){return r.date;}),ic=rows.map(function(r){return Number(r.RankIC);}),cum=rows.map(function(r){return Number(r['累计RankIC']);});
+    plot(id,x.length?[
+      {type:'bar',name:'RankIC',x:x,y:ic,marker:{color:'#8faadc'},yaxis:'y'},
+      {type:'scatter',mode:'lines',name:'累计RankIC',x:x,y:cum,line:{color:'#c00000',width:2.4},yaxis:'y2'}
+    ]:[],{height:360,hovermode:'x unified',legend:{orientation:'h',y:-.18,x:0},xaxis:{showgrid:false},yaxis:{gridcolor:'#edf0f2',zeroline:true},yaxis2:{overlaying:'y',side:'right',showgrid:false,zeroline:false}});
+  }
+  function tfDrawLongShort(id,detail){
+    const rows=arr(obj(detail).long_short),x=rows.map(function(r){return r.date;}),ls=rows.map(function(r){return Number(r['多空收益']);}),cum=rows.map(function(r){return Number(r['累计多空']);});
+    plot(id,x.length?[
+      {type:'bar',name:'单期多空',x:x,y:ls,marker:{color:'#bfbfbf'}},
+      {type:'scatter',mode:'lines',name:'累计多空',x:x,y:cum,line:{color:'#c00000',width:2.4},yaxis:'y2'}
+    ]:[],{height:360,hovermode:'x unified',legend:{orientation:'h',y:-.18,x:0},xaxis:{showgrid:false},yaxis:{gridcolor:'#edf0f2',tickformat:'.1%'},yaxis2:{overlaying:'y',side:'right',showgrid:false,zeroline:false}});
+  }
+  function tfDrawGroups(id,detail){
+    const rows=arr(obj(detail).groups),x=rows.map(function(r){return r['年度'];});
+    plot(id,x.length?[
+      {type:'bar',name:'高分组',x:x,y:rows.map(function(r){return Number(r['高分组']);}),marker:{color:'#c00000'}},
+      {type:'bar',name:'低分组',x:x,y:rows.map(function(r){return Number(r['低分组']);}),marker:{color:'#bfbfbf'}},
+      {type:'scatter',mode:'lines+markers',name:'多空',x:x,y:rows.map(function(r){return Number(r['多空']);}),line:{color:'#2f5597',width:2.2}}
+    ]:[],{height:340,barmode:'group',legend:{orientation:'h',y:-.18,x:0},xaxis:{showgrid:false},yaxis:{gridcolor:'#edf0f2',tickformat:'.1%'}});
+  }
+  function tfDrawWeights(id,data){
+    const rows=arr(data.weight_stack),families=arr(data.efficient_factors).map(function(r){return r['一级因子'];}).filter(Boolean),x=rows.map(function(r){return r.date;});
+    const traces=families.map(function(name,index){return {type:'scatter',mode:'lines',stackgroup:'one',name:name,x:x,y:rows.map(function(r){return Number(r[name]||0);}),line:{width:.6,color:['#c00000','#2f5597','#70ad47','#f5b400','#7f7f7f','#8064a2'][index%6]}};});
+    plot(id,traces,{height:360,hovermode:'x unified',legend:{orientation:'h',y:-.18,x:0},xaxis:{showgrid:false},yaxis:{gridcolor:'#edf0f2',tickformat:'.0%',range:[0,1]}});
+  }
+  function tfKpis(data){
+    const efficient=arr(data.efficient_factors),backtests=obj(data.backtests),weights=efficient.map(function(r){return Number(r['调整RankIC权重']||0);});
+    return cardHTML([
+      {label:'一级因子数量',value:efficient.length,unit:'个',as_of:'六维量价信号'},
+      {label:'二级因子数量',value:arr(data.factor_rows).length,unit:'个',as_of:'OHLCV纯量价'},
+      {label:'宽基轮动域',value:Object.keys(backtests).length,unit:'个',as_of:'指数内部多股轮动'},
+      {label:'最大单因子权重',value:(Math.max.apply(null,weights.length?weights:[0])*100),unit:'%',as_of:'RankIC收缩后'}
+    ]);
+  }
+  async function renderTechnicalFactor(){
+    await loadPlotly();
+    header('技术因子','OHLCV量价因子-数据处理-截面打分-多股轮动','技术分析');
+    setText('as-of','加载中');setText('generated-at','加载中');
+    const data=await tfSnapshot(false);
+    setText('as-of',data.as_of||'--');setText('generated-at',data.generated_at||'--');
+    const factors=arr(data.efficient_factors).map(function(r){return r['一级因子'];}).filter(Boolean);
+    const factor=S.technicalFactor.factor||data.default_factor||factors[0]||'趋势动量';
+    const benchmark=S.technicalFactor.benchmark||data.default_benchmark||arr(data.universe_options)[0]||'中证500';
+    const detail=obj(obj(data.factor_details)[factor]);
+    const backtest=obj(obj(data.backtests)[benchmark]);
+    const corrId=pid('tfcorr'),rankId=pid('tfrank'),lsId=pid('tfls'),grpId=pid('tfgrp'),wId=pid('tfw');
+    root('<div class="tf-workbench">'+
+      '<section class="control-card"><div class="control-grid tf-controls">'+
+      '<label>单因子<select id="tf-factor">'+tfFactorOptions(data,factor)+'</select></label>'+
+      '<label>基准指数<select id="tf-benchmark">'+tfBenchmarkOptions(data,benchmark)+'</select></label>'+
+      '<button id="tf-apply" class="action-button" type="button">更新图表</button>'+
+      '<button id="tf-refresh" class="ghost-button" type="button">刷新快照</button>'+
+      '</div></section>'+tfKpis(data)+tfFlowHtml(data)+
+      '<div class="panel-grid">'+kllmRowsTable('全部因子表',data.factor_rows,['一级因子','二级因子','方向','计算逻辑','一级内权重','经济解释'],{'一级内权重':function(v){return tfNum(v,3);}})+kllmRowsTable('数据处理+因子检验流程',data.processing_rows,['步骤','处理方法','输出'])+'</div>'+
+      '<div class="panel-grid">'+kllmRowsTable('高效因子检验表格',data.efficient_factors,['一级因子','方向','RankIC均值','ICIR','t值','近1周衰减','近4周衰减','近12周衰减','多空收益','命中率','盈亏比','覆盖期数','调整RankIC权重'],{'RankIC均值':function(v){return tfNum(v,4);},'ICIR':function(v){return tfNum(v,3);},'t值':function(v){return tfNum(v,2);},'近1周衰减':function(v){return tfNum(v,4);},'近4周衰减':function(v){return tfNum(v,4);},'近12周衰减':function(v){return tfNum(v,4);},'多空收益':function(v){return tfPct(v,2);},'命中率':function(v){return tfPct(v,1);},'盈亏比':function(v){return tfNum(v,2);},'调整RankIC权重':function(v){return tfPct(v,1);}})+panel(corrId,'高效因子相关性','',false)+'</div>'+
+      '<div class="panel-grid">'+panel(rankId,'选中因子检验累计RankIC和RankIC','',false)+panel(lsId,'选中因子多空测试','',false)+panel(grpId,'选中因子时序分组','',false)+panel(wId,'各一级因子权重变化堆积图','',false)+'</div>'+
+      '<section class="section-heading"><div><h2>回测两图表</h2></div></section><div class="tf-figure-grid">'+tfFigure(benchmark+'年度收益表',backtest.annual_table_image)+tfFigure(benchmark+'趋势折线图',backtest.trend_nav_image)+'</div>'+
+      '<section class="section-heading"><div><h2>频率与打分对比</h2></div></section><div class="tf-figure-grid">'+tfFigure(benchmark+'每个策略不同频率+基准曲线',backtest.frequency_nav_image)+tfFigure(benchmark+'每个策略不同打分+基准曲线',backtest.score_nav_image)+'</div>'+
+      '<div class="panel-grid">'+kllmRowsTable('年度因子贡献归因表',data.annual_contribution,['年度','趋势动量','突破确认','回撤/防守择时','量价确认','波动质量','合计'],{'趋势动量':function(v){return tfPct(v,1);},'突破确认':function(v){return tfPct(v,1);},'回撤/防守择时':function(v){return tfPct(v,1);},'量价确认':function(v){return tfPct(v,1);},'波动质量':function(v){return tfPct(v,1);},'合计':function(v){return tfPct(v,1);}})+kllmRowsTable('本年YTD月度贡献归因表',data.ytd_monthly_contribution,['月份','进攻质量','买卖点确认','六维投票','合计'],{'进攻质量':function(v){return tfPct(v,1);},'买卖点确认':function(v){return tfPct(v,1);},'六维投票':function(v){return tfPct(v,1);},'合计':function(v){return tfPct(v,1);}})+'</div>'+kllmRowsTable('截面打分定义',data.score_definitions,['策略','合成逻辑','买入含义'])+
+      '</div>');
+    tfDrawCorr(corrId,data.correlation);tfDrawRankIC(rankId,detail);tfDrawLongShort(lsId,detail);tfDrawGroups(grpId,detail);tfDrawWeights(wId,data);
+    $('tf-apply').onclick=function(){S.technicalFactor.factor=$('tf-factor').value;S.technicalFactor.benchmark=$('tf-benchmark').value;invalidateView(S.active);render(true);};
+    $('tf-refresh').onclick=async function(){S.technicalFactor.snapshot=null;await api('/api/technical-factor/dashboard?refresh=1&_='+Date.now());invalidateView(S.active);await render(true);};
+    conclusion('技术因子当前为 <strong>OHLCV纯量价</strong> 框架：六维一级因子经数据处理、RankIC/多空/相关性检验后，合成为进攻质量、买卖点确认、六维投票三类信号，在所选宽基内部做多股轮动。'+esc(data.research_boundary||''));
   }
   const kllmOldWorkspaceRenderSection=workspaceRenderSection;
   workspaceRenderSection=async function(section){
     if(section.kind==='kline-llm')return renderKlineLLM();
-    if(section.kind==='technical-factor-empty')return renderTechnicalFactorEmpty();
+    if(section.kind==='technical-factor')return renderTechnicalFactor();
     return kllmOldWorkspaceRenderSection(section);
   };
   kllmPatchNav();
 
   function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 })();
-

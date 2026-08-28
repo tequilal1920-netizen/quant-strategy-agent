@@ -44,9 +44,9 @@
                    },
     "inventory":  {
                       "skill_files":  4,
-                      "source_files":  4,
+                      "source_files":  13,
                       "component_files":  0,
                       "runtime_files":  8,
-                      "total_files":  17
+                      "total_files":  26
                   }
 }

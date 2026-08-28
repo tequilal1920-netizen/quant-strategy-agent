@@ -320,7 +320,7 @@ def _industry_query(operation: str, params: dict[str, Any]) -> dict[str, Any]:
     response_payload = payload
     if operation == "ranking":
         if frequency == "high_frequency":
-            rows = sorted(high_rows, key=lambda row: row.get("rank", 10_000))
+            rows = sorted(high_rows, key=lambda row: row.get("rank") if row.get("rank") is not None else 10_000)
             ranking = [
                 {
                     "排名": row.get("rank"),

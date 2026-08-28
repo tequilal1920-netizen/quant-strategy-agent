@@ -1498,15 +1498,17 @@ def refresh_edb(
         return {"refreshed": [], "errors": {}}
     refreshed: list[str] = []
     errors: dict[str, str] = {}
+    wind_error: str | None = None
     try:
         client = WindEDBClient()
     except Exception as error:
-        return {
-            "refreshed": [],
-            "errors": {"wind_edb": f"{type(error).__name__}: {error}"},
-        }
+        client = None
+        wind_error = f"{type(error).__name__}: {error}"
+        errors["wind_edb"] = wind_error
     for series_id, (indicator_id, scale) in active.items():
         try:
+            if client is None:
+                raise SourceUnavailableError(wind_error or "Wind EDB is unavailable")
             values = {
                 when: value * scale
                 for when, value in client.series(indicator_id, start, end).items()
@@ -1522,6 +1524,25 @@ def refresh_edb(
             refreshed.append(series_id)
         except Exception as error:
             errors[series_id] = f"{type(error).__name__}: {error}"
+    if "retail.participating_investors" in active and "retail.participating_investors" not in refreshed:
+        try:
+            ifind_client = IFindEDBClient()
+            values = {
+                when: value * 0.0001
+                for when, value in ifind_client.series("S004085260", start, end).items()
+            }
+            item = CONTRACT_BY_ID["retail.participating_investors"]
+            cache.replace_series(
+                "retail.participating_investors",
+                values,
+                "iFinD EDB",
+                "S004085260",
+                run_id,
+            )
+            refreshed.append("retail.participating_investors")
+            errors.pop("retail.participating_investors", None)
+        except Exception as error:
+            errors["retail.participating_investors.ifind"] = f"{type(error).__name__}: {error}"
     return {"refreshed": refreshed, "errors": errors}
 
 

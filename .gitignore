@@ -29,9 +29,27 @@ output/
 board/**/private/
 board/**/runtime/
 board/**/data_cache/
+board/**/data/*_cache.json
+board/**/data/*_cache.sqlite
+board/**/data/*_cache.sqlite3
+board/**/data/*_source_cache.sqlite
+board/**/data/kline_llm_stock_cache/
+board/**/data/wallstreet_wechat_export/
+board/**/deploy/remote-windows-ssh/
+board/**/deploy/wheelhouse/
+board/**/test-results/
+board/**/qa/*.patch
+board/trump/
+board/cmb_nav_monitor/
+board/public_dashboard/data/history/
+board/**/static/asset_allocation_figures/
 copy/
 *.log
 *.tmp
+*.patch
+**/tmp_probe*.py
+**/_patch_probe.txt
+**/_apply_patch_write_test.txt
 
 # Release packages and externally mounted vNext model outputs
 dist/
@@ -44,6 +62,10 @@ board/quant_strategy_agent_vnext/qa/*.png
 # Locally vendored third-party packages; install from requirements instead
 environment/vendor/
 board/**/vendor/
+node_modules/
+board/**/node_modules/
+board/**/.next/
+board/**/.vite/
 
 # Editor and operating-system files
 .DS_Store

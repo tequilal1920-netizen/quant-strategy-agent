@@ -28,11 +28,26 @@
 
   async function fetchJSON(path) {
     if (cache.has(path)) return cache.get(path);
-    const response = await fetch(`${basePath}${path}`, { headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const payload = await response.json();
-    cache.set(path, payload);
-    return payload;
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const response = await fetch(`${basePath}${path}`, { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } });
+        if (!response.ok) {
+          const error = new Error(`HTTP ${response.status}`);
+          error.status = response.status;
+          throw error;
+        }
+        const payload = await response.json();
+        cache.set(path, payload);
+        return payload;
+      } catch (error) {
+        lastError = error;
+        const retryable = !error.status || error.status >= 500;
+        if (!retryable || attempt === 2) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
+    }
+    throw lastError;
   }
 
   function scoreKey() {

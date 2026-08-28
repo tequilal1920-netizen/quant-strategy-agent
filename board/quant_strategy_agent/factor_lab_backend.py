@@ -19,7 +19,7 @@ from typing import Any
 from flask import Blueprint, Flask, jsonify, request, session
 
 
-API_VERSION = "factor-lab-api/1.0"
+API_VERSION = "factor-lab-api/2.9"
 APP_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = APP_ROOT.parents[1]
 ENGINE_PATH = Path(
@@ -37,6 +37,12 @@ CHAMPION_MANIFEST = Path(
         str(PROJECT_ROOT / "model" / "factor_laboratory" / "champion_manifest.json"),
     )
 ).resolve()
+PROFESSIONAL_FRAMEWORK = Path(
+    os.environ.get(
+        "FACTOR_LAB_PROFESSIONAL_FRAMEWORK",
+        str(PROJECT_ROOT / "model" / "factor_laboratory" / "professional_framework.json"),
+    )
+).resolve()
 
 STATE_DB.parent.mkdir(parents=True, exist_ok=True)
 PROCESS_LOCK = threading.RLock()
@@ -44,6 +50,17 @@ PROCESSES: dict[str, subprocess.Popen] = {}
 MAX_CONCURRENT = max(1, int(os.environ.get("FACTOR_LAB_MAX_CONCURRENT", "1")))
 RUN_SEMAPHORE = threading.BoundedSemaphore(MAX_CONCURRENT)
 CATALOG_CACHE: dict[str, Any] = {"at": 0.0, "payload": None}
+FACTOR_MODEL_ROOT = (PROJECT_ROOT / "model" / "factor_laboratory").resolve()
+if str(FACTOR_MODEL_ROOT) not in sys.path:
+    sys.path.insert(0, str(FACTOR_MODEL_ROOT))
+try:
+    from factor_catalog import build_factor_catalog
+except Exception:
+    build_factor_catalog = None
+try:
+    from environment.data_sources.factor_lab_vendor_data import audit_vendor_data_layer
+except Exception:  # noqa: BLE001
+    audit_vendor_data_layer = None
 
 
 def now_iso() -> str:
@@ -148,39 +165,95 @@ MODEL_PRESETS: dict[str, dict[str, Any]] = {
             "六专家市场状态 MoE 路由",
             "5/10/20日异方差概率与分位数预测头",
             "横截面Rank+Huber+NLL+符号+换手+暴露+路由均衡复合损失",
+            "训练期时间裁剪、特征dropout、输入噪声，验证/测试不扰动",
+            "验证均值+最弱时间折+正IC占比-波动-训练验证落差的稳健早停",
             "净化嵌套搜索、successive halving、五种子深度集成",
         ],
         "defaults": {
-            "sequence_length": 252, "hidden_dim": 160, "lstm_layers": 3,
-            "attention_layers": 3, "heads": 8, "experts": 6, "dropout": .18,
-            "learning_rate": 0.0003, "weight_decay": 0.0001, "grad_clip": 1.0,
-            "epochs": 18, "ensemble_seeds": 5,
-            "search": {"method": "purged_successive_halving", "trials": 12, "trial_epochs": 4},
+            "sequence_length": 180, "hidden_dim": 128, "lstm_layers": 2,
+            "attention_layers": 2, "heads": 4, "experts": 4, "dropout": .22,
+            "learning_rate": 0.00025, "weight_decay": 0.0002, "grad_clip": 0.8,
+            "epochs": 20, "ensemble_seeds": 5, "patience": 5, "min_delta": 0.0005,
+            "feature_dropout": 0.08, "input_noise": 0.015, "min_sequence_fraction": 0.78,
+            "selection_folds": 4, "train_valid_gap_penalty": 0.60,
+            "search": {"method": "purged_successive_halving", "trials": 16, "trial_epochs": 3},
+        },
+    },
+    "gru": {
+        "label": "因果混合残差 GRU",
+        "architecture": [
+            "五域变量选择门控与缺失年龄编码",
+            "3/5/9核多尺度因果深度卷积",
+            "三层 projected GRU 状态空间",
+            "三层因果多头注意力",
+            "六专家市场状态 MoE 路由",
+            "5/10/20日异方差概率与分位数预测头",
+            "横截面Rank+Huber+NLL+符号+换手+暴露+路由均衡复合损失",
+            "训练期时间裁剪、特征dropout、输入噪声，验证/测试不扰动",
+            "验证均值+最弱时间折+正IC占比-波动-训练验证落差的稳健早停",
+            "净化嵌套搜索、successive halving、七种子深度集成",
+        ],
+        "defaults": {
+            "recurrent_cell": "gru", "sequence_length": 120,
+            "hidden_dim": 96, "gru_layers": 2,
+            "attention_layers": 2, "heads": 4, "experts": 4, "dropout": .24,
+            "learning_rate": 0.00035, "weight_decay": 0.0002, "grad_clip": 0.8,
+            "epochs": 22, "ensemble_seeds": 7, "patience": 5, "min_delta": 0.0005,
+            "feature_dropout": 0.10, "input_noise": 0.012, "min_sequence_fraction": 0.80,
+            "selection_folds": 4, "train_valid_gap_penalty": 0.65,
+            "search": {"method": "purged_successive_halving", "trials": 18, "trial_epochs": 3},
         },
     },
     "rl_transformer": {
         "label": "语法约束协同 RL+Transformer",
         "architecture": [
             "后缀 AST 公式环境与栈类型系统",
-            "六层 causal Transformer actor + critic value head",
+            "四层稳健 causal Transformer actor + critic value head",
             "字段/单位/栈深/算子/窗口硬动作掩码",
             "PPO clipped objective + GAE + KL/熵正则",
             "训练/验证最弱折、残差IC、净Sharpe、换手、冗余、复杂度联合奖励",
+            "候选公式增加训练-验证落差、验证换手、验证回撤硬门控",
             "35%→100%多保真 successive halving",
             "复杂度×因子域质量多样性 archive",
             "搜索期严格隔离测试集，最终一次性报告",
         ],
         "defaults": {
-            "d_model": 256, "layers": 6, "heads": 8, "dropout": .15,
-            "max_formula_tokens": 18, "episodes": 2048, "rollout_batch": 64,
+            "d_model": 192, "layers": 4, "heads": 8, "dropout": .18,
+            "max_formula_tokens": 20, "episodes": 2048, "rollout_batch": 64,
             "ppo_epochs": 4, "ppo_clip": .20, "gamma": .99, "gae_lambda": .95,
-            "entropy": .01, "value_coef": .5, "learning_rate": .0002, "weight_decay": .0001,
+            "entropy": .018, "value_coef": .5, "learning_rate": .00018, "weight_decay": .0002,
+            "reward_stability_folds": 4, "max_formula_complexity_penalty": 0.010,
+            "min_valid_rank_ic": 0.0, "min_valid_sharpe": 0.0,
+            "max_train_valid_ic_gap": 0.08, "max_valid_turnover": 0.80, "max_valid_drawdown": 0.30,
         },
     },
     "strategy": {
-        "label": "OLS / Lasso / 深度融合策略",
-        "architecture": ["共同样本OLS", "一标准误Lasso", "256-128-64深度残差预测", "验证期净Sharpe约束融合", "次期成交与15bp成本"],
-        "defaults": {"lasso_alpha": .00002, "epochs": 30, "max_training_samples": 300000},
+        "label": "等权 / RankIC / OLS / Lasso / Ridge / MLP 打分回测",
+        "architecture": [
+            "旧版21因子OLS、全29因子OLS并行",
+            "Lasso稀疏筛选、经济域Ridge、横截面Ridge与ElasticNet",
+            "256-128-64深层MLP非线性打分",
+            "自适应ICIR、OLS/ICIR固定秩集成",
+            "Top10%、连续排名、缓冲换仓、成本感知、逆波动、可靠性调仓",
+        ],
+        "defaults": {
+            "lasso_alpha": .00002,
+            "epochs": 30,
+            "max_training_samples": 300000,
+            "factor_universe_mode": "screened_full",
+            "max_factor_candidates": 180,
+            "factor_screen_top_n": 60,
+            "factor_screen_lookback_days": 252,
+            "factor_screen_rebalance_days": 63,
+            "factor_screen_min_coverage": 0.35,
+            "factor_screen_min_dates": 20,
+            "factor_screen_min_assets_per_date": 30,
+            "factor_screen_max_pair_corr": 0.92,
+            "external_factor_max_staleness_days": 63,
+            "selection_turnover_budget": 0.65,
+            "selection_prefer_best_development": True,
+            "include_subject_parquet": False,
+        },
     },
     "joint_test": {
         "label": "单因子与多因子联合检验",
@@ -216,6 +289,11 @@ def normalized_config(payload: dict[str, Any]) -> dict[str, Any]:
     defaults.update({k: v for k, v in payload.items() if k not in {"search"}})
     if isinstance(payload.get("search"), dict):
         defaults.setdefault("search", {}).update(payload["search"])
+    if engine == "gru":
+        defaults["recurrent_cell"] = "gru"
+        defaults["gru_layers"] = clamp(payload.get("gru_layers", payload.get("lstm_layers", defaults.get("gru_layers", 3))), 2, 5)
+    elif engine == "lstm":
+        defaults["recurrent_cell"] = "lstm"
     defaults.update({
         "engine": engine, "mode": mode, "database_path": str(warehouse_path()),
         "max_assets": clamp(payload.get("max_assets", 240), 40, caps["max_assets"]),
@@ -234,6 +312,21 @@ def normalized_config(payload: dict[str, Any]) -> dict[str, Any]:
         "frequency": str(payload.get("frequency") or "daily")[:16],
         "risk_profile": str(payload.get("risk_profile") or "balanced")[:24],
     })
+    if engine == "strategy":
+        mode_value = str(defaults.get("factor_universe_mode") or "screened_full").strip().lower()
+        defaults["factor_universe_mode"] = mode_value if mode_value in {"core_29", "screened_full", "warehouse_screened"} else "screened_full"
+        defaults["max_factor_candidates"] = clamp(defaults.get("max_factor_candidates", 180), 1, 600)
+        defaults["factor_screen_top_n"] = clamp(defaults.get("factor_screen_top_n", 60), 0, 240)
+        defaults["factor_screen_lookback_days"] = clamp(defaults.get("factor_screen_lookback_days", 252), 40, 756)
+        defaults["factor_screen_rebalance_days"] = clamp(defaults.get("factor_screen_rebalance_days", 63), 20, 252)
+        defaults["factor_screen_min_coverage"] = clamp(defaults.get("factor_screen_min_coverage", 0.35), 0.01, 0.99, float)
+        defaults["factor_screen_min_dates"] = clamp(defaults.get("factor_screen_min_dates", 20), 5, 252)
+        defaults["factor_screen_min_assets_per_date"] = clamp(defaults.get("factor_screen_min_assets_per_date", 30), 5, 500)
+        defaults["factor_screen_max_pair_corr"] = clamp(defaults.get("factor_screen_max_pair_corr", 0.92), 0.50, 0.999, float)
+        defaults["external_factor_max_staleness_days"] = clamp(defaults.get("external_factor_max_staleness_days", 63), 0, 252)
+        defaults["selection_turnover_budget"] = clamp(defaults.get("selection_turnover_budget", 0.65), 0.05, 2.0, float)
+        defaults["selection_prefer_best_development"] = bool(defaults.get("selection_prefer_best_development", True))
+        defaults["include_subject_parquet"] = bool(defaults.get("include_subject_parquet", False))
     defaults.setdefault("search", {})
     defaults["search"]["trials"] = clamp(defaults["search"].get("trials", 6), 1, caps["search_trials"])
     defaults["search"]["trial_epochs"] = clamp(defaults["search"].get("trial_epochs", 2), 1, caps["trial_epochs"])
@@ -362,36 +455,60 @@ def catalog_payload(force: bool = False) -> dict[str, Any]:
     if not force and CATALOG_CACHE.get("payload") and time.time() - float(CATALOG_CACHE.get("at") or 0) < 300:
         return CATALOG_CACHE["payload"]
     path = warehouse_path()
-    base = {
-        "status": "ok" if path.exists() else "blocked", "database_available": path.exists(),
-        "watermark": None, "standard_factor_count": 107, "discovered_factor_count": 7,
-        "families": [
-            {"id": "technical", "label": "技术", "count": 25}, {"id": "money", "label": "资金", "count": 22},
-            {"id": "fundamental", "label": "基本面", "count": 24}, {"id": "valuation", "label": "估值", "count": 18},
-            {"id": "macro", "label": "宏观", "count": 18}, {"id": "discovered", "label": "发现", "count": 7},
-            {"id": "lstm", "label": "LSTM", "count": 0}, {"id": "rl_transformer", "label": "RL+Transformer", "count": 0},
-        ], "factors": [],
-    }
+    if build_factor_catalog is not None:
+        try:
+            base = build_factor_catalog(path if path.exists() else None)
+        except Exception as exc:  # noqa: BLE001
+            base = {
+                "status": "blocked",
+                "message": str(exc),
+                "families": [],
+                "factors": [],
+                "registered_factor_count": 0,
+                "explicit_factor_entry_count": 0,
+                "materialized_factor_count": 0,
+                "current_model_feature_count": 0,
+            }
+    else:
+        base = {
+            "status": "blocked",
+            "message": "factor_catalog_module_unavailable",
+            "families": [],
+            "factors": [],
+            "registered_factor_count": 0,
+            "explicit_factor_entry_count": 0,
+            "materialized_factor_count": 0,
+            "current_model_feature_count": 0,
+        }
+    base["database_available"] = path.exists()
+    base.setdefault("watermark", None)
     if path.exists():
         try:
             conn = sqlite3.connect("file:" + path.as_posix() + "?mode=ro", uri=True, timeout=20)
             conn.row_factory = sqlite3.Row
-            watermark = conn.execute("SELECT MAX(trade_date) FROM stock_ohlcv_daily").fetchone()[0]
-            factors = [dict(x) for x in conn.execute("SELECT factor_name,COALESCE(factor_group,'未分类') factor_group,COALESCE(source_agent,'local') source_agent,COUNT(*) value_count,MAX(trade_date) last_date FROM factor_value_daily GROUP BY factor_name,factor_group,source_agent ORDER BY last_date DESC,factor_name LIMIT 240")]
+            try:
+                base["watermark"] = conn.execute("SELECT MAX(trade_date) FROM stock_ohlcv_daily").fetchone()[0]
+            except sqlite3.Error:
+                base["watermark"] = None
             tests = latest_factor_evaluations(conn)
             conn.close()
-            for factor in factors:
-                factor.update(tests.get(factor["factor_name"], {}))
-            base.update({"watermark": watermark, "factors": factors, "registered_factor_count": len(factors)})
+            for factor in base.get("factors", []):
+                factor.update(tests.get(factor.get("factor_name"), {}))
         except sqlite3.Error as exc:
             base.update({"status": "blocked", "message": str(exc)})
     with state_conn() as conn:
         counts = {row[0]: row[1] for row in conn.execute("SELECT engine,COUNT(*) FROM factor_lab_run WHERE status='completed' GROUP BY engine")}
-    for family in base["families"]:
-        if family["id"] in counts: family["count"] = counts[family["id"]]
+    base["completed_model_runs"] = counts
+    base["model_catalog"] = [
+        {"id": key, "label": value.get("label", key), "completed_runs": int(counts.get(key, 0))}
+        for key, value in MODEL_PRESETS.items()
+    ]
+    family_counts = {row.get("id"): int(row.get("count") or 0) for row in base.get("families", [])}
+    base["standard_factor_count"] = sum(family_counts.get(key, 0) for key in ("technical", "money", "fundamental", "valuation", "macro"))
+    base["discovered_factor_count"] = sum(family_counts.get(key, 0) for key in ("llm_mined", "deep_mined", "discovered", "warehouse_dynamic"))
+    base["status"] = "ok" if base.get("status") != "blocked" else "blocked"
     CATALOG_CACHE.update({"at": time.time(), "payload": base})
     return base
-
 
 def champion_payload() -> dict[str, Any]:
     """Load the compact, audited strategy champion contract for the UI."""
@@ -441,21 +558,60 @@ def champion_payload() -> dict[str, Any]:
     return payload
 
 
+def professional_framework_payload(champion: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Load the professional Factor Lab framework shared by UI and Skill."""
+    unavailable = {
+        "status": "unavailable",
+        "version": "r35.9-professional-factor-lab-framework",
+        "message": "professional_framework_artifact_unavailable",
+    }
+    try:
+        if not PROFESSIONAL_FRAMEWORK.exists() or PROFESSIONAL_FRAMEWORK.stat().st_size > 512_000:
+            return unavailable
+        payload = json.loads(PROFESSIONAL_FRAMEWORK.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return unavailable
+    if not isinstance(payload, dict):
+        return unavailable
+    payload = dict(payload)
+    payload.setdefault("status", "ok")
+    payload["artifact"] = "model/factor_laboratory/professional_framework.json"
+    if champion and champion.get("status") == "ok":
+        effect = dict(payload.get("current_effect_contract") or {})
+        effect.update({
+            "default_champion": champion.get("selected_candidate"),
+            "selection_basis": champion.get("selection_basis"),
+            "test_usage": champion.get("test_usage"),
+            "splits": champion.get("splits"),
+            "gate_summary": champion.get("gate_summary"),
+        })
+        payload["current_effect_contract"] = effect
+    return payload
 def bootstrap_payload() -> dict[str, Any]:
     path, python = warehouse_path(), worker_python()
     champion = champion_payload()
+    framework = professional_framework_payload(champion)
     return {
         "status": "ok" if path.exists() and ENGINE_PATH.exists() and python.exists() else "blocked",
         "api_version": API_VERSION,
         "engine_version": champion.get("engine_version", "factor-lab/3.2-inverse-volatility-rank-execution"),
-        "data": {"database_available": path.exists(), "database_hint": "server-side research warehouse", "watermark": catalog_payload().get("watermark"), "point_in_time": True},
+        "data": {
+            "database_available": path.exists(),
+            "database_hint": "server-side research warehouse",
+            "watermark": catalog_payload().get("watermark"),
+            "point_in_time": True,
+            "vendor_data_layer": audit_vendor_data_layer(PROJECT_ROOT) if audit_vendor_data_layer else {"status": "unavailable"},
+        },
         "worker": {"python_available": python.exists(), "isolated_process": True, "max_concurrent": MAX_CONCURRENT},
         "champion": champion,
+        "professional_framework": framework,
         "models": MODEL_PRESETS, "mode_caps": MODE_CAPS,
         "pages": [
-            {"id": "home", "label": "01 主页"}, {"id": "dashboard", "label": "02 因子看板"},
-            {"id": "mining", "label": "03 因子挖掘"}, {"id": "testing", "label": "04 联合检验"},
-            {"id": "strategy", "label": "05 投资策略"}, {"id": "history", "label": "06 历史记录"},
+            {"id": "dashboard", "label": "01 因子看板"},
+            {"id": "mining", "label": "02 LLM因子挖掘"},
+            {"id": "strategy", "label": "03 模型层"},
+            {"id": "testing", "label": "04 联合检验"},
+            {"id": "history", "label": "05 历史记录"},
         ],
         "policies": {"split": "60/20/20 chronological + max-horizon embargo", "test": "report-only once", "cost_bps": 15, "gates": 10, "credentials_in_worker": False},
     }
@@ -473,6 +629,10 @@ def register_factor_lab(app: Flask) -> None:
     @bp.get("/api/factor-lab/bootstrap")
     def bootstrap():
         return jsonify(bootstrap_payload())
+
+    @bp.get("/api/factor-lab/professional-framework")
+    def professional_framework():
+        return jsonify(professional_framework_payload(champion_payload()))
 
     @bp.get("/api/factor-lab/catalog")
     def catalog():
@@ -552,4 +712,3 @@ def register_factor_lab(app: Flask) -> None:
         return jsonify({"status": "ok", "valid": valid, "tokens": tokens, "invalid_tokens": invalid, "stack_depth": stack, "formula_hash": hashlib.sha256(formula.encode()).hexdigest() if valid else None})
 
     app.register_blueprint(bp)
-
