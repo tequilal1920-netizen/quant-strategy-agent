@@ -2,8 +2,24 @@
 name: data-dashboard
 description: "用于查询、生成和维护数据看板；当任务涉及宏观、全球市场、行业、大宗商品、个股、新闻事件、AI监控、数据新鲜度或数据质量时使用。"
 ---
-
 # 数据看板
+
+
+## 直接对话入口
+
+```powershell
+python skill/data-dashboard/scripts/query.py overview
+python skill/data-dashboard/scripts/query.py market 数量=10
+python skill/data-dashboard/scripts/query.py news 数量=20
+```
+
+将“全球市场最近谁最强谁最弱”“最新市场数据截止到哪一天”“列出重要新闻”分别映射为 `market`、`overview` 和 `news`。回答必须引用返回的 `数据截止`、`生成时间` 和 `数据来源`。
+
+需要在线刷新或访问统一服务时，设置运行时账号后执行：
+
+```powershell
+python -m agent_runtime remote GET /api/services
+```
 
 ## 目标
 

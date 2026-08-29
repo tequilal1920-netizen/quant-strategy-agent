@@ -44,21 +44,81 @@ DATA_DIR = PROJECT_ROOT / "board" / "quant_strategy_agent" / "data"
 CACHE_DIR = PROJECT_ROOT / "output" / "industry_rotation" / "cache" / "market"
 CMB_DATA_RAW = os.environ.get("INDUSTRY_ROTATION_SOURCE_XLSX", "").strip()
 CMB_DATA = Path(CMB_DATA_RAW) if CMB_DATA_RAW else None
+SIGNAL_CUTOFF_RAW = os.environ.get("INDUSTRY_ROTATION_SIGNAL_CUTOFF", "").strip()
+SIGNAL_CUTOFF = pd.Timestamp(SIGNAL_CUTOFF_RAW) if SIGNAL_CUTOFF_RAW else None
 KEYWORD_AUDIT = PROJECT_ROOT / "output" / "industry_rotation" / "evidence" / "rotation_keyword_columns_v4.json"
 WAREHOUSE = PROJECT_ROOT / "database" / "research_warehouse.db"
 OLD_SNAPSHOT = DATA_DIR / "rotation_snapshot.json"
 OUTPUT = DATA_DIR / "rotation_snapshot.json"
+CHAMPION_DIRECTION_FILE = ROOT / "champion_r32_directions.json"
+_CHAMPION_PARAMETERS: dict[str, Any] | None = None
+
+
+def _champion_parameters() -> dict[str, Any]:
+    """Load the hash-pinned R32 champion parameters and validate the contract."""
+    global _CHAMPION_PARAMETERS
+    if _CHAMPION_PARAMETERS is None:
+        payload = _read_json(CHAMPION_DIRECTION_FILE)
+        contracts = payload.get("contracts") or {}
+        if int(payload.get("contract_count") or 0) != 248 or len(contracts) != 248:
+            raise RuntimeError("industry_champion_direction_contract_invalid")
+        _CHAMPION_PARAMETERS = payload
+    return _CHAMPION_PARAMETERS
+
+
+def _champion_ic(industry: str, variable: str) -> float:
+    key = f"{industry}|{variable}"
+    row = (_champion_parameters().get("contracts") or {}).get(key)
+    if not isinstance(row, dict):
+        raise KeyError(f"industry_champion_direction_missing:{key}")
+    value = float(row.get("train_spearman_ic"))
+    if not math.isfinite(value):
+        raise ValueError(f"industry_champion_direction_non_finite:{key}")
+    return value
+
+
+def _champion_sign(industry: str, variable: str) -> float:
+    return -1.0 if _champion_ic(industry, variable) < 0.0 else 1.0
+
 
 SPLITS = {
     "train": ("2015-01-01", "2018-12-31"),
     "validation": ("2019-01-01", "2021-12-31"),
     "test": ("2022-01-01", "2099-12-31"),
 }
+DIRECTION_MIN_LABELS = 120
+_DIRECTION_LABEL_AUDIT: dict[tuple[str, str], dict[str, Any]] = {}
 EVENT_INDUSTRIES = set(EVENT_BLUEPRINTS)
 EXCLUDED_NEWS = (
     "营业收入", "营收", "利润", "净利润", "ROE", "ROA", "毛利率", "负债率",
     "主力资金", "涨停", "跌停", "股价", "换手率", "市盈率", "市净率",
 )
+
+CANDIDATE_LABELS = {
+    "C1_equal": "专属指标等权",
+    "C2_reliability": "数据可靠性加权",
+    "C3_train_ic": "训练期IC加权",
+    "C4_direct_dominant": "直接业务指标主导",
+    "C5_ic_quarter_smooth": "IC季度平滑",
+    "C6_direct_month_smooth": "直接景气月度平滑",
+    "C7_consensus": "多口径景气共识",
+    "C10_monthly_direct_smooth_risk_budget_cash25": "月频景气与轻度风险预算",
+    "C11_monthly_direct_smooth_risk_budget_cash50": "月频景气与中度风险预算",
+    "C14_weekly_direct_smooth_risk_budget_cash25": "周频景气与轻度风险预算",
+    "C15_weekly_direct_smooth_risk_budget_cash50": "周频景气与中度风险预算",
+    "C18_monthly_residual_path_top5": "月频残差趋势前五",
+    "C19_monthly_business_price_crowding_top5": "月频景气价格低拥挤前五",
+    "C20_weekly_residual_path_top5": "周频残差趋势前五",
+    "C21_weekly_business_price_crowding_top5": "周频景气价格低拥挤前五",
+    "C22_monthly_report_enhanced_momentum_top5": "月频景气增强动量前五",
+    "C23_monthly_post_test_diagnostic_acceleration_confirmed_crowding_residual_top5_buffered": "景气加速度确认与拥挤残差前五",
+}
+
+
+def _candidate_label(candidate: str) -> str:
+    return CANDIDATE_LABELS.get(candidate, "行业轮动候选")
+
+
 
 
 @dataclass
@@ -137,7 +197,11 @@ def _load_cmb_sheets() -> dict[str, pd.DataFrame]:
     workbook = pd.ExcelFile(CMB_DATA)
     for sheet in workbook.sheet_names:
         frame = pd.read_excel(CMB_DATA, sheet_name=sheet, index_col=0)
-        frame.index = pd.to_datetime(frame.index, errors="coerce")
+        frame.index = pd.to_datetime(
+            frame.index,
+            errors="coerce",
+            format="mixed",
+        )
         frame = frame.loc[frame.index.notna()]
         frames[str(sheet)] = frame
     return frames
@@ -330,36 +394,90 @@ def _load_closes() -> pd.DataFrame:
     return close.loc["2012-01-01":].dropna(how="all")
 
 
+def _non_overlapping_direction_labels(
+    close: pd.DataFrame,
+    signal_dates: list[pd.Timestamp],
+) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
+    """Build adjacent T+1-close return labels with explicit maturity dates."""
+    calendar = pd.DatetimeIndex(
+        sorted({pd.Timestamp(date) for date in signal_dates if date in close.index})
+    )
+    future = pd.DataFrame(np.nan, index=close.index, columns=close.columns, dtype=float)
+    maturities: dict[pd.Timestamp, pd.Timestamp] = {}
+    executions: dict[pd.Timestamp, pd.Timestamp] = {}
+    for signal, next_signal in zip(calendar[:-1], calendar[1:]):
+        start_pos = int(close.index.searchsorted(signal, side="right"))
+        end_pos = int(close.index.searchsorted(next_signal, side="right"))
+        if start_pos >= len(close.index) or end_pos >= len(close.index):
+            continue
+        execution = pd.Timestamp(close.index[start_pos])
+        maturity = pd.Timestamp(close.index[end_pos])
+        future.loc[signal] = close.loc[maturity].div(close.loc[execution]).sub(1.0)
+        executions[signal] = execution
+        maturities[signal] = maturity
+    return (
+        future,
+        pd.Series(maturities, dtype="datetime64[ns]").sort_index(),
+        pd.Series(executions, dtype="datetime64[ns]").sort_index(),
+    )
+
+
 def _align_features(
     contracts: dict[str, list[SeriesContract]],
     trading_index: pd.DatetimeIndex,
 ) -> tuple[dict[str, dict[str, pd.Series]], dict[str, dict[str, float]]]:
+    """Align PIT features and estimate a purged diagnostic IC.
+
+    The production C6 direction is loaded separately from the frozen R32
+    champion.  The diagnostic magnitude uses all matured daily observations;
+    the last 21 trading days of the training interval are purged explicitly.
+    """
+    global _DIRECTION_LABEL_AUDIT
     aligned: dict[str, dict[str, pd.Series]] = {}
     diagnostics: dict[str, dict[str, float]] = {}
+    direction_close = _load_closes().reindex(trading_index).ffill()
+    future = direction_close.shift(-21).div(direction_close).sub(1.0)
+    maturities = pd.Series(trading_index, index=trading_index).shift(-21)
+    train_start = pd.Timestamp(SPLITS["train"][0])
+    train_end = pd.Timestamp(SPLITS["train"][1])
+    eligible = maturities[
+        maturities.index.to_series().ge(train_start)
+        & maturities.le(train_end)
+    ].index
+    _DIRECTION_LABEL_AUDIT = {}
     for industry, items in contracts.items():
         aligned[industry] = {}
         diagnostics[industry] = {}
-        future = _load_industry_forward_return(industry, trading_index)
         for contract in items:
             feature = _feature(contract)
             feature.index = _available_index(contract, feature.index)
             daily = feature[~feature.index.duplicated(keep="last")].reindex(trading_index).ffill(limit=80 if contract.frequency == "月" else 25)
             aligned[industry][contract.variable] = daily
-            sample = pd.concat([daily.rename("x"), future.rename("y")], axis=1).loc[SPLITS["train"][0] : SPLITS["train"][1]].dropna()
-            ic = float(sample["x"].corr(sample["y"], method="spearman")) if len(sample) >= 120 else 0.0
-            diagnostics[industry][contract.variable] = ic if math.isfinite(ic) else 0.0
+            sample = pd.concat(
+                [daily.reindex(eligible).rename("x"), future[industry].reindex(eligible).rename("y")],
+                axis=1,
+            ).dropna()
+            value = float(sample["x"].corr(sample["y"], method="spearman")) if len(sample) >= 120 else math.nan
+            fallback = not math.isfinite(value)
+            diagnostic_ic = value if not fallback else _champion_ic(industry, contract.variable)
+            diagnostics[industry][contract.variable] = diagnostic_ic
+            champion_ic = _champion_ic(industry, contract.variable)
+            _DIRECTION_LABEL_AUDIT[(industry, contract.variable)] = {
+                "label_count": int(len(sample)),
+                "fallback_to_champion": fallback,
+                "latest_maturity": (
+                    pd.Timestamp(maturities.loc[sample.index.max()]).strftime("%Y-%m-%d")
+                    if len(sample)
+                    else None
+                ),
+                "champion_sign": int(_champion_sign(industry, contract.variable)),
+                "diagnostic_sign": 1 if diagnostic_ic >= 0.0 else -1,
+                "sign_drift": bool((champion_ic >= 0.0) != (diagnostic_ic >= 0.0)),
+            }
     return aligned, diagnostics
 
 
 _CLOSE_CACHE: pd.DataFrame | None = None
-
-
-def _load_industry_forward_return(industry: str, index: pd.DatetimeIndex) -> pd.Series:
-    global _CLOSE_CACHE
-    if _CLOSE_CACHE is None:
-        _CLOSE_CACHE = _load_closes()
-    close = _CLOSE_CACHE[industry].reindex(index).ffill()
-    return close.shift(-21).div(close).sub(1.0)
 
 
 def _candidate_scores(
@@ -371,7 +489,7 @@ def _candidate_scores(
     outputs = {name: pd.DataFrame(index=index, columns=list(INDUSTRY_CODES), dtype=float) for name in ("C1_equal", "C2_reliability", "C3_train_ic")}
     for industry, items in contracts.items():
         frame = pd.DataFrame(aligned[industry])
-        signs = {item.variable: (1.0 if diagnostics[industry].get(item.variable, 0.0) >= 0 else -1.0) for item in items}
+        signs = {item.variable: _champion_sign(industry, item.variable) for item in items}
         signed = frame.mul(pd.Series(signs), axis=1)
         weights_equal = pd.Series(1.0, index=frame.columns)
         weights_reliability = pd.Series({item.variable: 1.0 if item.source_kind == "direct" else 0.72 for item in items})
@@ -394,21 +512,112 @@ def _candidate_scores(
 
 
 def _signal_dates(index: pd.DatetimeIndex, frequency: str) -> list[pd.Timestamp]:
+    if frequency == "monthly" and SIGNAL_CUTOFF is not None:
+        index = pd.DatetimeIndex(index[index <= SIGNAL_CUTOFF])
+        if index.empty:
+            return []
     labels = index.to_period("M") if frequency == "monthly" else index.to_period("W-FRI")
     values = pd.Series(index=index, data=index)
     return [pd.Timestamp(value) for value in values.groupby(labels).max().tolist()]
 
 
-def _targets(score: pd.DataFrame, frequency: str) -> dict[pd.Timestamp, pd.Series]:
+def _capped_weights(raw: pd.Series, cap: float = 0.15) -> pd.Series:
+    values = pd.to_numeric(raw, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0).clip(lower=0.0)
+    if values.sum() <= 0:
+        return pd.Series(1.0 / len(values), index=values.index)
+    weights = values / values.sum()
+    for _ in range(len(weights) + 1):
+        fixed = weights >= cap - 1e-12
+        if not fixed.any():
+            break
+        free = ~fixed
+        weights.loc[fixed] = cap
+        remaining = 1.0 - float(weights.loc[fixed].sum())
+        if not free.any() or remaining <= 0:
+            break
+        free_raw = values.loc[free]
+        if free_raw.sum() <= 0:
+            weights.loc[free] = remaining / int(free.sum())
+        else:
+            weights.loc[free] = free_raw / free_raw.sum() * remaining
+        if (weights <= cap + 1e-12).all():
+            break
+    return weights / weights.sum()
+
+
+def _market_risk_budget(close: pd.DataFrame) -> pd.Series:
+    """Continuous causal risk budget from trend, breadth and volatility."""
+    returns = close.pct_change(fill_method=None)
+    market = (1.0 + returns.mean(axis=1, skipna=True).fillna(0.0)).cumprod()
+    breadth = close.gt(close.rolling(120, min_periods=60).mean()).mean(axis=1)
+    trend_components = []
+    for horizon in (21, 63, 126):
+        trend = market.pct_change(horizon, fill_method=None)
+        trend_components.append(
+            trend.rolling(1250, min_periods=252).rank(pct=True)
+        )
+    trend_state = pd.concat(trend_components, axis=1).mean(axis=1)
+    short_vol = returns.mean(axis=1, skipna=True).rolling(21, min_periods=15).std(ddof=0)
+    long_vol = returns.mean(axis=1, skipna=True).rolling(126, min_periods=63).std(ddof=0)
+    volatility_expansion = short_vol.div(long_vol.replace(0, np.nan))
+    low_volatility_state = 1.0 - volatility_expansion.rolling(
+        1250, min_periods=252
+    ).rank(pct=True)
+    budget = (
+        breadth.mul(0.45)
+        .add(trend_state.mul(0.35))
+        .add(low_volatility_state.mul(0.20))
+    )
+    return budget.clip(0.0, 1.0).ewm(span=5, adjust=False, min_periods=3).mean()
+
+
+def _targets(
+    score: pd.DataFrame,
+    frequency: str,
+    close: pd.DataFrame | None = None,
+    buffer_size: int = 0,
+    risk_weighted: bool = False,
+    risk_overlay: float = 0.0,
+    top_n: int = 10,
+) -> dict[pd.Timestamp, pd.Series]:
     targets: dict[pd.Timestamp, pd.Series] = {}
+    previous: list[str] = []
+    risk = None
+    if risk_weighted and close is not None:
+        risk = close.pct_change(fill_method=None).rolling(63, min_periods=30).std(ddof=0)
+    risk_budget = (
+        _market_risk_budget(close) if risk_overlay > 0 and close is not None else None
+    )
     for date in _signal_dates(score.index, frequency):
         row = score.loc[date].dropna()
         if len(row) < 25:
             continue
-        chosen = row.nlargest(10).index
+        selection_count = max(1, min(int(top_n), len(row)))
+        ranked = list(row.sort_values(ascending=False).index)
+        eligible = set(ranked[: selection_count + max(0, buffer_size)])
+        chosen = [name for name in previous if name in eligible]
+        chosen.extend(name for name in ranked if name not in chosen)
+        chosen = chosen[:selection_count]
         target = pd.Series(0.0, index=score.columns)
-        target.loc[chosen] = 0.1
+        if risk_weighted and risk is not None and date in risk.index:
+            selected_score = row.loc[chosen]
+            confidence = selected_score.sub(selected_score.min()).add(0.05).clip(lower=0.01)
+            selected_risk = risk.loc[date, chosen].replace(0, np.nan)
+            fallback_risk = float(selected_risk.dropna().median()) if selected_risk.notna().any() else 1.0
+            selected_risk = selected_risk.fillna(fallback_risk).clip(lower=1e-6)
+            raw = confidence.pow(0.5).div(selected_risk)
+            target.loc[chosen] = _capped_weights(
+                raw, cap=max(0.15, 1.0 / selection_count)
+            )
+        else:
+            target.loc[chosen] = 1.0 / len(chosen)
+        if risk_budget is not None and date in risk_budget.index:
+            budget = float(risk_budget.loc[date])
+            if math.isfinite(budget):
+                investment = 1.0 - float(risk_overlay) * (1.0 - min(1.0, max(0.0, budget)))
+                target = target.mul(investment)
         targets[date] = target
+        previous = chosen
     return targets
 
 
@@ -443,17 +652,38 @@ def _simulate(close: pd.DataFrame, targets: dict[pd.Timestamp, pd.Series], cost_
             signal_date, target = execution[date]
             target_values = target.reindex(columns).fillna(0.0).to_numpy(dtype=float)
             benchmark_target = np.full(len(columns), 1.0 / len(columns))
-            turnover = float(np.abs(target_values - weights).sum())
-            benchmark_turnover = float(np.abs(benchmark_target - benchmark_weights).sum())
+            current_cash = max(0.0, 1.0 - float(weights.sum()))
+            target_cash = max(0.0, 1.0 - float(target_values.sum()))
+            # One-way turnover is half the L1 change for a fully invested
+            # long-only rebalance.  The first deployment starts from external
+            # cash, so its purchase notional remains 100% rather than 50%.
+            turnover = (
+                float(np.abs(target_values).sum())
+                if not started
+                else float(
+                    (np.abs(target_values - weights).sum() + abs(target_cash - current_cash))
+                    / 2.0
+                )
+            )
+            benchmark_turnover = (
+                float(np.abs(benchmark_target).sum()) if not started else float(np.abs(benchmark_target - benchmark_weights).sum() / 2.0)
+            )
             nav *= max(0.0, 1.0 - cost_rate * turnover)
             benchmark_nav *= max(0.0, 1.0 - cost_rate * benchmark_turnover)
             weights, benchmark_weights = target_values, benchmark_target
             started = True
+            positive_weights = weights[weights > 0]
             holdings.append({
                 "signal_date": signal_date.strftime("%Y-%m-%d"),
                 "execution_date": pd.Timestamp(date).strftime("%Y-%m-%d"),
                 "names": [columns[i] for i, value in enumerate(weights) if value > 0],
-                "weight": 0.1,
+                "weight": (
+                    round(float(positive_weights.mean()), 6)
+                    if positive_weights.size
+                    else 0.0
+                ),
+                "weights": {columns[i]: round(float(value), 6) for i, value in enumerate(weights) if value > 0},
+                "cash_weight": round(max(0.0, 1.0 - float(weights.sum())), 6),
                 "turnover": round(turnover, 6),
             })
         rows.append({
@@ -508,34 +738,289 @@ def _all_metrics(frame: pd.DataFrame) -> dict[str, dict[str, Any]]:
     return result
 
 
+def _candidate_target_policy(candidate: str) -> dict[str, Any]:
+    top_n = 10
+    for value in (3, 5, 7, 10):
+        if f"top{value}" in candidate:
+            top_n = value
+            break
+    risk_overlay = 0.0
+    cash_match = re.search(r"cash(\d{2})", candidate)
+    if cash_match:
+        risk_overlay = min(0.85, max(0.0, int(cash_match.group(1)) / 100.0))
+    return {
+        "top_n": top_n,
+        "buffer_size": 3 if "buffered" in candidate else 0,
+        "risk_weighted": "risk_weighted" in candidate,
+        "risk_overlay": risk_overlay,
+        "position_cap": (
+            max(0.15, 1.0 / top_n)
+            if "risk_weighted" in candidate
+            else 1.0 / top_n
+        ),
+    }
+
+
+def _robust_selection_objective(
+    simulation: pd.DataFrame,
+    metrics: dict[str, Any],
+) -> tuple[float, list[float]]:
+    validation = metrics["validation"].get("excess_sharpe")
+    train = metrics["train"].get("excess_sharpe")
+    if validation is None or train is None:
+        return -999.0, []
+    if float(train) <= 0.0 or float(validation) <= 0.0:
+        return -999.0, []
+    start, end = SPLITS["validation"]
+    sample = simulation.loc[start:end]
+    yearly: list[float] = []
+    for _, group in sample.groupby(sample.index.year):
+        excess = group["return"].astype(float) - group["benchmark_return"].astype(float)
+        std = float(excess.std(ddof=1))
+        if len(excess) >= 60 and std > 0:
+            yearly.append(float(np.sqrt(252.0) * excess.mean() / std))
+    if yearly:
+        # Regime robustness is non-compensatory: one weak validation year
+        # cannot be hidden by two strong years.
+        objective = 0.65 * float(validation) + 0.35 * float(min(yearly))
+    else:
+        objective = float(validation)
+    objective += 0.25 * min(0.0, float(train))
+    if train < -0.25:
+        objective -= 1.0
+    return objective, yearly
+
+
+def _calendar_year_metrics(simulation: pd.DataFrame) -> list[dict[str, Any]]:
+    """Build report-only regime diagnostics outside the selection objective."""
+    output: list[dict[str, Any]] = []
+    for year, group in simulation.groupby(simulation.index.year):
+        if group.empty:
+            continue
+        metrics = _metrics(
+            group,
+            group.index.min().strftime("%Y-%m-%d"),
+            group.index.max().strftime("%Y-%m-%d"),
+        )
+        output.append({"year": int(year), **metrics})
+    return output
+
+
+def _champion_challenger_promotion_gate(
+    champion_metrics: dict[str, Any],
+    challenger_metrics: dict[str, Any],
+) -> dict[str, Any]:
+    """A sealed test may veto a challenger but never rank challengers."""
+    champion = champion_metrics.get("test") or {}
+    challenger = challenger_metrics.get("test") or {}
+
+    def observed(row: dict[str, Any], key: str, default: float) -> float:
+        value = row.get(key)
+        return float(value) if value is not None and np.isfinite(value) else default
+
+    checks = {
+        "annual_excess_not_worse": (
+            observed(challenger, "annual_excess", -np.inf)
+            >= observed(champion, "annual_excess", -np.inf)
+        ),
+        "excess_sharpe_not_worse": (
+            observed(challenger, "excess_sharpe", -np.inf)
+            >= observed(champion, "excess_sharpe", -np.inf)
+        ),
+        "max_drawdown_not_worse": (
+            observed(challenger, "max_drawdown", -np.inf)
+            >= observed(champion, "max_drawdown", -np.inf)
+        ),
+    }
+    return {
+        "status": "passed" if all(checks.values()) else "rejected",
+        "checks": checks,
+        "policy": (
+            "train and validation choose one research challenger; the sealed "
+            "test can only veto its promotion against the predeclared "
+            "champion and is never used to rank or tune candidates"
+        ),
+        "champion_test": {
+            key: champion.get(key)
+            for key in ("annual_excess", "excess_sharpe", "max_drawdown")
+        },
+        "challenger_test": {
+            key: challenger.get(key)
+            for key in ("annual_excess", "excess_sharpe", "max_drawdown")
+        },
+    }
+
+
+def _common_evaluation_start(
+    simulations: list[pd.DataFrame],
+) -> pd.Timestamp:
+    """Use one post-establishment date for every candidate in a frequency."""
+    usable = [frame for frame in simulations if not frame.empty]
+    if not usable:
+        raise ValueError("industry_candidate_simulations_empty")
+    latest_first_execution = max(frame.index.min() for frame in usable)
+    next_dates = [
+        frame.index[frame.index > latest_first_execution].min()
+        for frame in usable
+        if bool((frame.index > latest_first_execution).any())
+    ]
+    return pd.Timestamp(
+        max(next_dates) if len(next_dates) == len(usable) else latest_first_execution
+    )
+
+
 def _frequency_payload(close: pd.DataFrame, scores: dict[str, pd.DataFrame], frequency: str) -> tuple[dict[str, Any], pd.DataFrame]:
     evaluated: list[tuple[float, str, pd.DataFrame, list[dict[str, Any]], dict[str, Any]]] = []
     audit: list[dict[str, Any]] = []
+    prepared: list[tuple[str, dict[str, Any], pd.DataFrame, list[dict[str, Any]]]] = []
     for name, score in scores.items():
-        simulation, holdings = _simulate(close, _targets(score, frequency))
+        if "_monthly_" in name and frequency != "monthly":
+            continue
+        if "_weekly_" in name and frequency != "weekly":
+            continue
+        target_policy = _candidate_target_policy(name)
+        targets = _targets(
+            score,
+            frequency,
+            close=close,
+            **{
+                key: target_policy[key]
+                for key in ("buffer_size", "risk_weighted", "risk_overlay", "top_n")
+            },
+        )
+        raw_simulation, holdings = _simulate(close, targets)
+        prepared.append((name, target_policy, raw_simulation, holdings))
+    common_start = _common_evaluation_start(
+        [row[2] for row in prepared]
+    )
+    for name, target_policy, raw_simulation, holdings in prepared:
+        simulation = raw_simulation.loc[common_start:].copy()
         metrics = _all_metrics(simulation)
-        validation = metrics["validation"].get("excess_sharpe")
         train = metrics["train"].get("excess_sharpe")
-        objective = float(validation) if validation is not None else -999.0
-        if train is None or train < -0.25:
-            objective -= 1.0
-        audit.append({"candidate": name, "train_excess_sharpe": train, "validation_excess_sharpe": validation, "objective": objective})
+        validation = metrics["validation"].get("excess_sharpe")
+        objective, yearly = _robust_selection_objective(simulation, metrics)
+        audit.append({
+            "candidate_label": _candidate_label(name),
+            "train_sharpe": metrics["train"].get("sharpe"),
+            "validation_sharpe": metrics["validation"].get("sharpe"),
+            "train_annual_return": metrics["train"].get("annual_return"),
+            "validation_annual_return": metrics["validation"].get("annual_return"),
+            "train_max_drawdown": metrics["train"].get("max_drawdown"),
+            "validation_max_drawdown": metrics["validation"].get("max_drawdown"),
+            "train_turnover": metrics["train"].get("annual_turnover"),
+            "validation_turnover": metrics["validation"].get("annual_turnover"),
+            "candidate": name,
+            "train_excess_sharpe": train,
+            "validation_excess_sharpe": validation,
+            "validation_yearly_excess_sharpe": yearly,
+            "objective": objective,
+            "common_evaluation_start": common_start.strftime("%Y-%m-%d"),
+            "target_policy": target_policy,
+            "report_only_test": {
+                "annual_return": metrics["test"].get("annual_return"),
+                "annual_excess": metrics["test"].get("annual_excess"),
+                "sharpe": metrics["test"].get("sharpe"),
+                "excess_sharpe": metrics["test"].get("excess_sharpe"),
+                "max_drawdown": metrics["test"].get("max_drawdown"),
+                "annual_turnover": metrics["test"].get("annual_turnover"),
+            },
+        })
         evaluated.append((objective, name, simulation, holdings, metrics))
     evaluated.sort(key=lambda row: (row[0], row[1]), reverse=True)
-    _, selected, simulation, holdings, metrics = evaluated[0]
+    six_dimension_universe = [row for row in evaluated if "six_dimension" in row[1]]
+    research_universe = six_dimension_universe or evaluated
+    _, research_selected, research_simulation, research_holdings, research_metrics = research_universe[0]
+    simulation = research_simulation
+    holdings = research_holdings
+    metrics = research_metrics
+    champion_name = "C6_direct_month_smooth"
+    champion = next(
+        (row for row in evaluated if row[1] == champion_name),
+        None,
+    )
+    promotion_gate = {
+        "status": "not_required",
+        "policy": "predeclared champion already selected by train and validation",
+    }
+    selected = research_selected
+    if champion is not None and research_selected != champion_name:
+        observed_gate = _champion_challenger_promotion_gate(
+            champion[4],
+            metrics,
+        )
+        if "post_test_diagnostic" in research_selected:
+            promotion_gate = {
+                **observed_gate,
+                "status": "diagnostic_only",
+                "reason": (
+                    "该架构在2022年后的测试区间已被观察之后才预声明；"
+                    "无论报告期结果如何都不能替换生产冠军。"
+                ),
+                "counterfactual_status": observed_gate["status"],
+            }
+            _, selected, simulation, holdings, metrics = champion
+        else:
+            promotion_gate = observed_gate
+            if promotion_gate["status"] != "passed":
+                _, selected, simulation, holdings, metrics = champion
+    # Candidate ranking and the promotion gate use the shared comparison window.
+    # Once the production candidate is fixed, report its own complete history;
+    # a later-starting research data source must never truncate the champion.
+    production = next(row for row in prepared if row[0] == selected)
+    simulation = production[2]
+    holdings = production[3]
+    metrics = _all_metrics(simulation)
     score = scores[selected]
+    target_policy = _candidate_target_policy(selected)
+    latest_targets = _targets(
+        score,
+        frequency,
+        close=close,
+        **{
+            key: target_policy[key]
+            for key in ("buffer_size", "risk_weighted", "risk_overlay", "top_n")
+        },
+    )
+    latest_target = latest_targets[max(latest_targets)] if latest_targets else pd.Series(0.0, index=score.columns)
     latest_date = score.dropna(how="all").index.max()
     row = score.loc[latest_date].dropna().sort_values(ascending=False)
     ranking = [
-        {"rank": rank, "code": INDUSTRY_CODES[name], "name": name, "score": round(float(value), 6), "selected": rank <= 10, "weight": 0.1 if rank <= 10 else 0.0, "components": {}}
+        {"rank": rank, "code": INDUSTRY_CODES[name], "name": name, "score": round(float(value), 6), "selected": float(latest_target.get(name, 0.0)) > 0, "weight": round(float(latest_target.get(name, 0.0)), 6), "components": {}}
         for rank, (name, value) in enumerate(row.items(), start=1)
     ]
     payload = {
         "frequency": frequency,
         "selected_candidate": selected,
-        "selection_rule": "候选只使用训练集估计方向/权重，按验证集超额夏普选择；测试集冻结后一次性评估",
+        "selected_candidate_label": _candidate_label(selected),
+        "research_selected_candidate": research_selected,
+        "research_selected_candidate_label": _candidate_label(research_selected),
+        "selection_rule": (
+            "六维架构存在时仅在其冻结执行变体中由训练与验证选择唯一挑战者；"
+            "封存测试只允许否决挑战者相对预声明冠军的晋级，不参与候选排序或参数调整"
+        ),
+        "promotion_gate": promotion_gate,
         "candidate_audit": audit,
+        "research_result": {
+            "candidate": research_selected,
+            "candidate_label": _candidate_label(research_selected),
+            "metrics": research_metrics,
+            "nav": [
+                {"date": date.strftime("%Y-%m-%d"), "strategy": round(float(value.nav), 6), "benchmark": round(float(value.benchmark_nav), 6), "excess": round(float(value.nav / value.benchmark_nav), 6)}
+                for date, value in research_simulation.iterrows()
+            ],
+            "holdings": research_holdings[-52:],
+        },
+        "target_policy": target_policy,
+        "common_evaluation_start": common_start.strftime("%Y-%m-%d"),
+        "production_evaluation_start": simulation.index.min().strftime("%Y-%m-%d"),
         "metrics": metrics,
+        "return_loss_diagnostics": {
+            "selection_policy": (
+                "calendar-year fields never select candidates; sealed test "
+                "may only veto the single train-validation challenger"
+            ),
+            "calendar_year": _calendar_year_metrics(simulation),
+        },
         "gate": {
             "status": "pass" if all((metrics[s].get("sharpe") or -999) > 0 for s in ("train", "validation", "test")) else "review",
             "policy": "真实结果原样披露；不以测试集反向调参，不承诺或伪造夏普。",
@@ -558,7 +1043,8 @@ def _indicator_payload(
 ) -> dict[str, Any]:
     raw = pd.to_numeric(contract.raw, errors="coerce").dropna().sort_index()
     available_feature = feature.dropna()
-    sign = 1 if ic >= 0 else -1
+    champion_ic = _champion_ic(contract.industry, contract.variable)
+    sign = 1 if champion_ic >= 0 else -1
     chart = raw.tail(180 if contract.frequency == "周" else 120)
     last_observation = raw.index.max() if not raw.empty else None
     last_available = _available_index(contract, pd.DatetimeIndex([last_observation]))[0] if last_observation is not None else None
@@ -577,7 +1063,8 @@ def _indicator_payload(
         "model_eligible": contract.status == "live" and len(raw) >= 36,
         "model_note": "仅在available_date不晚于信号日时入模；缺失不补0，剩余可见字段重新归一化。",
         "direction": "训练集单调正向" if sign > 0 else "训练集单调反向",
-        "train_spearman_ic": round(float(ic), 6),
+        "train_spearman_ic": round(float(champion_ic), 6),
+        "matured_train_spearman_ic": round(float(ic), 6),
         "first_date": raw.index.min().strftime("%Y-%m-%d") if not raw.empty else None,
         "last_date": last_observation.strftime("%Y-%m-%d") if last_observation is not None else None,
         "last_available_date": pd.Timestamp(last_available).strftime("%Y-%m-%d") if last_available is not None else None,
@@ -647,25 +1134,41 @@ def build(output: Path) -> dict[str, Any]:
     latest_score_date = selected_scores["monthly"].dropna(how="all").index.max()
     high_frequency = _high_frequency_payload(contracts, aligned, diagnostics, monthly_ranking, latest_score_date)
     generated_at = datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    direction_rows = list(_DIRECTION_LABEL_AUDIT.values())
+    direction_label_audit = {
+        "method": "逐交易日21日持有期Spearman IC仅作方向漂移诊断；标签成熟日不晚于训练期末；生产方向固定读取R32冠军参数",
+        "minimum_labels": DIRECTION_MIN_LABELS,
+        "contract_count": len(direction_rows),
+        "fallback_count": sum(bool(row["fallback_to_champion"]) for row in direction_rows),
+        "sign_drift_count": sum(bool(row["sign_drift"]) for row in direction_rows),
+        "champion_parameter_source": {key: value for key, value in _champion_parameters().items() if key != "contracts"},
+        "minimum_observations": min((row["label_count"] for row in direction_rows), default=0),
+        "maximum_observations": max((row["label_count"] for row in direction_rows), default=0),
+        "latest_maturity": max((row["latest_maturity"] for row in direction_rows if row["latest_maturity"]), default=None),
+    }
     snapshot = {
         "schema_version": "4.0",
+        "engine_version": "industry-rotation/4.9-prosperity-acceleration-diagnostic",
         "generated_at": generated_at,
         "as_of": close.index.max().strftime("%Y-%m-%d"),
         "status": "ok" if high_frequency["summary"]["min_live_per_industry"] >= 6 else "review",
         "status_reason": "31行业×8专属业务字段已通过字段禁用、历史长度、PIT可用日和live覆盖门禁。",
         "method": {
             "industry_universe": "申万一级31行业官方指数",
-            "industry_portfolio": "Top10等权、只做多、单行业10%",
+            "industry_portfolio": "Top10生产组合保持不变；新增景气水平、边际加速度、价格确认与连续拥挤残差的Top5诊断组合",
             "industry_benchmark": "31行业等权；与策略同一执行日再平衡并扣同口径成本",
             "frequencies": ["monthly", "weekly"],
             "cost_rate": 0.001,
+            "turnover_convention": "initial funding = 100%; subsequent turnover = 0.5 * L1 drift-to-target change; cost_rate is a round-trip rate on one-way turnover",
             "timing": "T日收盘形成信号；T+1收盘执行；首个持有收益为T+1收盘至T+2收盘",
             "availability": "观察日与可用日分离；月度保守按期末+25自然日，周度/事件按发布后第1交易日",
             "industry_splits": SPLITS,
             "test_policy": "训练集估计方向/权重，验证集选择候选，测试集冻结后只评估一次",
+            "direction_label": "R32冠军方向冻结；最新诊断使用21交易日前瞻收益且成熟日不晚于训练期末",
             "factor_contract": ["行业专属产量/价格/库存/运量/订单/开工/终端销量", "PIT行业事件", "训练期方向", "验证期选型"],
             "forbidden_fields": list(FORBIDDEN_PATTERNS),
         },
+        "direction_label_audit": direction_label_audit,
         "industry": {
             "source": "申万行业指数用于收益；正式信号仅来自248个行业专属业务字段",
             "start": close.index.min().strftime("%Y-%m-%d"),

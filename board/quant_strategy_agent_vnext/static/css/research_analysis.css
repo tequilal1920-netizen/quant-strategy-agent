@@ -1,0 +1,429 @@
+.research-analysis {
+  --研究红: #b42318;
+  --研究深红: #92170f;
+  --研究黄: #ffc000;
+  --研究蓝: #2f75b5;
+  --研究灰: #808080;
+  --研究字: #18212b;
+  --研究次字: #667085;
+  --研究边: #d8e0e7;
+  --研究浅边: #edf0f2;
+  display: grid;
+  min-width: 0;
+  gap: 18px;
+  margin-top: 18px;
+  color: var(--研究字);
+  font-family: Arial, "KaiTi", "STKaiti", "楷体", sans-serif;
+}
+
+.研究区块 {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--研究边);
+  border-top: 3px solid var(--研究红);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, .045);
+}
+
+.研究标题 {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--研究浅边);
+  background: linear-gradient(90deg, #fff 0%, #fafbfc 100%);
+}
+
+.研究标题 h3 {
+  margin: 0;
+  color: var(--研究字);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+
+.研究结论 {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin: 14px 16px 10px;
+  padding: 11px 14px;
+  border-left: 5px solid var(--研究红);
+  background: linear-gradient(90deg, #fff4f2 0%, #fff 68%);
+}
+
+.研究结论 span {
+  color: var(--研究红);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.研究结论 p {
+  margin: 0;
+  color: var(--研究字);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.65;
+}
+
+.研究数字带 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 0 16px 6px;
+  border-top: 1px solid var(--研究边);
+  border-bottom: 1px solid var(--研究边);
+}
+
+.研究数字带 > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 10px 14px;
+  border-right: 1px solid var(--研究边);
+}
+
+.研究数字带 > div:last-child {
+  border-right: 0;
+}
+
+.研究数字带 small,
+.研究图谱指标 small {
+  color: var(--研究次字);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.研究数字带 strong {
+  color: var(--研究字);
+  font: 800 20px/1.2 Arial, "KaiTi", "楷体", sans-serif;
+}
+
+.研究数字带 span {
+  overflow: hidden;
+  color: var(--研究次字);
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.研究主图 {
+  width: 100%;
+  max-width: 100%;
+  min-height: 390px;
+  overflow: hidden;
+  padding: 0 8px;
+}
+
+.研究图谱 {
+  display: grid;
+  grid-template-columns: repeat(var(--图谱列数), minmax(0, 1fr));
+  gap: 8px;
+  padding: 4px 16px 16px;
+}
+
+.研究图谱项 {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  overflow: hidden;
+  border: 1px solid var(--研究边);
+  border-top: 2px solid var(--研究蓝);
+  background: #fff;
+}
+
+.研究图谱项:nth-child(4n + 1) {
+  border-top-color: var(--研究红);
+}
+
+.研究图谱项:nth-child(4n + 2) {
+  border-top-color: var(--研究黄);
+}
+
+.研究图谱项:nth-child(4n + 3) {
+  border-top-color: var(--研究蓝);
+}
+
+.研究图谱项:nth-child(4n + 4) {
+  border-top-color: var(--研究灰);
+}
+
+.研究图谱项 > header {
+  min-height: 42px;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--研究浅边);
+  background: #fafbfc;
+}
+
+.研究图谱项 > header strong {
+  display: block;
+  overflow: hidden;
+  color: var(--研究字);
+  font-size: 12px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+}
+
+.研究图谱指标列 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+}
+
+.研究图谱指标 {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 7px 9px;
+  border-right: 1px solid var(--研究浅边);
+  border-bottom: 1px solid var(--研究浅边);
+}
+
+.研究图谱指标:nth-child(2n) {
+  border-right: 0;
+}
+
+.研究图谱指标 b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--研究字);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.研究图谱趋势 {
+  padding: 5px 9px 7px;
+}
+
+.研究趋势线 {
+  display: block;
+  width: 100%;
+  height: 34px;
+}
+
+.研究数字[data-sign="正"] {
+  color: var(--研究红);
+}
+
+.研究数字[data-sign="负"] {
+  color: var(--研究蓝);
+}
+
+.研究方向 {
+  font: 800 19px/1 Arial, sans-serif;
+}
+
+.研究方向[data-sign="正"] {
+  color: var(--研究红);
+}
+
+.研究方向[data-sign="负"] {
+  color: var(--研究蓝);
+}
+
+.研究方向[data-sign="平"] {
+  color: var(--研究黄);
+}
+
+.研究分位 {
+  display: block;
+  min-width: 56px;
+  padding: 2px 4px;
+  color: var(--研究字);
+  background:
+    linear-gradient(90deg, rgba(47, 117, 181, .28) var(--分位), transparent var(--分位)),
+    #f7f9fb;
+  text-align: right;
+}
+
+.研究状态 {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: #eef1f4;
+  color: #475467;
+}
+
+.研究状态[data-tone="通过"] {
+  background: #dce6f3;
+  color: #234d7c;
+}
+
+.研究状态[data-tone="未过"] {
+  background: #f5d9d7;
+  color: #8f241e;
+}
+
+.研究区块--链路 {
+  border-top-color: var(--研究红);
+}
+
+.研究链路 {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0;
+  padding: 14px 16px 10px;
+}
+
+.研究链路 > div {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 7px;
+  align-items: center;
+  min-height: 58px;
+  padding: 7px 12px 7px 6px;
+  border-top: 1px solid var(--研究边);
+  border-bottom: 1px solid var(--研究边);
+  background: #fff;
+}
+
+.研究链路 > div:first-child {
+  border-left: 1px solid var(--研究边);
+}
+
+.研究链路 > div:last-child {
+  border-right: 1px solid var(--研究边);
+}
+
+.研究链路 > div:not(:last-child)::after {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: -6px;
+  width: 10px;
+  height: 10px;
+  content: "";
+  border-top: 2px solid var(--研究红);
+  border-right: 2px solid var(--研究红);
+  background: #fff;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.研究链路 b {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--研究红);
+  font: 700 10px/1 Arial, sans-serif;
+}
+
+.研究链路 span {
+  color: var(--研究字);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.研究关系 {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  margin: 0 16px 14px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--研究蓝);
+  background: #f5f8fb;
+}
+
+.研究关系 span {
+  color: var(--研究蓝);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.研究关系 b {
+  color: #344054;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.研究空白 {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+  color: var(--研究次字);
+  font-size: 12px;
+}
+
+@media (max-width: 1380px) {
+  .研究图谱 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .研究链路 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 8px;
+  }
+
+  .研究链路 > div:nth-child(3) {
+    border-right: 1px solid var(--研究边);
+  }
+
+  .研究链路 > div:nth-child(4) {
+    border-left: 1px solid var(--研究边);
+  }
+}
+
+@media (max-width: 960px) {
+  .研究数字带,
+  .研究图谱 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .研究数字带 > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .研究数字带 > div:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--研究边);
+  }
+
+  .研究链路 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .研究链路 > div:nth-child(2n) {
+    border-right: 1px solid var(--研究边);
+  }
+
+  .研究链路 > div:nth-child(2n + 1) {
+    border-left: 1px solid var(--研究边);
+  }
+}
+
+@media (max-width: 620px) {
+  .研究结论 {
+    grid-template-columns: 1fr;
+  }
+
+  .研究数字带,
+  .研究图谱,
+  .研究链路 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .研究数字带 > div {
+    border-right: 0;
+    border-bottom: 1px solid var(--研究边);
+  }
+
+  .研究链路 > div {
+    border-right: 1px solid var(--研究边);
+    border-left: 1px solid var(--研究边);
+  }
+
+  .研究链路 > div::after {
+    display: none;
+  }
+}

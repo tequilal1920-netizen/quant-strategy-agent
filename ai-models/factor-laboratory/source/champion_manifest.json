@@ -1,0 +1,514 @@
+{
+  "schema_version": "factor-champion/1.1",
+  "status": "ok",
+  "engine_version": "factor-lab/1.1-hac-evaluation",
+  "verified_at": "2026-08-14T10:18:19+00:00",
+  "selected_model": "incumbent_ols_adaptive_icir_rank_ensemble",
+  "selected_execution_policy": "robust_volatility_budget_rank_buffer",
+  "selected_candidate": "incumbent_ols_adaptive_icir_rank_ensemble::robust_volatility_budget_rank_buffer",
+  "selected_candidate_label": "OLS/ICIR固定秩集成 · 分位缓冲与波动预算",
+  "selection_basis": "train_and_validation_only",
+  "test_usage": "report_only",
+  "candidate_count": 53,
+  "selection_quality": "passed",
+  "promotion_status": "validated_champion_high_sharpe_default",
+  "promotion_decision": "已按用户明确授权切换为高夏普增强档默认冠军；采用0.80换手预算，测试集仍只作一次性报告。",
+  "evidence": {
+    "local_path": "output\\factor_laboratory\\full_strategy_r354_turnover_gate_20260814_175751\\result.json",
+    "sha256": "E6BFF48B29D5CF3E116DBD8D3968CF8D03EB7305D7E4F50607DC8C2301561513"
+  },
+  "splits": [
+    {
+      "split": "train",
+      "rank_ic": 0.07931137036656814,
+      "icir": 8.390866123612984,
+      "hit_rate": 0.8568129330254042,
+      "annual_return": 0.4089864409485382,
+      "annual_volatility": 0.132955197262051,
+      "sharpe": 2.6531599530894057,
+      "max_drawdown": -0.09609962111499981,
+      "turnover": 0.7554491509046164,
+      "average_signal_reliability_gain": 1.0
+    },
+    {
+      "split": "valid",
+      "rank_ic": 0.0729434643804723,
+      "icir": 5.92302697912779,
+      "hit_rate": 0.7892976588628763,
+      "annual_return": 0.38716398453078815,
+      "annual_volatility": 0.16353988343546833,
+      "sharpe": 2.087905799778265,
+      "max_drawdown": -0.1660418330396196,
+      "turnover": 0.6939240746940274,
+      "average_signal_reliability_gain": 1.0
+    },
+    {
+      "split": "test",
+      "rank_ic": 0.07290846938806492,
+      "icir": 7.471808554255539,
+      "hit_rate": 0.7792642140468228,
+      "annual_return": 0.3771685487474694,
+      "annual_volatility": 0.12282849926311852,
+      "sharpe": 2.6737214264778237,
+      "max_drawdown": -0.049481522033170244,
+      "turnover": 0.7690995362464033,
+      "average_signal_reliability_gain": 1.0
+    }
+  ],
+  "gates": [
+    {
+      "gate": "point_in_time",
+      "label": "点时与冻结切分",
+      "observed": 1.0,
+      "threshold": 1.0,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "coverage",
+      "label": "测试期覆盖率",
+      "observed": 1.0,
+      "threshold": 0.8,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "rank_ic",
+      "label": "测试期绝对RankIC",
+      "observed": 0.07290846938806492,
+      "threshold": 0.03,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "hit_rate",
+      "label": "测试期IC命中率",
+      "observed": 0.7792642140468228,
+      "threshold": 0.53,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "oos_decay",
+      "label": "验证到测试衰减",
+      "observed": 0.9995202449910405,
+      "threshold": 0.75,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "net_sharpe",
+      "label": "成本后测试Sharpe",
+      "observed": 2.6737214264778237,
+      "threshold": 0.5,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "drawdown",
+      "label": "最大回撤不劣于-25%",
+      "observed": -0.049481522033170244,
+      "threshold": -0.25,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "turnover",
+      "label": "增强档换手预算",
+      "observed": 0.7690995362464033,
+      "threshold": 0.8,
+      "comparison": "le",
+      "passed": true
+    },
+    {
+      "gate": "dsr",
+      "label": "多重试验修正DSR",
+      "observed": 1.0,
+      "threshold": 0.6,
+      "comparison": "ge",
+      "passed": true
+    },
+    {
+      "gate": "trial_ledger",
+      "label": "试验台账完整",
+      "observed": 53.0,
+      "threshold": 1.0,
+      "comparison": "ge",
+      "passed": true
+    }
+  ],
+  "candidate_diagnostics": [
+    {
+      "development_score": 2.3593632242793103,
+      "candidate": "线性与ICIR秩集成 · 尾部分组全仓",
+      "train_sharpe": 2.612625471029538,
+      "valid_sharpe": 2.150863209650768,
+      "train_rank_ic": 0.07931137036656814,
+      "valid_rank_ic": 0.0729434643804723,
+      "valid_hit_rate": 0.7892976588628763,
+      "candidate_id": "incumbent_ols_adaptive_icir_rank_ensemble::full_exposure",
+      "decision": "统计误差范围内未胜出"
+    },
+    {
+      "development_score": 2.3368366281122173,
+      "candidate": "线性与ICIR秩集成 · 分位缓冲与波动预算",
+      "train_sharpe": 2.6531599530894057,
+      "valid_sharpe": 2.087905799778265,
+      "train_rank_ic": 0.07931137036656814,
+      "valid_rank_ic": 0.0729434643804723,
+      "valid_hit_rate": 0.7892976588628763,
+      "candidate_id": "incumbent_ols_adaptive_icir_rank_ensemble::robust_volatility_budget_rank_buffer",
+      "decision": "统计误差范围内未胜出"
+    },
+    {
+      "development_score": 2.280262994256877,
+      "candidate": "基准线性模型 · 尾部分组全仓",
+      "train_sharpe": 2.7564555685658796,
+      "valid_sharpe": 1.9443636766246561,
+      "train_rank_ic": 0.08113097081815458,
+      "valid_rank_ic": 0.0933501126222916,
+      "valid_hit_rate": 0.6923076923076923,
+      "candidate_id": "incumbent_ols::full_exposure",
+      "decision": "统计误差范围内未胜出"
+    },
+    {
+      "development_score": 2.275294397572871,
+      "candidate": "全因子线性模型 · 尾部分组全仓",
+      "train_sharpe": 2.7900498077002163,
+      "valid_sharpe": 1.9208952655256926,
+      "train_rank_ic": 0.07794047383707234,
+      "valid_rank_ic": 0.08999647254773112,
+      "valid_hit_rate": 0.6889632107023411,
+      "candidate_id": "ols::full_exposure",
+      "decision": "统计误差范围内未胜出"
+    },
+    {
+      "development_score": 2.259156334886611,
+      "candidate": "线性与ICIR秩集成 · 快慢波动预算",
+      "train_sharpe": 2.610832814290062,
+      "valid_sharpe": 1.9909741732420159,
+      "train_rank_ic": 0.07931137036656814,
+      "valid_rank_ic": 0.0729434643804723,
+      "valid_hit_rate": 0.7892976588628763,
+      "candidate_id": "incumbent_ols_adaptive_icir_rank_ensemble::robust_fast_slow_volatility_budget",
+      "decision": "统计误差范围内未胜出"
+    }
+  ],
+  "selection_audit": {
+    "best_development_candidate_under_080_turnover": "incumbent_ols_adaptive_icir_rank_ensemble::robust_volatility_budget_rank_buffer",
+    "selected_default_profile": "high_sharpe_enhanced",
+    "previous_default_profile": "strict_turnover_065",
+    "test_used_for_selection": false,
+    "authorization": "user explicitly authorized switching Factor Lab default champion to high_sharpe_enhanced with 0.80 turnover budget on 2026-08-14",
+    "source_result": "output\\factor_laboratory\\full_strategy_r354_turnover_gate_20260814_175751\\result.json",
+    "release_note": "Default optimized for higher net Sharpe while retaining point-in-time train/validation selection and report-only test governance."
+  },
+  "enhanced_profiles": {
+    "high_sharpe": {
+      "profile_id": "high_sharpe_enhanced",
+      "profile_label": "高夏普默认冠军",
+      "status": "ok",
+      "selected_candidate": "incumbent_ols_adaptive_icir_rank_ensemble::robust_volatility_budget_rank_buffer",
+      "selected_candidate_label": "OLS/ICIR固定秩集成 · 分位缓冲与波动预算",
+      "selection_basis": "train_and_validation_only",
+      "test_usage": "report_only",
+      "turnover_budget": 0.8,
+      "promotion_status": "validated_champion_default",
+      "promotion_decision": "已按用户明确授权切换为默认冠军；增强档数据质量、泛化、风险、换手和多重检验门禁通过。",
+      "splits": [
+        {
+          "split": "train",
+          "rank_ic": 0.07931137036656814,
+          "icir": 8.390866123612984,
+          "hit_rate": 0.8568129330254042,
+          "annual_return": 0.4089864409485382,
+          "annual_volatility": 0.132955197262051,
+          "sharpe": 2.6531599530894057,
+          "max_drawdown": -0.09609962111499981,
+          "turnover": 0.7554491509046164,
+          "average_signal_reliability_gain": 1.0
+        },
+        {
+          "split": "valid",
+          "rank_ic": 0.0729434643804723,
+          "icir": 5.92302697912779,
+          "hit_rate": 0.7892976588628763,
+          "annual_return": 0.38716398453078815,
+          "annual_volatility": 0.16353988343546833,
+          "sharpe": 2.087905799778265,
+          "max_drawdown": -0.1660418330396196,
+          "turnover": 0.6939240746940274,
+          "average_signal_reliability_gain": 1.0
+        },
+        {
+          "split": "test",
+          "rank_ic": 0.07290846938806492,
+          "icir": 7.471808554255539,
+          "hit_rate": 0.7792642140468228,
+          "annual_return": 0.3771685487474694,
+          "annual_volatility": 0.12282849926311852,
+          "sharpe": 2.6737214264778237,
+          "max_drawdown": -0.049481522033170244,
+          "turnover": 0.7690995362464033,
+          "average_signal_reliability_gain": 1.0
+        }
+      ],
+      "gates": [
+        {
+          "gate": "point_in_time",
+          "label": "点时与冻结切分",
+          "observed": 1.0,
+          "threshold": 1.0,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "coverage",
+          "label": "测试期覆盖率",
+          "observed": 1.0,
+          "threshold": 0.8,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "rank_ic",
+          "label": "测试期绝对RankIC",
+          "observed": 0.07290846938806492,
+          "threshold": 0.03,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "hit_rate",
+          "label": "测试期IC命中率",
+          "observed": 0.7792642140468228,
+          "threshold": 0.53,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "oos_decay",
+          "label": "验证到测试衰减",
+          "observed": 0.9995202449910405,
+          "threshold": 0.75,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "net_sharpe",
+          "label": "成本后测试Sharpe",
+          "observed": 2.6737214264778237,
+          "threshold": 0.5,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "drawdown",
+          "label": "最大回撤不劣于-25%",
+          "observed": -0.049481522033170244,
+          "threshold": -0.25,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "turnover",
+          "label": "增强档换手预算",
+          "observed": 0.7690995362464033,
+          "threshold": 0.8,
+          "comparison": "le",
+          "passed": true
+        },
+        {
+          "gate": "dsr",
+          "label": "多重试验修正DSR",
+          "observed": 1.0,
+          "threshold": 0.6,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "trial_ledger",
+          "label": "试验台账完整",
+          "observed": 53.0,
+          "threshold": 1.0,
+          "comparison": "ge",
+          "passed": true
+        }
+      ],
+      "gate_summary": {
+        "passed": 10,
+        "total": 10,
+        "all_passed": true
+      },
+      "selection_audit": {
+        "source_result": "output\\factor_laboratory\\full_strategy_r354_turnover_gate_20260814_175751\\result.json",
+        "best_development_candidate_under_080_turnover": "incumbent_ols_adaptive_icir_rank_ensemble::robust_volatility_budget_rank_buffer",
+        "test_used_for_selection": false,
+        "why_not_default": "default production profile keeps the stricter 0.65 turnover budget until explicit user approval"
+      },
+      "evidence": {
+        "local_path": "output\\factor_laboratory\\full_strategy_r354_turnover_gate_20260814_175751\\result.json",
+        "sha256": "E6BFF48B29D5CF3E116DBD8D3968CF8D03EB7305D7E4F50607DC8C2301561513"
+      }
+    }
+  },
+  "profile_policy": {
+    "default_profile": "high_sharpe_enhanced",
+    "available_profiles": [
+      "high_sharpe_enhanced",
+      "strict_turnover_065"
+    ],
+    "default_switch_authorized": true,
+    "default_switch_authorized_at": "2026-08-14",
+    "default_turnover_budget": 0.8,
+    "previous_default_profile": "strict_turnover_065"
+  },
+  "archive_profiles": {
+    "strict_turnover_065_previous_default": {
+      "profile_id": "strict_turnover_065",
+      "profile_label": "原稳健默认档",
+      "selected_candidate": "incumbent_ols::robust_volatility_budget_rank_buffer",
+      "selected_candidate_label": "基准线性模型 · 分位缓冲与波动预算",
+      "selection_basis": "train_and_validation_only",
+      "test_usage": "report_only",
+      "turnover_budget": 0.65,
+      "promotion_status": "validated_champion",
+      "promotion_decision": "全部数据质量、泛化、风险、换手和多重检验门禁通过。",
+      "splits": [
+        {
+          "split": "train",
+          "rank_ic": 0.08113097081815458,
+          "icir": 5.3009010627031765,
+          "hit_rate": 0.7297297297297297,
+          "annual_return": 0.5660823328043751,
+          "annual_volatility": 0.16084068684630504,
+          "sharpe": 2.8794618295706775,
+          "max_drawdown": -0.08584423367956517,
+          "turnover": 0.47360317884494724,
+          "average_signal_reliability_gain": 1.0
+        },
+        {
+          "split": "valid",
+          "rank_ic": 0.0933501126222916,
+          "icir": 3.830105141930731,
+          "hit_rate": 0.6923076923076923,
+          "annual_return": 0.37439597007517955,
+          "annual_volatility": 0.1888737611720678,
+          "sharpe": 1.7819343985506704,
+          "max_drawdown": -0.1366096308676087,
+          "turnover": 0.44331401076773136,
+          "average_signal_reliability_gain": 1.0
+        },
+        {
+          "split": "test",
+          "rank_ic": 0.08188957541743255,
+          "icir": 4.402555026684998,
+          "hit_rate": 0.7023411371237458,
+          "annual_return": 0.47612624812511983,
+          "annual_volatility": 0.19406970704731327,
+          "sharpe": 2.109367827563941,
+          "max_drawdown": -0.12173804738166116,
+          "turnover": 0.5350972815958938,
+          "average_signal_reliability_gain": 1.0
+        }
+      ],
+      "gates": [
+        {
+          "gate": "point_in_time",
+          "label": "点时与冻结切分",
+          "observed": 1.0,
+          "threshold": 1.0,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "coverage",
+          "label": "测试期覆盖率",
+          "observed": 1.0,
+          "threshold": 0.8,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "rank_ic",
+          "label": "测试期绝对RankIC",
+          "observed": 0.08188957541743255,
+          "threshold": 0.03,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "hit_rate",
+          "label": "测试期IC命中率",
+          "observed": 0.7023411371237458,
+          "threshold": 0.53,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "oos_decay",
+          "label": "验证到测试衰减",
+          "observed": 0.8772306011967004,
+          "threshold": 0.75,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "net_sharpe",
+          "label": "成本后测试Sharpe",
+          "observed": 2.109367827563941,
+          "threshold": 0.5,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "drawdown",
+          "label": "最大回撤不劣于-25%",
+          "observed": -0.12173804738166116,
+          "threshold": -0.25,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "turnover",
+          "label": "换手预算",
+          "observed": 0.5350972815958938,
+          "threshold": 0.65,
+          "comparison": "le",
+          "passed": true
+        },
+        {
+          "gate": "dsr",
+          "label": "多重试验修正DSR",
+          "observed": 0.9999999999999545,
+          "threshold": 0.6,
+          "comparison": "ge",
+          "passed": true
+        },
+        {
+          "gate": "trial_ledger",
+          "label": "试验台账完整",
+          "observed": 53.0,
+          "threshold": 1.0,
+          "comparison": "ge",
+          "passed": true
+        }
+      ],
+      "selection_audit": {
+        "best_validation_candidate": "incumbent_ols::robust_volatility_budget_rank_buffer",
+        "best_development_candidate": "incumbent_ols::robust_volatility_budget_rank_buffer",
+        "best_development_score": 2.2014914983932,
+        "one_standard_error": 0.2565781635572275,
+        "test_used_for_selection": false
+      },
+      "evidence": {
+        "local_path": "output/factor_laboratory/full_strategy_r354_turnover_gate_20260814_175751/result_selection_replay_best_development.json",
+        "sha256": "6D6D210563EBBB002BF48174587120D1D4AF93767DF1D2D0AC2BD70F1BCFB57E"
+      }
+    }
+  },
+  "professional_framework_version": "r35.9-professional-factor-lab-framework",
+  "framework_upgrade_status": "comprehensive_professional_framework_attached_champion_preserved",
+  "framework_artifact": "model/factor_laboratory/professional_framework.json",
+  "framework_performance_policy": "framework/governance/UI upgrade only; selected champion, splits, gates and report-only test metrics are preserved"
+}

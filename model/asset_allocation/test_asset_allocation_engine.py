@@ -12,10 +12,17 @@ from asset_allocation_engine import (
     _active_metrics_v3,
     _factor_signals_v3,
     _trend_specs_v3,
+    _promotion_gate_v4,
+    _objective_champions_v5,
+    _architecture_comparison_v5,
+    _cash_hurdle_metrics_v5,
+    _macro_factor_risk_audit_v5,
+    _causal_portfolio_volatility_budget_v4,
     _posterior_specs_v4,
     _posterior_target_v4,
     _drifted_weight_v4,
     _execute_target_v4,
+    _metrics,
     PROFILE_SPECS,
     PRING_BITS_TO_PHASE,
     _specs_v2,
@@ -134,6 +141,12 @@ class EngineTests(unittest.TestCase):
         self.assertGreater(turnover, 0.0)
         self.assertFalse(limited)
         self.assertAlmostEqual(float(executed.sum()), 1.0, places=8)
+        expected = 0.5 * float(np.abs(previous - drifted).sum())
+        self.assertAlmostEqual(turnover, expected, places=12)
+
+        _, limited_turnover, limited = _execute_target_v4(previous, drifted, expected, "balanced")
+        self.assertTrue(limited)
+        self.assertLessEqual(limited_turnover, expected / 2.0 + 1e-12)
 
     def test_factor_signal_filter_is_causal(self) -> None:
         rows = [{"month": f"2020{month:02d}", "value": value} for month, value in enumerate([0.2, -0.1, 0.4, 0.7, -0.3, 0.1], 1)]
@@ -149,6 +162,167 @@ class EngineTests(unittest.TestCase):
             states = payload["states"]
             self.assertEqual([row["order"] for row in states], list(range(1, len(states) + 1)))
             self.assertTrue(all(row["summary"] and row["asset_bias"] for row in states))
+
+    def test_sharpe_uses_arithmetic_mean_return_not_cagr(self) -> None:
+        returns = np.asarray([0.02, -0.01, 0.03, -0.02] * 6, dtype=float)
+        metrics = _metrics(returns)
+        expected = float(np.mean(returns) / np.std(returns, ddof=1) * np.sqrt(12))
+        legacy = metrics["annual_return"] / metrics["annual_volatility"]
+        self.assertAlmostEqual(metrics["sharpe"], expected, places=12)
+        self.assertNotAlmostEqual(metrics["sharpe"], legacy, places=6)
+        self.assertAlmostEqual(metrics["total_return"], float(np.prod(1.0 + returns) - 1.0), places=12)
+
+    def test_v4_promotion_requires_multiple_testing_adjusted_evidence(self) -> None:
+        selected = {
+            "train_active": {"annual_excess_return": 0.01},
+            "validation": {"annual_return": 0.001},
+            "validation_active": {
+                "annual_excess_return": 0.01,
+                "information_ratio": 0.3,
+                "max_relative_drawdown": -0.02,
+            },
+        }
+        audit = {
+            "pbo_cscv": 0.30,
+            "deflated_sharpe_probability": 0.56,
+        }
+        conditional = _promotion_gate_v4(selected, audit)
+        self.assertEqual(conditional["status"], "conditional")
+        self.assertIn(
+            "deflated_sharpe_probability_at_least_95pct",
+            conditional["failed"],
+        )
+        audit["deflated_sharpe_probability"] = 0.96
+        passed = _promotion_gate_v4(selected, audit)
+        self.assertEqual(passed["status"], "passed")
+        self.assertEqual(passed["failed"], [])
+
+    def test_v4_portfolio_volatility_budget_is_causal_and_bounded(self) -> None:
+        rng = np.random.default_rng(20260726)
+        window = rng.normal(
+            loc=[0.005, 0.002, 0.003, 0.0002],
+            scale=[0.12, 0.04, 0.10, 0.002],
+            size=(48, 4),
+        )
+        weight = np.asarray([0.55, 0.15, 0.20, 0.10])
+        spec = {"portfolio_volatility_target": 0.08}
+        adjusted, report = _causal_portfolio_volatility_budget_v4(
+            weight, window, spec, "equity_preferred"
+        )
+        self.assertAlmostEqual(float(adjusted.sum()), 1.0, places=10)
+        self.assertTrue(np.all(adjusted >= np.asarray([0.10, 0.05, 0.05, 0.05]) - 1e-12))
+        self.assertTrue(np.all(adjusted <= np.asarray([0.70, 0.70, 0.60, 0.60]) + 1e-12))
+        self.assertLess(report["risk_scale"], 1.0)
+        self.assertLess(
+            report["post_budget_forecast_volatility"],
+            report["pre_budget_forecast_volatility"],
+        )
+        adjusted_again, _ = _causal_portfolio_volatility_budget_v4(
+            weight, window.copy(), spec, "equity_preferred"
+        )
+        np.testing.assert_allclose(adjusted, adjusted_again)
+
+
+    def test_cash_hurdle_metrics_do_not_reward_cash_beta(self) -> None:
+        cash = np.asarray([0.002, 0.0015, 0.0022, 0.0018] * 6)
+        portfolio = cash + np.asarray([0.001, -0.0005, 0.0012, -0.0002] * 6)
+        report = _cash_hurdle_metrics_v5(portfolio, cash)
+        self.assertGreater(report["annual_excess_return"], 0.0)
+        self.assertGreater(report["cash_excess_sharpe"], 0.0)
+        with self.assertRaisesRegex(ValueError, "cash_hurdle_length_mismatch"):
+            _cash_hurdle_metrics_v5(portfolio[:-1], cash)
+
+    def test_macro_factor_risk_audit_is_finite_and_complete(self) -> None:
+        rng = np.random.default_rng(46)
+        returns = rng.normal(0.002, [0.04, 0.015, 0.03, 0.002], size=(60, 4))
+        cycles = [
+            {
+                "growth_score": np.sin(index / 7),
+                "inflation_score": np.cos(index / 9),
+                "liquidity_score": np.sin(index / 11),
+                "credit_score": np.cos(index / 13),
+            }
+            for index in range(60)
+        ]
+        audit = _macro_factor_risk_audit_v5(returns, cycles, [0.35, 0.30, 0.20, 0.15])
+        self.assertEqual(audit["status"], "ok")
+        self.assertEqual([row["factor"] for row in audit["factors"]], ["增长", "通胀", "流动性", "信用"])
+        self.assertTrue(all(np.isfinite(row["total_risk_share"]) for row in audit["factors"]))
+
+    def test_architecture_comparison_requires_train_and_validation_evidence(self) -> None:
+        def strategy(train_excess: float, validation_excess: float) -> dict:
+            metrics = {
+                split: {"annual_return": 0.02, "sharpe": 1.0}
+                for split in ("train", "validation", "test")
+            }
+            active = {
+                "train": {"annual_excess_return": train_excess},
+                "validation": {"annual_excess_return": validation_excess},
+                "test": {"annual_excess_return": 0.01},
+            }
+            cash = {
+                split: {"cash_excess_sharpe": 0.5}
+                for split in ("train", "validation", "test")
+            }
+            return {
+                "metrics": {"average_annual_turnover": 0.2},
+                "metrics_by_split": metrics,
+                "active_metrics_by_split": active,
+                "cash_hurdle_metrics_by_split": cash,
+            }
+        rows = _architecture_comparison_v5({"strategies": {
+            "recommended": strategy(0.01, 0.01),
+            "hrp": strategy(-0.01, 0.02),
+        }})
+        self.assertEqual(rows[0]["id"], "recommended")
+        self.assertTrue(rows[0]["validation_gate"])
+        self.assertTrue(rows[0]["cash_hurdle_gate"])
+        self.assertTrue(rows[0]["evidence_gate"])
+        self.assertFalse(rows[1]["train_gate"])
+
+        weak_cash = strategy(0.01, 0.01)
+        weak_cash["cash_hurdle_metrics_by_split"]["validation"]["cash_excess_sharpe"] = -0.1
+        weak_row = _architecture_comparison_v5({"strategies": {"recommended": weak_cash}})[0]
+        self.assertTrue(weak_row["validation_gate"])
+        self.assertFalse(weak_row["cash_hurdle_gate"])
+        self.assertFalse(weak_row["evidence_gate"])
+
+    def test_objective_champion_uses_train_validation_floor_not_test(self) -> None:
+        def strategy(train_sharpe: float, validation_sharpe: float, test_sharpe: float) -> dict:
+            metrics = {
+                "train": {"annual_return": 0.03, "sharpe": train_sharpe},
+                "validation": {"annual_return": 0.03, "sharpe": validation_sharpe},
+                "test": {"annual_return": 0.03, "sharpe": test_sharpe},
+            }
+            active = {
+                split: {"annual_excess_return": 0.01}
+                for split in ("train", "validation", "test")
+            }
+            cash = {
+                split: {"cash_excess_sharpe": 0.2}
+                for split in ("train", "validation", "test")
+            }
+            return {
+                "metrics": {"average_annual_turnover": 0.2},
+                "metrics_by_split": metrics,
+                "active_metrics_by_split": active,
+                "cash_hurdle_metrics_by_split": cash,
+            }
+
+        backtest = {
+            "strategies": {
+                "recommended": strategy(1.0, 0.1, 9.0),
+                "hrp": strategy(0.8, 0.7, -4.0),
+                "risk_parity": strategy(0.9, 0.6, 12.0),
+            }
+        }
+        backtest["architecture_comparison"] = _architecture_comparison_v5(backtest)
+        champions = _objective_champions_v5(backtest)
+        stable = champions["stable_absolute"]
+        self.assertEqual(stable["strategy"], "hrp")
+        self.assertAlmostEqual(stable["conservative_sharpe"], 0.7)
+        self.assertFalse(stable["selection_uses_test"])
+        self.assertEqual(stable["test_sharpe_report_only"], -4.0)
 
     def test_price_merge_later_source_wins(self) -> None:
         first = {"equity": [{"date": "20260102", "close": 1.0}]}

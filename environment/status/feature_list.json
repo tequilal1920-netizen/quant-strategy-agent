@@ -1,60 +1,230 @@
 {
-  "updated_at": "2026-07-23",
-  "features": [
-    {
-      "id": "repository-layout",
-      "status": "passed",
-      "verification": "agent uses board/database/environment/framework/model/output/skill; one ignored 1.7MB source backup remains under copy/ and contains no database"
-    },
-    {
-      "id": "research-workspace-navigation",
-      "status": "passed",
-      "verification": "8 primary groups, 27 secondary pages and exhaustive 49 legacy-view mappings are present; no core visualization or child panel was removed"
-    },
-    {
-      "id": "module-skills",
-      "status": "passed",
-      "verification": "8 primary skills contain SKILL.md, agents/openai.yaml and references/module-map.md and all pass official quick_validate.py"
-    },
-    {
-      "id": "cache-and-transfer-r16-3",
-      "status": "passed",
-      "verification": "serialized navigation, route-parameter cache identity, K-line/factor prewarm and server caches, gzip, ETag and conditional 304 passed locally and in production"
-    },
-    {
-      "id": "unified-ui",
-      "status": "passed",
-      "verification": "green/blue/red semantics, Arial/KaiTi typography, 14px HTML and 11px chart minimums, unified cards and zero horizontal overflow passed the browser matrix"
-    },
-    {
-      "id": "public-browser-matrix-r16-3",
-      "status": "passed",
-      "verification": "27/27 pages and 51/51 in-page functions passed real public clicks; console errors 0, page errors 0; route-with-all-sections median 475ms, P95 4.42s, max 5.13s"
-    },
-    {
-      "id": "kline-cohort-wyckoff-r16-3",
-      "status": "passed",
-      "verification": "K-line 9.0 cohort/Wyckoff model and all K-line learning sections are live; public health/session/stocks/dates/history checks pass and the public section matrix completes in about 0.53s"
-    },
-    {
-      "id": "credential-migration",
-      "status": "passed",
-      "verification": "the requested administrator login works in a real public browser while existing content and factor task state remain unchanged; credentials are excluded from source"
-    },
-    {
-      "id": "public-deployment-r16-3",
-      "status": "passed",
-      "verification": "SHA-256 release validation, isolated 18072 preflight, rollback-protected scheduled-task switch and 12 public API checks passed for 2026.07.23-research-workspace-r16.3"
-    },
-    {
-      "id": "workspace-cleanup",
-      "status": "passed",
-      "verification": "14 root Word/Excel documents and 5 project Word documents remain on disk; Office/PDF artifacts are ignored by Git; the 11.9GB database and copy backup are preserved; only named render caches and generator/audit intermediates were removed"
-    },
-    {
-      "id": "github-publication",
-      "status": "passed",
-      "verification": "public main root commit cb7989cbd66325597e57ced2eeea46f1dc1bdcfc contains exactly 389 blobs; the repository is public, default branch is main, all 8 primary models and 8 skills are present, and forbidden published paths are zero"
-    }
-  ]
+    "updated_at":  "2026-08-29",
+    "features":  [
+                     {
+                         "id":  "portfolio-full-framework-v1",
+                         "status":  "passed",
+                         "verification":  "2026-08-29: 组合优化三页保持最新框架；优化求解器改为默认参数-约束解释-人工确认-HiGHS选股-Clarabel求权全流程，敏感性和回测图均为网页Plotly图；宽基择时与指数增强表格沿用数据看板样式。模型CLI current/solver/backtest、14项组合优化单测、15项主站QA、JS/Python语法、真实浏览器三页零错误、约束方案-草案-校验-确认-排队端到端、公网health/version/static资源校验均通过；公网版本2026.08.29-portfolio-full-framework-v1。"
+                     },
+                     {
+                         "id":  "repository-layout",
+                         "status":  "passed",
+                         "verification":  "agent uses board/database/environment/framework/model/output/skill; one ignored 1.7MB source backup remains under copy/ and contains no database"
+                     },
+                     {
+                         "id":  "research-workspace-navigation",
+                         "status":  "passed",
+                         "verification":  "8 primary groups, 27 secondary pages and exhaustive 49 legacy-view mappings are present; no core visualization or child panel was removed"
+                     },
+                     {
+                         "id":  "module-skills",
+                         "status":  "passed",
+                         "verification":  "8 primary skills contain SKILL.md, agents/openai.yaml, module mapping and executable query.py entrypoints; all pass official quick_validate.py and route through the shared runtime"
+                     },
+                     {
+                         "id":  "cache-and-transfer-r16-3",
+                         "status":  "passed",
+                         "verification":  "serialized navigation, route-parameter cache identity, K-line/factor prewarm and server caches, gzip, ETag and conditional 304 passed locally and in production"
+                     },
+                     {
+                         "id":  "unified-ui",
+                         "status":  "passed",
+                         "verification":  "green/blue/red semantics, Arial/KaiTi typography, 14px HTML and 11px chart minimums, unified cards and zero horizontal overflow passed the browser matrix"
+                     },
+                     {
+                         "id":  "public-browser-matrix-r16-3",
+                         "status":  "passed",
+                         "verification":  "27/27 pages and 51/51 in-page functions passed real public clicks; console errors 0, page errors 0; route-with-all-sections median 475ms, P95 4.42s, max 5.13s"
+                     },
+                     {
+                         "id":  "kline-cohort-wyckoff-r16-3",
+                         "status":  "passed",
+                         "verification":  "K-line 9.0 cohort/Wyckoff model and all K-line learning sections are live; public health/session/stocks/dates/history checks pass and the public section matrix completes in about 0.53s"
+                     },
+                     {
+                         "id":  "credential-migration",
+                         "status":  "passed",
+                         "verification":  "the requested administrator login works in a real public browser while existing content and factor task state remain unchanged; credentials are excluded from source"
+                     },
+                     {
+                         "id":  "public-deployment-r16-3",
+                         "status":  "passed",
+                         "verification":  "SHA-256 release validation, isolated 18072 preflight, rollback-protected scheduled-task switch and 12 public API checks passed for 2026.07.23-research-workspace-r16.3"
+                     },
+                     {
+                         "id":  "workspace-cleanup",
+                         "status":  "passed",
+                         "verification":  "14 root Word/Excel documents and 5 project Word documents remain on disk; Office/PDF artifacts are ignored by Git; the 11.9GB database and copy backup are preserved; only named render caches and generator/audit intermediates were removed"
+                     },
+                     {
+                         "id":  "github-publication",
+                         "status":  "passed",
+                         "verification":  "public branch agent/industry-style-r16-6 and draft PR 1 contain the executable runtime, R25.4 source, all 8 primary models and all 8 skills; database files, credentials and licensed R25.4 output snapshots remain external"
+                     },
+                     {
+                         "id":  "agent-runtime-remote-r1",
+                         "status":  "passed",
+                         "verification":  "official GitHub archive hash matched locally and remotely; 6 runtime tests, strict database doctor, 8-module real queries, authenticated R25.4 service catalog and cross-SSH scheduled-task HTTP queries passed on homeserver at 127.0.0.1:8091"
+                     },
+                     {
+                         "id":  "liquidity-external-source-migration",
+                         "status":  "blocked",
+                         "verification":  "49 non-Excel source contracts and a strict release gate are implemented; 39 exact series are persisted from Wind SQL, CSData, CREFI and AMAC, while 10 licensed Wind EDB/EPFR series remain unavailable, so the production snapshot and deployment were intentionally left unchanged"
+                     },
+                     {
+                         "id":  "model-reliability-v4-2-local",
+                         "status":  "passed",
+                         "verification":  "shared arithmetic Sharpe/HAC metrics, run-locked V4 gates, score-component audits, one-way turnover accounting and portfolio return-loss attribution passed 117 tests plus the 31x248 industry contract; isolated backtests were retained and production/UI were not changed"
+                     },
+                     {
+                         "id":  "model-reliability-v4-3-local",
+                         "status":  "passed",
+                         "verification":  "causal asset and factor volatility budgets, PIT factor universe and T+1 execution labels, industry walk-forward risk challengers, K-line dual momentum, explicit turnover/drawdown gates and return-loss diagnostics passed 60 targeted regressions plus syntax, diff and 31x248 contract checks; rejected candidates remained isolated and production/UI were unchanged"
+                     },
+                     {
+                         "id":  "model-reliability-v4-4-local",
+                         "status":  "passed",
+                         "verification":  "PIT factor neutralization, industry path/crowding challengers, K-line active-path guards and an asset-allocation 95% DSR promotion gate passed 67 model/framework/UI tests plus four JavaScript syntax checks; rejected candidates remained research-only and UI headings were unchanged"
+                     },
+                     {
+                         "id":  "model-reliability-v4-5-local",
+                         "status":  "passed",
+                         "verification":  "causal symmetric-orthogonal adaptive ICIR factors and explicit train/validation IC-consistency diagnostics passed 68 model/framework/UI tests plus four JavaScript syntax checks; the failed asset uncertainty challenger was withdrawn, test-period gains were not promoted, UI headings and production snapshots were unchanged"
+                     },
+                     {
+                         "id":  "model-reliability-v4-6-local",
+                         "status":  "passed",
+                         "verification":  "the formal 31x248 industry source passed its strict live-field contract, a sealed-test champion guard rejected the train-validation C19 challenger and preserved C6, and the K-line zero-position fallback now reports observe_only_no_validated_strategy instead of an accepted improvement; 70 unit tests, four JavaScript syntax checks and diff validation passed without UI or production snapshot changes"
+                     },
+                     {
+                         "id":  "model-reliability-v4-7-local",
+                         "status":  "passed",
+                         "verification":  "industry candidates now share one evaluation start per frequency and the report-momentum challenger remains research-only; the factor 50/50 cross-sectional rank ensemble remained validation-ineligible despite high report-only test Sharpe; 73 Python tests, four JavaScript syntax checks and diff validation passed with no UI heading, production snapshot or deployment change"
+                     },
+                     {
+                         "id":  "model-reliability-v4-8-local",
+                         "status":  "passed",
+                         "verification":  "continuous cross-sectional rank execution selected the causal adaptive-ICIR model using train and validation only, raising validation Sharpe from 0.536 to 1.126 and producing 2.453 in the report-only test period; all 36 model-policy candidates now enter the DSR ledger, while the 0.767 turnover gate remains explicitly failed; 75 Python tests, four JavaScript syntax checks and diff validation passed with no UI heading, snapshot or deployment change"
+                     },
+                     {
+                         "id":  "factor-lab-causal-champion-r18-production",
+                         "status":  "passed",
+                         "verification":  "factor-lab/3.2 enforces h+1 label maturity, causal cost-aware execution and a complete 39-candidate ledger; the train/validation-selected continuous-rank champion reports 0.464/1.126/2.466 Sharpe, and the unchanged Config Strategy result page exposes the full report-only test metrics and 9/10 gates; 84 Python tests, four JavaScript syntax checks, real browser QA, isolated remote preflight, rollback-protected switch and 13 public API checks passed for R18.0"
+                     },
+                     {
+                         "id":  "model-governance-index-r19-production",
+                         "status":  "passed",
+                         "verification":  "one read-only contract exposes nine model states with train, validation and sealed-test separation; CSI800 champion selection uses 112 train and 24 validation months only, then reports -0.135 sealed-test Sharpe without reselection, while CSI2000 is blocked for missing train/validation history; 87 Python tests, JavaScript syntax, real-browser zero-error QA, isolated 18072 preflight, rollback-protected switch and 14 public API checks passed for R19.0"
+                     },
+                     {
+                         "id":  "factor-lab-turnover-budget",
+                         "status":  "passed",
+                         "verification":  "superseded by factor-lab/3.5 stable-development selection: the selected reliability-adjusted continuous-rank execution reports 0.426 report-period turnover against the 0.65 budget while retaining positive purged OOF train and validation Sharpe; selection used train and validation only and the test period remained report-only"
+                     },
+                     {
+                         "id":  "best-history-r20-2-production",
+                         "status":  "passed",
+                         "verification":  "K-line history now selects one non-empty, non-reverted task using train and validation evidence only, while index enhancement shows only its governed champion in the history table and preserves all comparison charts; 18 canonical QA tests, JavaScript syntax, isolated preflight, rollback-protected production switch, 14 public API checks and zero-error browser QA passed for R20.2"
+                     },
+                     {
+                         "id":  "analysis-first-vnext-r24-3",
+                         "status":  "passed",
+                         "verification":  "8 primary and 27 secondary navigation labels remained unchanged; six representative model pages each passed a real-browser contract of 5 analysis blocks, 4 full-view charts, zero evidence tables, zero horizontal overflow, zero legacy introductions and zero raw English transform codes; 113 regressions, JavaScript syntax, package audit, isolated remote deployment and new/old public health checks passed, while the existing /quant-agent/ R21.2 deployment remained untouched"
+                     },
+                     {
+                         "id":  "five-panel-dense-vnext-r25-4",
+                         "status":  "passed",
+                         "verification":  "all 19 model pages preserve the 8 primary and 27 secondary navigation labels while rendering one parameter zone plus five fixed high-density sections; 1920x1080, 1440x900 and 1366x768 real-browser matrices each reported five plots, five conditional matrices, zero legacy tables, zero visible legacy siblings, zero horizontal overflow, zero container or Plotly-label overlap and zero blue container backgrounds; 11 targeted regressions, syntax checks, archive audit, isolated 8076 deployment, atomic Funnel switch and old R24.3 cleanup passed while /quant-agent/ R21.2, the port-10000 root and /quant-ai remained unchanged"
+                     },
+                     {
+                         "id":  "factor-stable-vnext-r28-2",
+                         "status":  "passed",
+                         "verification":  "factor-lab/3.5 uses purged expanding OOF train predictions and train-validation stable-development selection with a one-standard-error complexity rule; the selected adaptive ICIR reliability-adjusted continuous-rank policy reports 1.022/0.820/2.894 train/validation/report-only-test Sharpe and 0.426 report-period turnover with 10/10 gates passed; 63 core, 39 vNext and 18 current-app compatibility tests passed; three real-browser resolutions each showed five plots, five matrices, zero horizontal overflow, zero plot-matrix collision, zero raw candidate IDs, zero raw factor variables and zero console messages; isolated 8080 deployment and superseded R28 cleanup passed while current /quant-agent remained R27.0"
+                     },
+                     {
+                         "id":  "industry-prosperity-diagnostic-vnext-r29-3",
+                         "status":  "passed",
+                         "verification":  "industry-rotation/4.9 combines PIT business prosperity level, 21-day acceleration, price confirmation and continuous crowding residual in a top-five buffered diagnostic; common-start train/validation absolute Sharpe is -1.237/1.656 and excess Sharpe is 0.554/1.821, but the observed 2022+ report period remains diagnostic_only and C6 stays production; 17 industry, 41 vNext and 21 current-app tests passed; three browser resolutions each showed five plots, five matrices, zero overflow, zero truncation, zero collision, zero range slider, zero raw candidate IDs and zero console messages; isolated 8084 deployment and R28.2/R29.0/R29.1/R29.2 cleanup passed while current /quant-agent remained R27.0"
+                     },
+                     {
+                         "id":  "asset-macro-risk-audit-vnext-r29-4",
+                         "status":  "passed",
+                         "verification":  "asset-allocation v4.6 adds investable cash-ETF excess Sharpe, identical-split comparison across 10 allocation architectures and a rolling macro-factor risk audit; the retained recommendation reports 1.048/0.023/1.548 train/validation/report-only absolute Sharpe and 0.610/-0.603/1.361 cash-excess Sharpe, so the all-evidence promotion gate remains failed and no 1.5 stability claim is made; macro factors explain 0.54% of current risk versus 99.46% specific risk; 22 asset tests, 30 vNext tests and 49 targeted regressions passed; 1366x900, 1920x1080 and 2560x1440 each showed five plots, five matrices, zero overflow, zero truncation, zero range sliders, zero raw internal IDs and zero console messages; isolated 8085 deployment and R29.3 cleanup passed while current /quant-agent remained R27.0"
+                     },
+                     {
+                         "id":  "portfolio-cash-duration-vnext-r29-6",
+                         "status":  "passed",
+                         "verification":  "portfolio-optimizer/2.6 fixes bond-ETF role classification, separates cash equivalents from duration bonds, applies role-aware capacity constraints, uses robust EWMA/Newey-West/shrunk PSD covariance and family-balanced validation; train/validation/report-only Sharpe is 1.963/0.706/2.702 with report-only excess return -6.94% and IR -0.636, so the candidate remains post-test diagnostic; PBO is 0.00 but DSR probability is 72.46%, below the 95% promotion gate; 16 portfolio, 41 vNext and 69 cross-model tests passed, three browser widths had zero overflow or clipping, isolated 8087 deployment and R29.4 cleanup passed while current /quant-agent remained R27.0"
+                     },
+                     {
+                         "id":  "index-bayesian-core-satellite-vnext-r29-7",
+                         "status":  "passed",
+                         "verification":  "index-enhancement/1.3 keeps a fully invested benchmark core, uses causal multi-horizon empirical-Bayes factor allocation, soft industry budgets, style residualization, shrunk tracking-risk covariance and turnover-aware active overlays; the train/validation/report-only Sharpe is 0.640/-0.267/0.275 and validation/report-only IR is 1.512/-0.102, so the candidate remains diagnostic_only and no 1.5 claim is made; 58 regressions passed, three browser widths showed five plots, zero overflow, zero text clipping, zero range inputs, zero hidden-history selector and zero console errors; isolated 8088 deployment and R29.6 cleanup passed while current /quant-agent remained R27.0"
+                     },
+                     {
+                         "id":  "liquidity-causal-posterior-vnext-r29-8",
+                         "status":  "passed",
+                         "verification":  "liquidity-state/1.0 uses exact SQLite series, explicit release lags, weekly next-period execution, hierarchical rolling posterior weights, continuous exposure, volatility budgeting and 10bp cost; train/validation/report-only Sharpe is 0.393/-0.150/0.471 and DSR probability is 20.08%, so promotion remains false and no 1.5 claim is made; 18 of 22 candidates form usable weekly history while 10 licensed Wind EDB/EPFR contracts remain unavailable and the 78/78 monitoring audit is reported separately; 67 regressions passed, seven liquidity pages returned 200, three browser widths had zero SVG text collision and zero HTML horizontal overflow, isolated 8089 deployment and R29.7 cleanup passed while current /quant-agent remained R27.0"
+                     },
+                     {
+                         "id":  "kline-multiscale-vnext-r29-9",
+                         "status":  "passed",
+                         "verification":  "kline-multiscale/1.0 uses PIT daily and weekly OHLCV experts, industry-size neutralization, expanding LambdaRank, matured-feedback posterior weights, next-open execution and 15bp cost; train/validation/report-only Sharpe is 1.595/1.720/-1.971, so release remains false and no 1.5 production claim is made; 5 K-line and 50 vNext tests passed, three browser widths showed five plots, zero horizontal overflow, zero range inputs, correct calendar dates and zero console messages; isolated 8090 deployment and authenticated public governance checks passed while current /quant-agent remained R27.0"
+                     },
+                     {
+                         "id":  "dual-objective-four-panel-vnext-r30-0",
+                         "status":  "passed",
+                         "verification":  "all active model pages retain the existing primary and secondary navigation while removing the mechanism diagram and exposing four dense evidence blocks; asset allocation routes strategic-active and stable-absolute objectives separately, with HRP selected only by the 1.318/0.712 train-validation Sharpe floor and 1.900 test Sharpe kept report-only; 23 asset, 50 vNext and 101 cross-model tests passed; browser QA at 1920/1440/1100 showed zero horizontal overflow, zero mechanism blocks and zero range inputs; authenticated isolated 8091 deployment and public evidence checks passed while current /quant-agent remained R27.0; remote R29.9/R29.8 cleanup awaits explicit destructive-action approval"
+                     },
+                     {
+                         "id":  "r30-0-reliability-and-kline-recovery",
+                         "status":  "passed",
+                         "verification":  "industry mixed-date parsing and all-cash serialization are deterministic; 19 industry, 23 asset, 88 other model/framework and 30 vNext tests passed; the existing Kline 8877 service was restored and authenticated public health/history proxies returned 200; 1920/1440/1280 browser checks showed four panels, zero mechanism blocks, zero range inputs, zero overflow and zero console messages while main public and navigation remained unchanged"
+                     },
+                     {
+                         "id":  "liquidity-investable-cash-vnext-r31-0",
+                         "status":  "passed",
+                         "verification":  "liquidity v9 replaces zero-return idle cash with the canonical 511880.SH total-return sleeve and executes the weekly posterior only at month-end; common-start train/validation Sharpe improved from 0.514/-0.250 to 0.801/0.037, validation information ratio improved from 0.617 to 0.726 and validation drawdown narrowed from -14.48% to -11.19%; test remained report-only and promotion_eligible=false; 50 vNext and 98 cross-model tests passed; authenticated 1280/1440/1920 browser checks showed four blocks, 12 charts, zero mechanism blocks, zero overflow and zero console errors; isolated R31 deployment passed while main /quant-agent stayed R27.0"
+                     },
+                     {
+                         "id":  "kline-research-deployment-split-vnext-r32-0",
+                         "status":  "passed",
+                         "verification":  "kline-multiscale-expert/1.6 separates research-only paper long-short diagnostics from deployable strategies; the research candidate reports 1.595/1.720/-1.971 train/validation/report-only Sharpe, but no deployable candidate passes train and validation, so release remains false and the failed NAV is replaced by feature-contribution evidence; asset defaults retain only the strategic champion, HRP absolute-return champion and equal-weight benchmark; 50 vNext and 104 cross-model tests passed; authenticated 1280/1440/1920 browser checks showed four plots, zero mechanism blocks, zero range inputs, zero overflow and zero console messages; isolated R32 deployment passed while main /quant-agent stayed R27.0"
+                     },
+                     {
+                         "id":  "asset-allocation-v5-four-asset-governed-shadow",
+                         "status":  "blocked",
+                         "verification":  "v5 implements equity/government-bond/RMB-gold/ex-gold-commodity data contracts, probabilistic Pring/Kitchin/Juglar/Merrill/Kondratieff tracking, macro-factor covariance, strict ERC, constrained risk budgeting, full-Omega Black-Litterman and a single robust cost-aware optimizer; 55/55 asset-allocation regressions and both JavaScript syntax checks passed, but the local four-asset overlap is only 202605-202606 because 511010.SH has 31 daily rows, commodity history is an unverified short ETF execution proxy, and macro PIT coverage is zero, so the live snapshots and deployment were intentionally left unchanged"
+                     },
+                     {
+                         "id":  "csi500-strict-joint-cardinality-r33-0",
+                         "status":  "passed",
+                         "verification":  "R33.0 fuses index enhancement and portfolio optimization around exact CSI500 membership and PIT Factor Lab scores; HiGHS MILP jointly selects exactly 50 names under long-only, budget, position, active, industry, style, turnover, buy/sell, liquidity and list constraints, then CLARABEL SOCP certifies tracking error and the full frozen support without heuristic or equal-weight fallback. Local and candidate regressions passed 94/94. Candidate run run-20260811131658-c5c3b23bc7 completed with 50 weights, SCIPY_HIGHS_MILP plus CLARABEL, max residual 4.1378012127779584e-13 and fallback_used=false. Requested-window performance is invalid because the 89-month window has only 71 complete periods, so formal metrics remain null and the release is research-only. Public /quant-agent now targets port 8094; port 8071 remains live for rollback. The external LLM request was not sent; only the local schema, knowledge base, compiler contract and structured validation path were verified."
+                     },
+                     {
+                         "id":  "industry-six-dimension-vnext-r33-0",
+                         "status":  "passed",
+                         "verification":  "industry-rotation/5.2 uses 53 effective PIT factors across prosperity, fundamentals, technicals, valuation, funds and crowding (5/12/12/4/10/10), with matured-label online IC and selection_uses_test=false. Production remains C6 for both frequencies; research C26 monthly and C29 weekly remain diagnostic_only. C26 train/validation/report-only absolute Sharpe is -1.6614/1.2056/-0.0302 and excess Sharpe is 0.1260/0.8912/-0.2268; C29 is -0.6773/1.1767/-0.1741 and 1.3349/0.7558/-0.7485. Core 46/46, AI runtime 10/10, packaged vNext candidate 71/71 and current release-scope 59/59 tests passed. The current dirty-tree full QA is 71 passed plus 7 failures confined to two unrelated asset-allocation v5.2.2 work-in-progress test files that are absent from the 86-entry industry release package. Authenticated 1920/1440/1280 browser checks showed the unchanged navigation, a 31x6 conditional matrix, 10 selected industries, monthly/weekly redraw and zero horizontal overflow. Isolated 8095 deployment passed while main /quant-agent stayed on 8094 version 2026.08.11-csi500-constrained-optimizer-r33.0."
+                     },
+                     {
+                         "id":  "csi500-visual-governed-optimizer-r34-0",
+                         "status":  "passed",
+                         "verification":  "R34.0 unifies portfolio optimization and index enhancement on an exact CSI500 500-stock snapshot and exact 50-name governed runs. Eleven existing factor histories are combined causally; HiGHS support selection now maximizes normalized alpha net linear turnover cost without a hidden benchmark/previous/risk blend, and Clarabel solves and certifies continuous weights under industry, style, active-weight, turnover, tracking-error and liquidity constraints with fallback_used=false. The 72-period formal contiguous replay has 72 certified, zero blocked and zero carried periods. Train annual excess/Sharpe/IR is 14.57%/0.846/0.945 and validation is 28.21%/0.315/2.484, but the report-only 2024+ sealed test is -28.02%/-0.209/-1.560, so the publication gate correctly rejects it and selected_run stays empty. Six plain pages contain 6/8/6/7/7/8 charts, zero tables, no numbered titles or mojibake, and display research-diagnostic/publication-blocked status where required. Targeted regressions passed 100/100 and JavaScript syntax passed. Final backend/test hashes match homeserver F:\\apps\\quant_strategy_agent_r34_0_visual_optimizer; task QuantStrategyAgent8096R340VisualOptimizer listens on 8096 and health returns r34.0. Existing public /quant-agent remains on 8096, but no candidate was promoted from the observed sealed test and temporary wheel directories were removed."
+                     },
+                     {
+                         "id":  "graph-first-governed-vnext-r34-1",
+                         "status":  "passed",
+                         "verification":  "R34.1 preserves every primary and secondary navigation title while replacing low-information internal layouts with graph-first evidence: industry has 9 charts, style and allocation have 8 each, and portfolio solve has 9 charts with zero matrices, controls or explanatory paragraphs. Production industry remains C6 and C26/C29 remain diagnostic-only shadow evidence with test excluded from selection. Research/UI 17/17, industry 46/46, portfolio 84/84, AI runtime 10/10 and release-scope vNext 61/61 tests passed. Authenticated 1920 browser checks found no horizontal overflow or sibling overlap and portfolio HTML text is at least 14px. Kline 8877 was recovered without code or data changes and public health/history both return 200. Isolated vNext runs on 8097 as 2026.08.11-graph-first-governed-vnext-r34.1 while main public remains 8094 R33.0."
+                     },
+                     {
+                         "id":  "industry-champion-anchor-vnext-r35-2",
+                         "status":  "passed",
+                         "verification":  "industry-rotation/5.3 freezes the R32 248-direction C6 production champion for monthly and weekly output, uses the six PIT dimensions only as train-and-validation-selected orthogonal research challengers, keeps the test split report-only, and forces tracking to production_champion. Monthly test annual excess is 1.80% with excess Sharpe 0.422 versus R32 0.337; weekly test annual excess is -0.66% with excess Sharpe -0.126, so no stable Sharpe 1.5 claim is made. Industry 54/54, AI runtime 10/10 and vNext 32/32 tests plus JavaScript syntax passed. Authenticated 1920/1440/1280 browser QA retained the original 8 primary and 3 industry secondary titles, 19 charts, zero overflow and zero console errors. All 28 R35.2 static UI/template files and app.py hash-match R34.1. Isolated vNext now runs on 8099 as 2026.08.13-industry-champion-anchor-vnext-r35.2; main public remains 8096 R34.0 and R34.1 on 8097 is preserved for rollback."
+                     },
+                     {
+                         "id":  "asset-allocation-v55-authoritative-long-sample",
+                         "status":  "blocked",
+                         "verification":  "v553 is the byte-reproducible D2 four-asset panel with T-2 information, T-1 settlement, real-contract drift, bilateral rolls, dated fees, half-tick cost and Shibor O/N ACT/360. v554 keeps the no-benchmark ABS-02 diagnostic (train/validation Sharpe 2.144/1.906) but it is not production eligible. Isolated v556/v557 fixes the B06 duplicate annualization and five audit P1s; 27 tests pass and two builds are byte-identical (file SHA256 DF923785A30F345F6C4E5CB2D4FB462519E6A2EE485BF850636943B6BFE8ADE9). v557 train excess/IR/Sharpe are +0.3444%/0.1154/0.5555; validation +0.0882%/-0.0123/1.1412, so the frozen gate rejects it (2/4 positive excess years). Current research target E/B/G/C=54.2055/18.1457/10.1887/17.4602. Deployment remains blocked by absent Wind/iFinD D3 crosscheck, zero macro release-vintage PIT, failed relative validation gate and no future pristine holdout; public R35.2/8099 remains unchanged."
+                     }
+                 ]
 }

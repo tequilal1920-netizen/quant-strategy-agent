@@ -1,0 +1,78 @@
+{
+  "schema_version": "quant-agent-catalog/1.0",
+  "runtime_version": "2026.08.13-agent-runtime-r3-champion-anchor",
+  "modules": [
+    {
+      "title": "主页",
+      "skill": "research-home",
+      "model_path": "model/research_home",
+      "skill_path": "skill/research-home",
+      "summary": "汇总七个研究模块的时点、结论、治理状态与当前组合，形成跨模型研究简报。",
+      "operations": ["overview"],
+      "questions": ["汇总当前宏观周期、行业、因子与组合结论", "现在全系统最重要的配置结论和风险是什么"]
+    },
+    {
+      "title": "数据看板",
+      "skill": "data-dashboard",
+      "model_path": "model/data_dashboard",
+      "skill_path": "skill/data-dashboard",
+      "summary": "查询宏观、全球市场、行业、商品、个股与事件快照，同时返回数据截止日和质量状态。",
+      "operations": ["overview", "market", "news"],
+      "questions": ["全球市场最近谁最强谁最弱", "列出最新市场数据的截止日和异常"]
+    },
+    {
+      "title": "资产配置",
+      "skill": "asset-allocation",
+      "model_path": "model/asset_allocation",
+      "skill_path": "skill/asset-allocation",
+      "summary": "识别普林格、基钦、朱格拉、康波与美林状态，返回分画像资产权重、风险贡献和回测治理结论。",
+      "operations": ["current", "cycle", "backtest"],
+      "questions": ["现在是什么周期，平衡型账户如何配置资产", "当前基钦周期和美林时钟分别是什么状态"]
+    },
+    {
+      "title": "资金面跟踪",
+      "skill": "liquidity-tracking",
+      "model_path": "model/liquidity_tracking",
+      "skill_path": "skill/liquidity-tracking",
+      "summary": "读取散户、公募、ETF、融资、一级市场、私募与外资资金的最新值、方向、来源和质量状态。",
+      "operations": ["overview", "page"],
+      "questions": ["当前资金面最重要的变化是什么", "外资资金最近如何变化"]
+    },
+    {
+      "title": "行业景气度",
+      "skill": "industry-rotation",
+      "model_path": "model/industry_rotation",
+      "skill_path": "skill/industry-rotation",
+      "summary": "查询31个申万一级行业的高频景气、53因子六维研究排名与单行业分解、生产冠军月周轮动结果和3×4风格箱。",
+      "operations": ["ranking", "drivers", "dimensions", "style", "backtest"],
+      "questions": ["哪个行业景气度最高", "电子行业的高频景气由哪些指标驱动", "六维行业轮动当前看好哪些行业", "电子行业的六维得分如何分解"]
+    },
+    {
+      "title": "因子实验室",
+      "skill": "factor-laboratory",
+      "model_path": "model/factor_laboratory",
+      "skill_path": "skill/factor-laboratory",
+      "summary": "读取因子冠军、三段样本绩效、治理门禁、指数增强与SmartBeta模型，并可转接远程因子任务。",
+      "operations": ["champion", "index", "models"],
+      "questions": ["当前因子冠军是什么，训练验证测试效果如何", "中证800指数增强当前模型和治理状态是什么"]
+    },
+    {
+      "title": "技术分析",
+      "skill": "technical-analysis",
+      "model_path": "model/technical_analysis",
+      "skill_path": "skill/technical-analysis",
+      "summary": "查询K线横截面治理状态与形态知识，并可转接远程单股K线学习任务。",
+      "operations": ["status", "patterns"],
+      "questions": ["K线模型现在是否可用于交易", "查询突破与反转形态的学习资料"]
+    },
+    {
+      "title": "组合优化",
+      "skill": "portfolio-optimization",
+      "model_path": "model/portfolio_optimization",
+      "skill_path": "skill/portfolio-optimization",
+      "summary": "读取当前求解器、资产权重、约束残差、风险贡献、回测结果和晋级门禁。",
+      "operations": ["current", "solver", "backtest"],
+      "questions": ["当前组合权重如何分配", "求解器是否满足约束，为什么还不能晋级实盘"]
+    }
+  ]
+}

@@ -59,6 +59,8 @@ FACTOR_LATEX = (
 
 def _load_factor_miner() -> Any:
     path = Path(__file__).resolve().parents[1] / "05_factor_mining_agent" / "factor_miner.py"
+    if not path.exists():
+        path = Path(__file__).resolve().parents[1] / "llm_factor_mining" / "factor_miner.py"
     spec = importlib.util.spec_from_file_location("factor_miner_for_cross_section", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Cannot load factor miner from {path}")
@@ -766,6 +768,66 @@ def _score_result(metrics: Dict[str, Dict[str, Any]], integrity: Dict[str, bool]
     }
 
 
+def _selection_score_result(
+    metrics: Dict[str, Dict[str, Any]],
+    integrity: Dict[str, bool],
+    frequency: str,
+) -> Dict[str, Any]:
+    """Score promotion with train/validation only; attach test separately."""
+    train, valid, test = metrics["train"], metrics["valid"], metrics["test"]
+    minimum_validation_periods = {"D": 120, "W": 26, "M": 8, "Q": 6}[frequency]
+    components = {
+        "train_rank_ic": min(25.0, max(0.0, train["rank_ic"] / 0.05 * 25.0)),
+        "validation_rank_ic": min(25.0, max(0.0, valid["rank_ic"] / 0.04 * 25.0)),
+        "validation_portfolio": min(
+            20.0,
+            max(0.0, valid["excess_annual_return"] / 0.08 * 20.0),
+        ),
+        "validation_monotonicity": min(
+            10.0,
+            max(0.0, valid["monotonicity"] * 10.0),
+        ),
+        "validation_risk_cost": min(
+            10.0,
+            max(
+                0.0,
+                (1.0 - abs(valid["max_drawdown"]) / 0.35)
+                * (1.0 - min(valid["turnover"], 1.0))
+                * 10.0,
+            ),
+        ),
+        "data_integrity": 10.0 if all(integrity.values()) else 0.0,
+    }
+    checks = {
+        "train_positive_sharpe": train["sharpe"] > 0,
+        "validation_positive_sharpe": valid["sharpe"] > 0,
+        "train_excess_return": train["excess_annual_return"] > 0,
+        "train_rank_ic": train["rank_ic"] >= 0.02,
+        "validation_rank_ic": valid["rank_ic"] >= 0.015,
+        "train_validation_same_direction": train["rank_ic"] * valid["rank_ic"] > 0,
+        "validation_excess_return": valid["excess_annual_return"] > 0,
+        "validation_monotonicity": valid["monotonicity"] >= 0.60,
+        "validation_coverage": valid["coverage"] >= 0.80,
+        "validation_periods": valid["periods"] >= minimum_validation_periods,
+        "future_information_audit": all(integrity.values()),
+    }
+    score = float(sum(components.values()))
+    return {
+        "score": score,
+        "grade": "A" if score >= 85 else "B" if score >= 70 else "C" if score >= 55 else "D",
+        "passed": all(checks.values()),
+        "components": components,
+        "checks": checks,
+        "selection_uses_test": False,
+        "test_report_only": {
+            "rank_ic": test["rank_ic"],
+            "excess_annual_return": test["excess_annual_return"],
+            "sharpe": test["sharpe"],
+            "max_drawdown": test["max_drawdown"],
+        },
+    }
+
+
 def _ranking_rows(frame: pd.DataFrame, universe: str, top: bool) -> List[Dict[str, Any]]:
     member = f"member_{universe}"
     sub = frame[frame[member] & frame["quality_eligible"]].sort_values("factor_score", ascending=not top).head(10)
@@ -965,7 +1027,7 @@ def run_study(
                 for split in ("train", "valid", "test")
             }
             metrics["full"] = _metric_block(clean_periods, frequency)
-            score = _score_result(metrics, integrity)
+            score = _selection_score_result(metrics, integrity, frequency)
             rank_ic_values = [row["rank_ic"] for row in clean_periods]
             trial_adjusted_sharpe = metrics["test"]["long_short_sharpe"] / math.sqrt(max(1.0, math.log(4.0 * len(UNIVERSES))))
             dsr_confidence = NormalDist().cdf(trial_adjusted_sharpe * math.sqrt(max(metrics["test"]["periods"], 1) / PERIODS_PER_YEAR[frequency]))
@@ -996,6 +1058,7 @@ def run_study(
                         "下一交易日涨跌停或停牌只影响成交，不反向改写信号",
                     ],
                     "test_usage": "sealed_report_only",
+                    "selection_uses_test": False,
                 },
             }
             results[universe][frequency] = block
@@ -1017,13 +1080,14 @@ def run_study(
 
     payload = {
         "status": "done",
-        "version": "cross-sectional-factor-study/1.2-lambdarank-factor-momentum",
+        "version": "cross-sectional-factor-study/1.3-train-validation-promotion",
         "factor_name": FACTOR_NAME,
         "formula": FACTOR_FORMULA,
         "latex": FACTOR_LATEX,
         "method": "LLM方法论候选 + 点时点特征编译 + LambdaRank收益十分位排序 + 稳定性裁判 + 严格滞后因子动量 + 封存测试",
         "ranker": ranker_diagnostics,
         "strategy_policies": strategy_policies,
+        "selection_policy": "train_validation_only_test_report_only",
         "database": str(db),
         "start": start,
         "end": end,
@@ -1431,4 +1495,3 @@ def load_runtime(path: Path) -> Optional[Dict[str, Any]]:
         "frequency_indices": {key: data[f"frequency_{key}"] for key in FREQUENCIES},
         "names": json.loads(str(data["names_json"][0])),
     }
-

@@ -1,0 +1,13 @@
+[project]
+name = "quant-agent-mcp"
+version = "0.1.0"
+description = "中信建投量化策略 Agent 的本地 MCP 接入层"
+requires-python = ">=3.10"
+dependencies = ["mcp>=1.2.0"]
+
+[project.scripts]
+quant-agent-mcp = "quant_agent_mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["quant_agent_mcp*"]

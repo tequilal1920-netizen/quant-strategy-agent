@@ -1,0 +1,13 @@
+# 数据看板模块地图
+
+- 一级标题：数据看板
+- 二级页面：市场监控、专题跟踪
+- 本地模型：`ai-models/data-dashboard/source`
+- 数据看板源码：`board/public_dashboard`
+- 统一服务入口：`board/quant_strategy_agent/main.py`
+- 统一前端：`board/quant_strategy_agent/static/js/app.js`
+- 统一数据快照：`board/quant_strategy_agent/data/`
+- AI 监控公网入口：`https://desktop-i22b489.tailf9d7ac.ts.net/tech-diffusion/`
+- 模块元数据：`ai-models/data-dashboard/source/MODULE.json`
+
+旧的“一级行业”能力合并至“行业”；所有旧图表的精确目标和页内区段见 `framework/integration/ui_module_mapping.json`。

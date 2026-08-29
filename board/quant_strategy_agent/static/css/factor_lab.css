@@ -210,3 +210,460 @@
 @media (max-width: 980px) {
   .fl2-advanced .fl2-param-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Final factor laboratory framework: dashboard-style live tables and Plotly charts. */
+.flx-shell {
+  --flx-red: #aa2d1e;
+  --flx-table-red: #c00000;
+  --flx-green: #00b050;
+  --flx-blue: #2f75b5;
+  --flx-ink: #1e2938;
+  --flx-muted: #667085;
+  --flx-line: #d8dfe7;
+  --flx-soft: #f7f4f1;
+  color: var(--flx-ink);
+  display: grid;
+  gap: 18px;
+  padding-bottom: 44px;
+}
+
+.flx-shell h2,
+.flx-shell h3,
+.flx-shell p {
+  margin: 0;
+}
+
+.flx-shell button,
+.flx-shell input,
+.flx-shell select,
+.flx-shell textarea {
+  font: inherit;
+}
+
+.flx-section,
+.flx-table-card,
+.flx-chart,
+.flx-metric {
+  background: #fff;
+  border: 1px solid var(--flx-line);
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(17, 24, 39, .05);
+}
+
+.flx-section {
+  padding: 16px 18px;
+}
+
+.flx-section.flx-inner {
+  padding: 14px;
+}
+
+.flx-section > header {
+  margin-bottom: 12px;
+}
+
+.flx-section h2,
+.flx-table-card h3 {
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.flx-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.flx-metric {
+  min-height: 96px;
+  padding: 16px;
+}
+
+.flx-metric span,
+.flx-metric em {
+  display: block;
+  color: var(--flx-muted);
+  font-style: normal;
+}
+
+.flx-metric span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.flx-metric strong {
+  display: block;
+  margin: 8px 0 5px;
+  color: #111827;
+  font-family: Arial, "Microsoft YaHei", sans-serif;
+  font-size: 23px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.flx-metric em {
+  font-size: 12px;
+}
+
+.flx-champion {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.flx-champion article {
+  min-height: 82px;
+  padding: 12px 14px;
+  border: 1px solid #ead6d0;
+  border-left: 4px solid var(--flx-red);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.flx-champion span,
+.flx-champion em {
+  display: block;
+  color: var(--flx-muted);
+  font-style: normal;
+}
+
+.flx-champion span {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.flx-champion strong {
+  display: block;
+  margin: 7px 0 4px;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.flx-champion em {
+  font-size: 12px;
+}
+
+.flx-taxonomy {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.flx-taxonomy article {
+  min-height: 144px;
+  padding: 14px;
+  border: 1px solid #e3e8ef;
+  border-left: 4px solid var(--flx-red);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.flx-taxonomy h3 {
+  color: var(--flx-red);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.flx-taxonomy p {
+  min-height: 52px;
+  margin-top: 8px;
+  color: var(--flx-muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.flx-taxonomy strong {
+  display: inline-block;
+  margin-top: 10px;
+  color: #111827;
+  font-family: Arial, "Microsoft YaHei", sans-serif;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.flx-taxonomy span {
+  margin-left: 7px;
+  color: var(--flx-muted);
+  font-size: 12px;
+}
+
+.flx-flow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 10px;
+  align-items: stretch;
+}
+
+.flx-flow-node {
+  min-height: 88px;
+  padding: 13px 12px;
+  border: 1px solid #e3e8ef;
+  border-radius: 8px;
+  background: var(--flx-soft);
+}
+
+.flx-flow-node b {
+  display: block;
+  color: var(--flx-red);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.flx-flow-node span {
+  display: block;
+  margin-top: 7px;
+  color: #475467;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.flx-flow i {
+  display: none;
+}
+
+.flx-controls {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.flx-controls-tight {
+  grid-template-columns: minmax(220px, 1.2fr) minmax(140px, .7fr) auto;
+}
+
+.flx-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.flx-field.flx-wide {
+  grid-column: span 2;
+}
+
+.flx-field span {
+  color: #4b5565;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.flx-field select,
+.flx-field textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
+  color: #111827;
+  background: #fff;
+  border: 1px solid #cfd7e1;
+  border-radius: 8px;
+  outline: none;
+}
+
+.flx-field textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.flx-field select:focus,
+.flx-field textarea:focus {
+  border-color: var(--flx-red);
+  box-shadow: 0 0 0 3px rgba(170, 45, 30, .08);
+}
+
+.flx-button {
+  min-height: 42px;
+  padding: 8px 16px;
+  color: #334155;
+  background: #fff;
+  border: 1px solid #cfd7e1;
+  border-radius: 8px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.flx-button.primary,
+.flx-button:hover {
+  color: #fff;
+  background: var(--flx-red);
+  border-color: var(--flx-red);
+}
+
+.flx-formula-status {
+  align-self: center;
+  color: var(--flx-red);
+  font-weight: 800;
+}
+
+.flx-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.flx-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.flx-chart {
+  min-width: 0;
+  padding: 10px 10px 8px;
+}
+
+.flx-plot {
+  width: 100%;
+  height: 330px;
+}
+
+.flx-empty {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+  color: var(--flx-muted);
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.flx-table-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.flx-table-card > header {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.flx-table-scroll {
+  max-height: 520px;
+  overflow: auto;
+}
+
+.flx-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.flx-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 10px 12px;
+  color: #fff;
+  background: var(--flx-table-red);
+  border: 1px solid rgba(255, 255, 255, .75);
+  font-weight: 800;
+  text-align: center;
+}
+
+.flx-table td {
+  position: relative;
+  padding: 9px 12px;
+  color: #111827;
+  background: #f6f6f6;
+  border: 1px solid #fff;
+  font-weight: 400;
+  vertical-align: middle;
+}
+
+.flx-table tbody tr:nth-child(odd) td {
+  background: #e6e6e6;
+}
+
+.flx-table tbody tr:nth-child(even) td {
+  background: #f4f4f4;
+}
+
+.flx-table tbody td:first-child,
+.flx-table td.flx-first {
+  background: #f2ece6 !important;
+  font-weight: 800;
+}
+
+.flx-table .flx-num {
+  text-align: right;
+  font-family: Arial, "Microsoft YaHei", sans-serif;
+}
+
+.flx-bar-cell {
+  min-width: 92px;
+  background-clip: padding-box;
+}
+
+.flx-zero,
+.flx-data-bar,
+.flx-cell-value {
+  pointer-events: none;
+}
+
+.flx-zero {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 50%;
+  width: 1px;
+  background: #111827;
+  opacity: .85;
+  z-index: 0;
+}
+
+.flx-data-bar {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  z-index: 0;
+  border-radius: 2px;
+}
+
+.flx-bar-cell.pos .flx-data-bar {
+  left: 50%;
+  border: 1px solid var(--flx-table-red);
+  background: linear-gradient(90deg, rgba(192, 0, 0, .98), rgba(192, 0, 0, .28));
+}
+
+.flx-bar-cell.neg .flx-data-bar {
+  right: 50%;
+  border: 1px solid var(--flx-green);
+  background: linear-gradient(270deg, rgba(0, 176, 80, .98), rgba(0, 176, 80, .28));
+}
+
+.flx-cell-value {
+  position: relative;
+  z-index: 1;
+  font-weight: 400;
+}
+
+@media (max-width: 1360px) {
+  .flx-taxonomy {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .flx-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .flx-grid.two,
+  .flx-controls,
+  .flx-controls-tight {
+    grid-template-columns: 1fr;
+  }
+
+  .flx-field.flx-wide {
+    grid-column: auto;
+  }
+
+  .flx-taxonomy,
+  .flx-metrics {
+    grid-template-columns: 1fr;
+  }
+}

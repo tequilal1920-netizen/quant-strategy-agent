@@ -1,10 +1,12 @@
-param(
+﻿param(
   [string]$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
   [string]$SourceDb = $env:SOURCE_DB,
   [string]$WarehouseDb = "",
   [switch]$SkipWarehouseBuild,
   [switch]$AllowIncompleteModels,
-  [int]$TushareMaxCalls = 0
+  [int]$TushareMaxCalls = 0,
+  [string]$EndDate = "20260630",
+  [switch]$UseBaostockFallback
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,11 +35,15 @@ if ($env:TUSHARE_TOKEN) {
   if ($TushareMaxCalls -gt 0) {
     $maxArgs = @("--max-calls", "$TushareMaxCalls")
   }
-  & $Python "framework\data_pipeline\connectors\tushare_connector.py" --db $WarehouseDb --mode market_gap --start 20120101 --end 20260630 --source-db $SourceDb @maxArgs
-  & $Python "framework\data_pipeline\connectors\tushare_connector.py" --db $WarehouseDb --mode index_weight --start 20120101 --end 20260630 @maxArgs
-  & $Python "framework\data_pipeline\connectors\tushare_connector.py" --db $WarehouseDb --mode lhb --start 20120101 --end 20260630 @maxArgs
+  & $Python "framework\data_pipeline\connectors\tushare_connector.py" --db $WarehouseDb --mode market_gap --start 20120101 --end $EndDate --source-db $SourceDb @maxArgs
+  & $Python "framework\data_pipeline\connectors\tushare_connector.py" --db $WarehouseDb --mode index_weight --start 20120101 --end $EndDate @maxArgs
+  & $Python "framework\data_pipeline\connectors\tushare_connector.py" --db $WarehouseDb --mode lhb --start 20120101 --end $EndDate @maxArgs
 } else {
   Write-Host "TUSHARE_TOKEN is not set; external gap-fill steps skipped."
+}
+
+if ($UseBaostockFallback) {
+  & $Python "framework\data_pipeline\connectors\baostock_gap_connector.py" --db $WarehouseDb --end $EndDate
 }
 
 & $Python "framework\data_quality\quality_gate.py" --db $WarehouseDb --out (Join-Path $QualityOutDir "data_quality_gate.json")

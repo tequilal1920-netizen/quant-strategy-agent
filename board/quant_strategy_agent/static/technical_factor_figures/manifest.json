@@ -1,0 +1,44 @@
+{
+  "中证500": {
+    "annual_table": "/static/technical_factor_figures/03_中证500技术多股轮动年度收益.png",
+    "trend_nav": "/static/technical_factor_figures/04_中证500技术多股轮动相对强度.png",
+    "score_nav": "/static/technical_factor_figures/31_中证500最佳频率三策略净值对比.png",
+    "frequency_nav": "/static/technical_factor_figures/32_中证500最佳策略三频率净值对比.png"
+  },
+  "中证800": {
+    "annual_table": "/static/technical_factor_figures/05_中证800技术多股轮动年度收益.png",
+    "trend_nav": "/static/technical_factor_figures/06_中证800技术多股轮动相对强度.png",
+    "score_nav": "/static/technical_factor_figures/33_中证800最佳频率三策略净值对比.png",
+    "frequency_nav": "/static/technical_factor_figures/34_中证800最佳策略三频率净值对比.png"
+  },
+  "中证1000": {
+    "annual_table": "/static/technical_factor_figures/07_中证1000技术多股轮动年度收益.png",
+    "trend_nav": "/static/technical_factor_figures/08_中证1000技术多股轮动相对强度.png",
+    "score_nav": "/static/technical_factor_figures/35_中证1000最佳频率三策略净值对比.png",
+    "frequency_nav": "/static/technical_factor_figures/36_中证1000最佳策略三频率净值对比.png"
+  },
+  "中证2000": {
+    "annual_table": "/static/technical_factor_figures/09_中证2000技术多股轮动年度收益.png",
+    "trend_nav": "/static/technical_factor_figures/10_中证2000技术多股轮动相对强度.png",
+    "score_nav": "/static/technical_factor_figures/37_中证2000最佳频率三策略净值对比.png",
+    "frequency_nav": "/static/technical_factor_figures/38_中证2000最佳策略三频率净值对比.png"
+  },
+  "沪深300": {
+    "annual_table": "/static/technical_factor_figures/11_沪深300技术多股轮动年度收益.png",
+    "trend_nav": "/static/technical_factor_figures/12_沪深300技术多股轮动相对强度.png",
+    "score_nav": "/static/technical_factor_figures/39_沪深300最佳频率三策略净值对比.png",
+    "frequency_nav": "/static/technical_factor_figures/40_沪深300最佳策略三频率净值对比.png"
+  },
+  "科创50": {
+    "annual_table": "/static/technical_factor_figures/13_科创50技术多股轮动年度收益.png",
+    "trend_nav": "/static/technical_factor_figures/14_科创50技术多股轮动相对强度.png",
+    "score_nav": "/static/technical_factor_figures/41_科创50最佳频率三策略净值对比.png",
+    "frequency_nav": "/static/technical_factor_figures/42_科创50最佳策略三频率净值对比.png"
+  },
+  "全A": {
+    "annual_table": "/static/technical_factor_figures/15_全A技术多股轮动年度收益.png",
+    "trend_nav": "/static/technical_factor_figures/16_全A技术多股轮动相对强度.png",
+    "score_nav": "/static/technical_factor_figures/43_全A最佳频率三策略净值对比.png",
+    "frequency_nav": "/static/technical_factor_figures/44_全A最佳策略三频率净值对比.png"
+  }
+}

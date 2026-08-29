@@ -9,7 +9,8 @@ param(
   [string]$FactorPython,
   [string]$TaskName = "QuantStrategyAgent8071",
   [int]$Port = 8071,
-  [string]$ExpectedVersion = "2026.07.23-research-workspace-r16.3"
+  [string]$ExpectedVersion = "2026.07.26-active-risk-shadow-r20.2",
+  [string]$ExpectedFactorEngine = "factor-lab/3.2-inverse-volatility-rank-execution"
 )
 
 $ErrorActionPreference = "Stop"
@@ -53,7 +54,7 @@ Set-PrivateEnvValue $PrivateEnv "PORT" ([string]$Port)
 $Task = Get-ScheduledTask -TaskName $TaskName
 $OriginalActions = $Task.Actions
 $BackupRoot = [IO.Path]::GetFullPath((
-  "F:\apps\quant_strategy_agent\deployment_backups\research_workspace_r16_3_switch_{0}" -f
+  "F:\apps\quant_strategy_agent\deployment_backups\active_risk_shadow_r20_switch_{0}" -f
   (Get-Date -Format "yyyyMMdd_HHmmss")
 ))
 if (-not $BackupRoot.StartsWith($AppsRoot, [StringComparison]::OrdinalIgnoreCase)) {
@@ -126,11 +127,45 @@ try {
   ) -WebSession $Session -TimeoutSec 30
   if ($Services.StatusCode -ne 200) { throw "Canonical service health validation failed." }
 
+  $FactorHealth = Invoke-RestMethod -Uri (
+    "http://127.0.0.1:{0}/api/factor-lab/health" -f $Port
+  ) -WebSession $Session -TimeoutSec 20
+  if (
+    $FactorHealth.engine_version -ne $ExpectedFactorEngine -or
+    $FactorHealth.champion.status -ne "ok" -or
+    $FactorHealth.champion.selection_basis -ne "train_and_validation_only" -or
+    $FactorHealth.champion.test_usage -ne "report_only" -or
+    $FactorHealth.champion.gate_summary.passed -ne 9 -or
+    $FactorHealth.champion.gate_summary.total -ne 10 -or
+    $FactorHealth.champion.gate_summary.all_passed
+  ) {
+    throw "Factor champion contract validation failed."
+  }
+  $Governance = Invoke-RestMethod -Uri (
+    "http://127.0.0.1:{0}/api/model-governance" -f $Port
+  ) -WebSession $Session -TimeoutSec 20
+  if (
+    $Governance.status -ne "ok" -or
+    $Governance.release -ne $ExpectedVersion -or
+    $Governance.summary.model_count -ne 9 -or
+    $Governance.models.index_enhancement.engine -ne "index-enhancement/1.2-active-risk-shadow-audit" -or
+    $Governance.models.index_enhancement.gate -ne "review" -or
+    $Governance.models.kline_memory.gate -ne "observe_only" -or
+    $Governance.models.kline_memory.robustness.cross_sectional_audit.candidate_count -ne 12 -or
+    $Governance.models.kline_memory.robustness.cross_sectional_audit.eligible_count -ne 0 -or
+    $Governance.models.kline_memory.robustness.cross_sectional_audit.selection_uses_test -or
+    $Governance.models.index_enhancement.robustness.post_test_shadow.model -ne "index_active_risk_optimizer_v12" -or
+    $Governance.models.index_enhancement.robustness.post_test_shadow.promotion_eligible -or
+    $Governance.models.index_enhancement.robustness.post_test_shadow.selection_uses_test
+  ) {
+    throw "Model governance contract validation failed."
+  }
   $Current = Get-NetTCPConnection -State Listen -LocalPort $Port | Select-Object -First 1
   $Process = Get-CimInstance Win32_Process -Filter ("ProcessId=" + $Current.OwningProcess)
   [pscustomobject]@{
     Status = "switched"
     Version = $Health.version
+    FactorEngine = $FactorHealth.engine_version
     Task = $TaskName
     Port = $Port
     ProcessId = $Current.OwningProcess

@@ -1,0 +1,1374 @@
+{
+  "schema_version": "1.1",
+  "generated_at": "2026-08-26T18:05:55.776782Z",
+  "source_data_dir": "G:\\中信建投\\agent\\board\\quant_strategy_agent_vnext\\data",
+  "splits": {
+    "训练集": [
+      "2015-01-01",
+      "2018-12-31"
+    ],
+    "验证集": [
+      "2019-01-01",
+      "2021-12-31"
+    ],
+    "测试集": [
+      "2022-01-01",
+      "2099-12-31"
+    ]
+  },
+  "figures": {
+    "industry_monthly": {
+      "label": "行业轮动",
+      "benchmark_label": "31行业等权",
+      "annual_table": "/static/rotation_figures/industry_monthly_annual_table.png",
+      "daily_nav": "/static/rotation_figures/industry_monthly_daily_nav.png",
+      "calendar_year": [
+        {
+          "年度": "2012",
+          "策略收益": -0.043071364880318264,
+          "基准收益": -0.06863689079295121,
+          "超额收益": 0.025565525912632947,
+          "最大回撤": -0.22889859950078784
+        },
+        {
+          "年度": "2013",
+          "策略收益": 0.2684655723816618,
+          "基准收益": 0.23702981459535666,
+          "超额收益": 0.03143575778630514,
+          "最大回撤": -0.16927864599041964
+        },
+        {
+          "年度": "2014",
+          "策略收益": 0.7084016240851223,
+          "基准收益": 0.5553728707468824,
+          "超额收益": 0.15302875333823995,
+          "最大回撤": -0.09922451395275056
+        },
+        {
+          "年度": "2015",
+          "策略收益": 1.2235041550080314,
+          "基准收益": 1.0312749143646633,
+          "超额收益": 0.1922292406433681,
+          "最大回撤": -0.5348594965403561
+        },
+        {
+          "年度": "2016",
+          "策略收益": 0.0726331877255244,
+          "基准收益": 0.05283275248442387,
+          "超额收益": 0.019800435241100534,
+          "最大回撤": -0.2678813771687538
+        },
+        {
+          "年度": "2017",
+          "策略收益": 0.009515317263416811,
+          "基准收益": -0.1001069954795577,
+          "超额收益": 0.10962231274297451,
+          "最大回撤": -0.18734233688897983
+        },
+        {
+          "年度": "2018",
+          "策略收益": -0.31628253637203574,
+          "基准收益": -0.3070661166908899,
+          "超额收益": -0.009216419681145838,
+          "最大回撤": -0.3634992732229744
+        },
+        {
+          "年度": "2019",
+          "策略收益": 0.35011277637514326,
+          "基准收益": 0.2619522637048872,
+          "超额收益": 0.08816051267025604,
+          "最大回撤": -0.1767494129611682
+        },
+        {
+          "年度": "2020",
+          "策略收益": 0.20164821223612406,
+          "基准收益": 0.12886424989668877,
+          "超额收益": 0.07278396233943529,
+          "最大回撤": -0.12459848489414505
+        },
+        {
+          "年度": "2021",
+          "策略收益": 0.21985935957267544,
+          "基准收益": 0.20277473545348612,
+          "超额收益": 0.017084624119189318,
+          "最大回撤": -0.1401644897942771
+        },
+        {
+          "年度": "2022",
+          "策略收益": -0.09173489824667536,
+          "基准收益": -0.08229826283610076,
+          "超额收益": -0.009436635410574601,
+          "最大回撤": -0.22271516816839065
+        },
+        {
+          "年度": "2023",
+          "策略收益": 0.019487977223808572,
+          "基准收益": 0.030904156011720918,
+          "超额收益": -0.011416178787912346,
+          "最大回撤": -0.12970166059727317
+        },
+        {
+          "年度": "2024",
+          "策略收益": 0.11299670330946254,
+          "基准收益": 0.048740174660186764,
+          "超额收益": 0.06425652864927578,
+          "最大回撤": -0.21321209630045335
+        },
+        {
+          "年度": "2025",
+          "策略收益": 0.4216713072265845,
+          "基准收益": 0.3399825236113512,
+          "超额收益": 0.08168878361523335,
+          "最大回撤": -0.15929121713250594
+        },
+        {
+          "年度": "2026YTD",
+          "策略收益": -0.013986749508107188,
+          "基准收益": -0.045563174324714906,
+          "超额收益": 0.03157642481660772,
+          "最大回撤": -0.24337279107842924
+        },
+        {
+          "年度": "区间年化",
+          "策略收益": 0.17891322734024606,
+          "基准收益": 0.12795558219188585,
+          "超额收益": 0.05095764514836021,
+          "最大回撤": -0.5348594965403561
+        }
+      ],
+      "metrics": {
+        "train": {
+          "status": "ok",
+          "start": "2015-01-05",
+          "end": "2018-12-28",
+          "observations": 975,
+          "annual_return": 0.11960409415577522,
+          "benchmark_annual_return": 0.06293768288065626,
+          "annual_excess": 0.056666411275118955,
+          "sharpe": 0.4929326608677317,
+          "excess_sharpe": 0.9320303294897155,
+          "max_drawdown": -0.5348594965403559,
+          "annual_turnover": 2.587029306396634
+        },
+        "validation": {
+          "status": "ok",
+          "start": "2019-01-02",
+          "end": "2021-12-31",
+          "observations": 730,
+          "annual_return": 0.2792211333388255,
+          "benchmark_annual_return": 0.21658671038486133,
+          "annual_excess": 0.06263442295396415,
+          "sharpe": 1.2242232778878,
+          "excess_sharpe": 0.8294577919622133,
+          "max_drawdown": -0.19302315273266502,
+          "annual_turnover": 2.8963852530306773
+        },
+        "test": {
+          "status": "ok",
+          "start": "2022-01-04",
+          "end": "2026-08-20",
+          "observations": 1122,
+          "annual_return": 0.09226900490066936,
+          "benchmark_annual_return": 0.06258724298882545,
+          "annual_excess": 0.029681761911843907,
+          "sharpe": 0.4931384716952349,
+          "excess_sharpe": 0.43894211451722714,
+          "max_drawdown": -0.2778631452281136,
+          "annual_turnover": 3.26788251099963
+        },
+        "all": {
+          "status": "ok",
+          "start": "2012-05-02",
+          "end": "2026-08-20",
+          "observations": 3478,
+          "annual_return": 0.1788277690302409,
+          "benchmark_annual_return": 0.1278738177536054,
+          "annual_excess": 0.05095395127663549,
+          "sharpe": 0.7396705861676988,
+          "excess_sharpe": 0.7559370372038378,
+          "max_drawdown": -0.5348594965403562,
+          "annual_turnover": 2.961292770975653
+        }
+      },
+      "chart_frequency": "daily",
+      "relative_strength_axis": "right",
+      "style_contract": {
+        "chinese_font": "KaiTi",
+        "english_font": "Arial",
+        "red": "#C00000",
+        "yellow": "#FFC000",
+        "grey": "#BFBFBF"
+      },
+      "selected_candidate": "C6_direct_month_smooth",
+      "research_selected_candidate": "C39_monthly_post_test_diagnostic_six_dimension_prosperity_earnings_top7_risk_weighted_buffered",
+      "published_candidate": "C47_dual_score_c45_long_crowding_first_short_risk"
+    },
+    "style12": {
+      "label": "12类风格轮动",
+      "benchmark_label": "12风格箱等权",
+      "annual_table": "/static/rotation_figures/style12_annual_table.png",
+      "daily_nav": "/static/rotation_figures/style12_daily_nav.png",
+      "calendar_year": [
+        {
+          "年度": "2016",
+          "策略收益": -0.056095,
+          "基准收益": -0.133241,
+          "超额收益": 0.077146,
+          "最大回撤": -0.263982
+        },
+        {
+          "年度": "2017",
+          "策略收益": 0.225294,
+          "基准收益": 0.117354,
+          "超额收益": 0.10794,
+          "最大回撤": -0.084713
+        },
+        {
+          "年度": "2018",
+          "策略收益": -0.262618,
+          "基准收益": -0.28072,
+          "超额收益": 0.018102,
+          "最大回撤": -0.308038
+        },
+        {
+          "年度": "2019",
+          "策略收益": 0.453725,
+          "基准收益": 0.340051,
+          "超额收益": 0.113673,
+          "最大回撤": -0.13426
+        },
+        {
+          "年度": "2020",
+          "策略收益": 0.594165,
+          "基准收益": 0.244875,
+          "超额收益": 0.34929,
+          "最大回撤": -0.159869
+        },
+        {
+          "年度": "2021",
+          "策略收益": 0.155811,
+          "基准收益": 0.031174,
+          "超额收益": 0.124637,
+          "最大回撤": -0.209084
+        },
+        {
+          "年度": "2022",
+          "策略收益": -0.258858,
+          "基准收益": -0.200931,
+          "超额收益": -0.057927,
+          "最大回撤": -0.340365
+        },
+        {
+          "年度": "2023",
+          "策略收益": 0.066185,
+          "基准收益": -0.094006,
+          "超额收益": 0.160191,
+          "最大回撤": -0.115014
+        },
+        {
+          "年度": "2024",
+          "策略收益": 0.281942,
+          "基准收益": 0.124102,
+          "超额收益": 0.15784,
+          "最大回撤": -0.166349
+        },
+        {
+          "年度": "2025",
+          "策略收益": 0.196384,
+          "基准收益": 0.202491,
+          "超额收益": -0.006107,
+          "最大回撤": -0.177312
+        },
+        {
+          "年度": "2026YTD",
+          "策略收益": 0.015499,
+          "基准收益": 0.007917,
+          "超额收益": 0.007582,
+          "最大回撤": -0.307515
+        },
+        {
+          "年度": "区间年化",
+          "策略收益": 0.1579085278684209,
+          "基准收益": 0.0627118731764611,
+          "超额收益": 0.09519665469195981,
+          "最大回撤": -0.5384393436493882
+        }
+      ],
+      "metrics": {
+        "all": {
+          "start": "2014-01-02",
+          "end": "2026-08-20",
+          "observations": 3074,
+          "annual_return": 0.157814,
+          "benchmark_annual_return": 0.062675,
+          "annual_excess": 0.095138,
+          "sharpe": 0.669392,
+          "excess_sharpe": 0.750808,
+          "max_drawdown": -0.53844
+        },
+        "train": {
+          "start": "2015-01-05",
+          "end": "2018-12-28",
+          "observations": 975,
+          "annual_return": 0.077011,
+          "benchmark_annual_return": -0.044835,
+          "annual_excess": 0.121847,
+          "sharpe": 0.391932,
+          "excess_sharpe": 1.01021,
+          "max_drawdown": -0.53844
+        },
+        "validation": {
+          "start": "2019-01-02",
+          "end": "2021-12-31",
+          "observations": 732,
+          "annual_return": 0.403817,
+          "benchmark_annual_return": 0.205316,
+          "annual_excess": 0.198501,
+          "sharpe": 1.509487,
+          "excess_sharpe": 1.580127,
+          "max_drawdown": -0.209084
+        },
+        "test": {
+          "start": "2022-01-04",
+          "end": "2026-08-20",
+          "observations": 1122,
+          "annual_return": 0.047727,
+          "benchmark_annual_return": -0.003087,
+          "annual_excess": 0.050814,
+          "sharpe": 0.310767,
+          "excess_sharpe": 0.459659,
+          "max_drawdown": -0.340365
+        },
+        "pretest_calendar": {
+          "years": 6,
+          "positive_years": 6,
+          "win_rate": 1.0,
+          "worst_excess": 0.018102,
+          "rows": [
+            {
+              "year": 2016,
+              "strategy_return": -0.056095,
+              "benchmark_return": -0.133241,
+              "excess_return": 0.077146
+            },
+            {
+              "year": 2017,
+              "strategy_return": 0.225294,
+              "benchmark_return": 0.117354,
+              "excess_return": 0.10794
+            },
+            {
+              "year": 2018,
+              "strategy_return": -0.262618,
+              "benchmark_return": -0.28072,
+              "excess_return": 0.018102
+            },
+            {
+              "year": 2019,
+              "strategy_return": 0.453725,
+              "benchmark_return": 0.340051,
+              "excess_return": 0.113673
+            },
+            {
+              "year": 2020,
+              "strategy_return": 0.594165,
+              "benchmark_return": 0.244875,
+              "excess_return": 0.34929
+            },
+            {
+              "year": 2021,
+              "strategy_return": 0.155811,
+              "benchmark_return": 0.031174,
+              "excess_return": 0.124637
+            }
+          ]
+        }
+      },
+      "chart_frequency": "daily",
+      "relative_strength_axis": "right",
+      "style_contract": {
+        "chinese_font": "KaiTi",
+        "english_font": "Arial",
+        "red": "#C00000",
+        "yellow": "#FFC000",
+        "grey": "#BFBFBF"
+      },
+      "selected_candidate": "低拥挤均衡",
+      "research_selected_candidate": "质量筛选低拥挤Top2",
+      "report_veto": {
+        "status": "research_vetoed_to_report_safe_pretest_candidate",
+        "baseline": "等权五因子",
+        "research_candidate": "质量筛选低拥挤Top2",
+        "fallback_candidate": "低拥挤均衡",
+        "policy": "测试期只作为相对等权五因子的未降级安全阀；通过安全阀后的候选仍按训练/验证目标排序，不按测试收益排序。"
+      },
+      "long_short": {
+        "label": "12类风格轮动多空",
+        "benchmark_label": "Bottom篮子",
+        "annual_table": "/static/rotation_figures/style12_long_short_annual_table.png",
+        "daily_nav": "/static/rotation_figures/style12_long_short_daily_nav.png",
+        "calendar_year": [
+          {
+            "年度": "2016",
+            "Top篮子": -0.086115,
+            "Bottom篮子": -0.142392,
+            "多空收益": 0.070837,
+            "最大回撤": -0.103995
+          },
+          {
+            "年度": "2017",
+            "Top篮子": 0.095666,
+            "Bottom篮子": -0.187944,
+            "多空收益": 0.327698,
+            "最大回撤": -0.036413
+          },
+          {
+            "年度": "2018",
+            "Top篮子": -0.282247,
+            "Bottom篮子": -0.315461,
+            "多空收益": 0.028752,
+            "最大回撤": -0.154103
+          },
+          {
+            "年度": "2019",
+            "Top篮子": 0.511388,
+            "Bottom篮子": 0.268585,
+            "多空收益": 0.170709,
+            "最大回撤": -0.122521
+          },
+          {
+            "年度": "2020",
+            "Top篮子": 0.628921,
+            "Bottom篮子": 0.065054,
+            "多空收益": 0.525077,
+            "最大回撤": -0.094309
+          },
+          {
+            "年度": "2021",
+            "Top篮子": 0.18539,
+            "Bottom篮子": 0.259767,
+            "多空收益": -0.074719,
+            "最大回撤": -0.258394
+          },
+          {
+            "年度": "2022",
+            "Top篮子": -0.271879,
+            "Bottom篮子": -0.029117,
+            "多空收益": -0.255824,
+            "最大回撤": -0.234385
+          },
+          {
+            "年度": "2023",
+            "Top篮子": 0.093924,
+            "Bottom篮子": -0.025275,
+            "多空收益": 0.11237,
+            "最大回撤": -0.065611
+          },
+          {
+            "年度": "2024",
+            "Top篮子": 0.135441,
+            "Bottom篮子": 0.098625,
+            "多空收益": -0.009842,
+            "最大回撤": -0.220875
+          },
+          {
+            "年度": "2025",
+            "Top篮子": 0.20341,
+            "Bottom篮子": 0.323576,
+            "多空收益": -0.0935,
+            "最大回撤": -0.199147
+          },
+          {
+            "年度": "2026YTD",
+            "Top篮子": -0.012532,
+            "Bottom篮子": -0.068421,
+            "多空收益": 0.053325,
+            "最大回撤": -0.344187
+          },
+          {
+            "年度": "区间年化",
+            "Top篮子": 0.082455,
+            "Bottom篮子": 0.003851,
+            "多空收益": 0.064082,
+            "最大回撤": -0.489941
+          }
+        ],
+        "metrics": {
+          "all": {
+            "start": "2014-01-02",
+            "end": "2026-08-20",
+            "observations": 3074,
+            "annual_return": 0.059656,
+            "benchmark_annual_return": 0.0,
+            "annual_excess": 0.059656,
+            "sharpe": 0.400669,
+            "excess_sharpe": 0.400669,
+            "max_drawdown": -0.489941
+          },
+          "train": {
+            "start": "2015-01-05",
+            "end": "2018-12-28",
+            "observations": 975,
+            "annual_return": 0.195714,
+            "benchmark_annual_return": 0.0,
+            "annual_excess": 0.195714,
+            "sharpe": 1.069212,
+            "excess_sharpe": 1.069212,
+            "max_drawdown": -0.285194
+          },
+          "validation": {
+            "start": "2019-01-02",
+            "end": "2021-12-31",
+            "observations": 732,
+            "annual_return": 0.18865,
+            "benchmark_annual_return": 0.0,
+            "annual_excess": 0.18865,
+            "sharpe": 1.061519,
+            "excess_sharpe": 1.061519,
+            "max_drawdown": -0.258394
+          },
+          "test": {
+            "start": "2022-01-04",
+            "end": "2026-08-20",
+            "observations": 1122,
+            "annual_return": -0.053559,
+            "benchmark_annual_return": 0.0,
+            "annual_excess": -0.053559,
+            "sharpe": -0.173349,
+            "excess_sharpe": -0.173349,
+            "max_drawdown": -0.344187
+          },
+          "pretest_calendar": {
+            "years": 6,
+            "positive_years": 5,
+            "win_rate": 0.833333,
+            "worst_excess": -0.074719,
+            "rows": [
+              {
+                "year": 2016,
+                "strategy_return": 0.070837,
+                "benchmark_return": 0.0,
+                "excess_return": 0.070837
+              },
+              {
+                "year": 2017,
+                "strategy_return": 0.327698,
+                "benchmark_return": 0.0,
+                "excess_return": 0.327698
+              },
+              {
+                "year": 2018,
+                "strategy_return": 0.028752,
+                "benchmark_return": 0.0,
+                "excess_return": 0.028752
+              },
+              {
+                "year": 2019,
+                "strategy_return": 0.170709,
+                "benchmark_return": 0.0,
+                "excess_return": 0.170709
+              },
+              {
+                "year": 2020,
+                "strategy_return": 0.525077,
+                "benchmark_return": 0.0,
+                "excess_return": 0.525077
+              },
+              {
+                "year": 2021,
+                "strategy_return": -0.074719,
+                "benchmark_return": 0.0,
+                "excess_return": -0.074719
+              }
+            ]
+          }
+        },
+        "chart_frequency": "daily",
+        "relative_strength_axis": "right",
+        "style_contract": {
+          "chinese_font": "KaiTi",
+          "english_font": "Arial",
+          "red": "#C00000",
+          "yellow": "#FFC000",
+          "grey": "#BFBFBF"
+        }
+      }
+    },
+    "size3": {
+      "label": "市值轮动",
+      "benchmark_label": "大中小等权",
+      "annual_table": "/static/rotation_figures/size3_annual_table.png",
+      "daily_nav": "/static/rotation_figures/size3_daily_nav.png",
+      "calendar_year": [
+        {
+          "年度": "2016",
+          "策略收益": -0.176631,
+          "基准收益": -0.17086,
+          "超额收益": -0.005771,
+          "最大回撤": -0.267895
+        },
+        {
+          "年度": "2017",
+          "策略收益": -0.09194,
+          "基准收益": 0.047191,
+          "超额收益": -0.139131,
+          "最大回撤": -0.209387
+        },
+        {
+          "年度": "2018",
+          "策略收益": -0.138799,
+          "基准收益": -0.303148,
+          "超额收益": 0.164349,
+          "最大回撤": -0.292035
+        },
+        {
+          "年度": "2019",
+          "策略收益": 0.453543,
+          "基准收益": 0.327035,
+          "超额收益": 0.126508,
+          "最大回撤": -0.119635
+        },
+        {
+          "年度": "2020",
+          "策略收益": 0.356053,
+          "基准收益": 0.263126,
+          "超额收益": 0.092927,
+          "最大回撤": -0.145977
+        },
+        {
+          "年度": "2021",
+          "策略收益": 0.467833,
+          "基准收益": 0.067438,
+          "超额收益": 0.400395,
+          "最大回撤": -0.104517
+        },
+        {
+          "年度": "2022",
+          "策略收益": -0.106398,
+          "基准收益": -0.213865,
+          "超额收益": 0.107466,
+          "最大回撤": -0.305792
+        },
+        {
+          "年度": "2023",
+          "策略收益": 0.126273,
+          "基准收益": -0.096511,
+          "超额收益": 0.222784,
+          "最大回撤": -0.097666
+        },
+        {
+          "年度": "2024",
+          "策略收益": 0.071799,
+          "基准收益": 0.096589,
+          "超额收益": -0.02479,
+          "最大回撤": -0.249102
+        },
+        {
+          "年度": "2025",
+          "策略收益": 0.364805,
+          "基准收益": 0.242571,
+          "超额收益": 0.122234,
+          "最大回撤": -0.156079
+        },
+        {
+          "年度": "2026YTD",
+          "策略收益": -0.098178,
+          "基准收益": 0.02202,
+          "超额收益": -0.120198,
+          "最大回撤": -0.214389
+        },
+        {
+          "年度": "区间年化",
+          "策略收益": 0.17601720556184408,
+          "基准收益": 0.05707679182946279,
+          "超额收益": 0.11894041373238129,
+          "最大回撤": -0.544819141782008
+        }
+      ],
+      "metrics": {
+        "all": {
+          "start": "2014-01-02",
+          "end": "2026-08-20",
+          "observations": 3074,
+          "annual_return": 0.175921,
+          "benchmark_annual_return": 0.057346,
+          "annual_excess": 0.118575,
+          "sharpe": 0.7473,
+          "excess_sharpe": 0.994418,
+          "max_drawdown": -0.544819
+        },
+        "train": {
+          "start": "2015-01-05",
+          "end": "2018-12-28",
+          "observations": 975,
+          "annual_return": 0.072658,
+          "benchmark_annual_return": -0.063763,
+          "annual_excess": 0.136421,
+          "sharpe": 0.379807,
+          "excess_sharpe": 1.216404,
+          "max_drawdown": -0.544819
+        },
+        "validation": {
+          "start": "2019-01-02",
+          "end": "2021-12-31",
+          "observations": 732,
+          "annual_return": 0.441571,
+          "benchmark_annual_return": 0.221758,
+          "annual_excess": 0.219813,
+          "sharpe": 1.900575,
+          "excess_sharpe": 1.677059,
+          "max_drawdown": -0.145977
+        },
+        "test": {
+          "start": "2022-01-04",
+          "end": "2026-08-20",
+          "observations": 1122,
+          "annual_return": 0.065728,
+          "benchmark_annual_return": -0.002456,
+          "annual_excess": 0.068184,
+          "sharpe": 0.383957,
+          "excess_sharpe": 0.626728,
+          "max_drawdown": -0.305792
+        },
+        "pretest_calendar": {
+          "years": 6,
+          "positive_years": 4,
+          "win_rate": 0.666667,
+          "worst_excess": -0.139131,
+          "rows": [
+            {
+              "year": 2016,
+              "strategy_return": -0.176631,
+              "benchmark_return": -0.17086,
+              "excess_return": -0.005771
+            },
+            {
+              "year": 2017,
+              "strategy_return": -0.09194,
+              "benchmark_return": 0.047191,
+              "excess_return": -0.139131
+            },
+            {
+              "year": 2018,
+              "strategy_return": -0.138799,
+              "benchmark_return": -0.303148,
+              "excess_return": 0.164349
+            },
+            {
+              "year": 2019,
+              "strategy_return": 0.453543,
+              "benchmark_return": 0.327035,
+              "excess_return": 0.126508
+            },
+            {
+              "year": 2020,
+              "strategy_return": 0.356053,
+              "benchmark_return": 0.263126,
+              "excess_return": 0.092927
+            },
+            {
+              "year": 2021,
+              "strategy_return": 0.467833,
+              "benchmark_return": 0.067438,
+              "excess_return": 0.400395
+            }
+          ]
+        }
+      },
+      "chart_frequency": "daily",
+      "relative_strength_axis": "right",
+      "style_contract": {
+        "chinese_font": "KaiTi",
+        "english_font": "Arial",
+        "red": "#C00000",
+        "yellow": "#FFC000",
+        "grey": "#BFBFBF"
+      },
+      "selected_candidate": "稳健增强五因子",
+      "research_selected_candidate": "质量筛选五因子",
+      "report_veto": {
+        "status": "research_vetoed_to_report_safe_pretest_candidate",
+        "baseline": "等权五因子",
+        "research_candidate": "质量筛选五因子",
+        "fallback_candidate": "稳健增强五因子",
+        "policy": "测试期只作为相对等权五因子的未降级安全阀；通过安全阀后的候选仍按训练/验证目标排序，不按测试收益排序。"
+      },
+      "long_short": {
+        "label": "市值轮动多空",
+        "benchmark_label": "Bottom篮子",
+        "annual_table": "/static/rotation_figures/size3_long_short_annual_table.png",
+        "daily_nav": "/static/rotation_figures/size3_long_short_daily_nav.png",
+        "calendar_year": [
+          {
+            "年度": "2016",
+            "Top篮子": -0.203422,
+            "Bottom篮子": -0.080695,
+            "多空收益": -0.150828,
+            "最大回撤": -0.191333
+          },
+          {
+            "年度": "2017",
+            "Top篮子": 0.054186,
+            "Bottom篮子": -0.170426,
+            "多空收益": 0.244209,
+            "最大回撤": -0.119166
+          },
+          {
+            "年度": "2018",
+            "Top篮子": -0.13853,
+            "Bottom篮子": -0.290852,
+            "多空收益": 0.194489,
+            "最大回撤": -0.099389
+          },
+          {
+            "年度": "2019",
+            "Top篮子": 0.439332,
+            "Bottom篮子": 0.14994,
+            "多空收益": 0.229886,
+            "最大回撤": -0.081294
+          },
+          {
+            "年度": "2020",
+            "Top篮子": 0.384458,
+            "Bottom篮子": 0.040818,
+            "多空收益": 0.310832,
+            "最大回撤": -0.05878
+          },
+          {
+            "年度": "2021",
+            "Top篮子": 0.463175,
+            "Bottom篮子": -0.0364,
+            "多空收益": 0.494019,
+            "最大回撤": -0.116738
+          },
+          {
+            "年度": "2022",
+            "Top篮子": -0.075294,
+            "Bottom篮子": -0.120689,
+            "多空收益": 0.045751,
+            "最大回撤": -0.163233
+          },
+          {
+            "年度": "2023",
+            "Top篮子": 0.060894,
+            "Bottom篮子": -0.057992,
+            "多空收益": 0.117263,
+            "最大回撤": -0.089793
+          },
+          {
+            "年度": "2024",
+            "Top篮子": 0.067691,
+            "Bottom篮子": 0.137372,
+            "多空收益": -0.08244,
+            "最大回撤": -0.261502
+          },
+          {
+            "年度": "2025",
+            "Top篮子": 0.271383,
+            "Bottom篮子": 0.272902,
+            "多空收益": -0.008462,
+            "最大回撤": -0.108117
+          },
+          {
+            "年度": "2026YTD",
+            "Top篮子": -0.099608,
+            "Bottom篮子": -0.020578,
+            "多空收益": -0.088465,
+            "最大回撤": -0.115658
+          },
+          {
+            "年度": "区间年化",
+            "Top篮子": 0.094667,
+            "Bottom篮子": -0.029878,
+            "多空收益": 0.111052,
+            "最大回撤": -0.268398
+          }
+        ],
+        "metrics": {
+          "all": {
+            "start": "2014-01-02",
+            "end": "2026-08-20",
+            "observations": 3074,
+            "annual_return": 0.1172,
+            "benchmark_annual_return": 0.0,
+            "annual_excess": 0.1172,
+            "sharpe": 0.742341,
+            "excess_sharpe": 0.742341,
+            "max_drawdown": -0.373208
+          },
+          "train": {
+            "start": "2015-01-05",
+            "end": "2018-12-28",
+            "observations": 975,
+            "annual_return": 0.209766,
+            "benchmark_annual_return": 0.0,
+            "annual_excess": 0.209766,
+            "sharpe": 1.111166,
+            "excess_sharpe": 1.111166,
+            "max_drawdown": -0.249257
+          },
+          "validation": {
+            "start": "2019-01-02",
+            "end": "2021-12-31",
+            "observations": 732,
+            "annual_return": 0.353407,
+            "benchmark_annual_return": 0.0,
+            "annual_excess": 0.353407,
+            "sharpe": 2.20311,
+            "excess_sharpe": 2.20311,
+            "max_drawdown": -0.116738
+          },
+          "test": {
+            "start": "2022-01-04",
+            "end": "2026-08-20",
+            "observations": 1122,
+            "annual_return": -0.007059,
+            "benchmark_annual_return": 0.0,
+            "annual_excess": -0.007059,
+            "sharpe": 0.038331,
+            "excess_sharpe": 0.038331,
+            "max_drawdown": -0.268398
+          },
+          "pretest_calendar": {
+            "years": 6,
+            "positive_years": 5,
+            "win_rate": 0.833333,
+            "worst_excess": -0.150828,
+            "rows": [
+              {
+                "year": 2016,
+                "strategy_return": -0.150828,
+                "benchmark_return": 0.0,
+                "excess_return": -0.150828
+              },
+              {
+                "year": 2017,
+                "strategy_return": 0.244209,
+                "benchmark_return": 0.0,
+                "excess_return": 0.244209
+              },
+              {
+                "year": 2018,
+                "strategy_return": 0.194489,
+                "benchmark_return": 0.0,
+                "excess_return": 0.194489
+              },
+              {
+                "year": 2019,
+                "strategy_return": 0.229886,
+                "benchmark_return": 0.0,
+                "excess_return": 0.229886
+              },
+              {
+                "year": 2020,
+                "strategy_return": 0.310832,
+                "benchmark_return": 0.0,
+                "excess_return": 0.310832
+              },
+              {
+                "year": 2021,
+                "strategy_return": 0.494019,
+                "benchmark_return": 0.0,
+                "excess_return": 0.494019
+              }
+            ]
+          }
+        },
+        "chart_frequency": "daily",
+        "relative_strength_axis": "right",
+        "style_contract": {
+          "chinese_font": "KaiTi",
+          "english_font": "Arial",
+          "red": "#C00000",
+          "yellow": "#FFC000",
+          "grey": "#BFBFBF"
+        }
+      }
+    },
+    "style4": {
+      "label": "风格轮动",
+      "benchmark_label": "四风格等权",
+      "annual_table": "/static/rotation_figures/style4_annual_table.png",
+      "daily_nav": "/static/rotation_figures/style4_daily_nav.png",
+      "calendar_year": [
+        {
+          "年度": "2016",
+          "策略收益": -0.049819,
+          "基准收益": -0.095586,
+          "超额收益": 0.045767,
+          "最大回撤": -0.193346
+        },
+        {
+          "年度": "2017",
+          "策略收益": 0.332542,
+          "基准收益": 0.190845,
+          "超额收益": 0.141698,
+          "最大回撤": -0.063237
+        },
+        {
+          "年度": "2018",
+          "策略收益": -0.169318,
+          "基准收益": -0.258569,
+          "超额收益": 0.089251,
+          "最大回撤": -0.23141
+        },
+        {
+          "年度": "2019",
+          "策略收益": 0.57445,
+          "基准收益": 0.351671,
+          "超额收益": 0.222779,
+          "最大回撤": -0.146187
+        },
+        {
+          "年度": "2020",
+          "策略收益": 0.499881,
+          "基准收益": 0.225047,
+          "超额收益": 0.274834,
+          "最大回撤": -0.155389
+        },
+        {
+          "年度": "2021",
+          "策略收益": 0.146911,
+          "基准收益": -0.005237,
+          "超额收益": 0.152149,
+          "最大回撤": -0.16723
+        },
+        {
+          "年度": "2022",
+          "策略收益": -0.199039,
+          "基准收益": -0.189102,
+          "超额收益": -0.009937,
+          "最大回撤": -0.338318
+        },
+        {
+          "年度": "2023",
+          "策略收益": -0.051246,
+          "基准收益": -0.092094,
+          "超额收益": 0.040848,
+          "最大回撤": -0.154133
+        },
+        {
+          "年度": "2024",
+          "策略收益": 0.523464,
+          "基准收益": 0.149895,
+          "超额收益": 0.373569,
+          "最大回撤": -0.085807
+        },
+        {
+          "年度": "2025",
+          "策略收益": 0.303046,
+          "基准收益": 0.161974,
+          "超额收益": 0.141072,
+          "最大回撤": -0.13171
+        },
+        {
+          "年度": "2026YTD",
+          "策略收益": -0.079638,
+          "基准收益": -0.009041,
+          "超额收益": -0.070596,
+          "最大回撤": -0.346347
+        },
+        {
+          "年度": "区间年化",
+          "策略收益": 0.19866257428246437,
+          "基准收益": 0.06605795082924182,
+          "超额收益": 0.13260462345322255,
+          "最大回撤": -0.42587087271430213
+        }
+      ],
+      "metrics": {
+        "all": {
+          "start": "2014-01-02",
+          "end": "2026-08-20",
+          "observations": 3074,
+          "annual_return": 0.198564,
+          "benchmark_annual_return": 0.065712,
+          "annual_excess": 0.132852,
+          "sharpe": 0.818769,
+          "excess_sharpe": 0.877504,
+          "max_drawdown": -0.425871
+        },
+        "train": {
+          "start": "2015-01-05",
+          "end": "2018-12-28",
+          "observations": 975,
+          "annual_return": 0.103858,
+          "benchmark_annual_return": -0.028339,
+          "annual_excess": 0.132197,
+          "sharpe": 0.480863,
+          "excess_sharpe": 1.005073,
+          "max_drawdown": -0.425871
+        },
+        "validation": {
+          "start": "2019-01-02",
+          "end": "2021-12-31",
+          "observations": 732,
+          "annual_return": 0.409184,
+          "benchmark_annual_return": 0.187453,
+          "annual_excess": 0.221731,
+          "sharpe": 1.53183,
+          "excess_sharpe": 1.396743,
+          "max_drawdown": -0.16723
+        },
+        "test": {
+          "start": "2022-01-04",
+          "end": "2026-08-20",
+          "observations": 1122,
+          "annual_return": 0.076487,
+          "benchmark_annual_return": -0.005715,
+          "annual_excess": 0.082203,
+          "sharpe": 0.417845,
+          "excess_sharpe": 0.55914,
+          "max_drawdown": -0.346347
+        },
+        "pretest_calendar": {
+          "years": 6,
+          "positive_years": 6,
+          "win_rate": 1.0,
+          "worst_excess": 0.045767,
+          "rows": [
+            {
+              "year": 2016,
+              "strategy_return": -0.049819,
+              "benchmark_return": -0.095586,
+              "excess_return": 0.045767
+            },
+            {
+              "year": 2017,
+              "strategy_return": 0.332542,
+              "benchmark_return": 0.190845,
+              "excess_return": 0.141698
+            },
+            {
+              "year": 2018,
+              "strategy_return": -0.169318,
+              "benchmark_return": -0.258569,
+              "excess_return": 0.089251
+            },
+            {
+              "year": 2019,
+              "strategy_return": 0.57445,
+              "benchmark_return": 0.351671,
+              "excess_return": 0.222779
+            },
+            {
+              "year": 2020,
+              "strategy_return": 0.499881,
+              "benchmark_return": 0.225047,
+              "excess_return": 0.274834
+            },
+            {
+              "year": 2021,
+              "strategy_return": 0.146911,
+              "benchmark_return": -0.005237,
+              "excess_return": 0.152149
+            }
+          ]
+        }
+      },
+      "chart_frequency": "daily",
+      "relative_strength_axis": "right",
+      "style_contract": {
+        "chinese_font": "KaiTi",
+        "english_font": "Arial",
+        "red": "#C00000",
+        "yellow": "#FFC000",
+        "grey": "#BFBFBF"
+      },
+      "selected_candidate": "质量估值防守",
+      "research_selected_candidate": "质量估值防守",
+      "report_veto": null,
+      "long_short": {
+        "label": "风格轮动多空",
+        "benchmark_label": "Bottom篮子",
+        "annual_table": "/static/rotation_figures/style4_long_short_annual_table.png",
+        "daily_nav": "/static/rotation_figures/style4_long_short_daily_nav.png",
+        "calendar_year": [
+          {
+            "年度": "2016",
+            "Top篮子": -0.059766,
+            "Bottom篮子": -0.127319,
+            "多空收益": 0.062967,
+            "最大回撤": -0.088063
+          },
+          {
+            "年度": "2017",
+            "Top篮子": 0.274523,
+            "Bottom篮子": -0.044131,
+            "多空收益": 0.317517,
+            "最大回撤": -0.040642
+          },
+          {
+            "年度": "2018",
+            "Top篮子": -0.281579,
+            "Bottom篮子": -0.266321,
+            "多空收益": -0.022232,
+            "最大回撤": -0.182835
+          },
+          {
+            "年度": "2019",
+            "Top篮子": 0.433093,
+            "Bottom篮子": 0.153393,
+            "多空收益": 0.238802,
+            "最大回撤": -0.064937
+          },
+          {
+            "年度": "2020",
+            "Top篮子": 0.501216,
+            "Bottom篮子": 0.080417,
+            "多空收益": 0.38667,
+            "最大回撤": -0.152047
+          },
+          {
+            "年度": "2021",
+            "Top篮子": 0.148446,
+            "Bottom篮子": 0.076419,
+            "多空收益": 0.058742,
+            "最大回撤": -0.183356
+          },
+          {
+            "年度": "2022",
+            "Top篮子": -0.208574,
+            "Bottom篮子": -0.08951,
+            "多空收益": -0.142267,
+            "最大回撤": -0.199579
+          },
+          {
+            "年度": "2023",
+            "Top篮子": -0.094087,
+            "Bottom篮子": 0.000202,
+            "多空收益": -0.106825,
+            "最大回撤": -0.186858
+          },
+          {
+            "年度": "2024",
+            "Top篮子": 0.510409,
+            "Bottom篮子": 0.124975,
+            "多空收益": 0.293425,
+            "最大回撤": -0.146529
+          },
+          {
+            "年度": "2025",
+            "Top篮子": 0.328454,
+            "Bottom篮子": 0.126087,
+            "多空收益": 0.161509,
+            "最大回撤": -0.105851
+          },
+          {
+            "年度": "2026YTD",
+            "Top篮子": -0.078693,
+            "Bottom篮子": 0.069004,
+            "多空收益": -0.153393,
+            "最大回撤": -0.427705
+          },
+          {
+            "年度": "区间年化",
+            "Top篮子": 0.106322,
+            "Bottom篮子": 0.001205,
+            "多空收益": 0.090268,
+            "最大回撤": -0.427705
+          }
+        ],
+        "metrics": {
+          "all": {
+            "start": "2014-01-02",
+            "end": "2026-08-20",
+            "observations": 3074,
+            "annual_return": 0.131216,
+            "benchmark_annual_return": 0.0,
+            "annual_excess": 0.131216,
+            "sharpe": 0.764027,
+            "excess_sharpe": 0.764027,
+            "max_drawdown": -0.427705
+          },
+          "train": {
+            "start": "2015-01-05",
+            "end": "2018-12-28",
+            "observations": 975,
+            "annual_return": 0.232756,
+            "benchmark_annual_return": 0.0,
+            "annual_excess": 0.232756,
+            "sharpe": 1.439975,
+            "excess_sharpe": 1.439975,
+            "max_drawdown": -0.182835
+          },
+          "validation": {
+            "start": "2019-01-02",
+            "end": "2021-12-31",
+            "observations": 732,
+            "annual_return": 0.228648,
+            "benchmark_annual_return": 0.0,
+            "annual_excess": 0.228648,
+            "sharpe": 1.274412,
+            "excess_sharpe": 1.274412,
+            "max_drawdown": -0.214832
+          },
+          "test": {
+            "start": "2022-01-04",
+            "end": "2026-08-20",
+            "observations": 1122,
+            "annual_return": -0.005809,
+            "benchmark_annual_return": 0.0,
+            "annual_excess": -0.005809,
+            "sharpe": 0.082447,
+            "excess_sharpe": 0.082447,
+            "max_drawdown": -0.427705
+          },
+          "pretest_calendar": {
+            "years": 6,
+            "positive_years": 5,
+            "win_rate": 0.833333,
+            "worst_excess": -0.022232,
+            "rows": [
+              {
+                "year": 2016,
+                "strategy_return": 0.062967,
+                "benchmark_return": 0.0,
+                "excess_return": 0.062967
+              },
+              {
+                "year": 2017,
+                "strategy_return": 0.317517,
+                "benchmark_return": 0.0,
+                "excess_return": 0.317517
+              },
+              {
+                "year": 2018,
+                "strategy_return": -0.022232,
+                "benchmark_return": 0.0,
+                "excess_return": -0.022232
+              },
+              {
+                "year": 2019,
+                "strategy_return": 0.238802,
+                "benchmark_return": 0.0,
+                "excess_return": 0.238802
+              },
+              {
+                "year": 2020,
+                "strategy_return": 0.38667,
+                "benchmark_return": 0.0,
+                "excess_return": 0.38667
+              },
+              {
+                "year": 2021,
+                "strategy_return": 0.058742,
+                "benchmark_return": 0.0,
+                "excess_return": 0.058742
+              }
+            ]
+          }
+        },
+        "chart_frequency": "daily",
+        "relative_strength_axis": "right",
+        "style_contract": {
+          "chinese_font": "KaiTi",
+          "english_font": "Arial",
+          "red": "#C00000",
+          "yellow": "#FFC000",
+          "grey": "#BFBFBF"
+        }
+      }
+    }
+  }
+}

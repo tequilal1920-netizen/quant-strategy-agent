@@ -1,0 +1,4 @@
+interface:
+  display_name: "行业景气度"
+  short_description: "查询高频景气、53因子六维行业轮动、单行业分解与治理状态"
+  default_prompt: "请使用 $industry-rotation 查询六维行业轮动排名，区分生产冠军、研究挑战者和测试仅报告口径。"

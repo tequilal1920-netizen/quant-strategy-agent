@@ -1,0 +1,203 @@
+version: "3.0"
+agent_name: "个股K线记忆学习Agent"
+entrypoint: "single_stock_analyzer.py"
+primary_database: "database/research_warehouse.db"
+
+data_windows:
+  stock_lifetime:
+    description: "从本地数据库中该股票最早交易日读取到 as_of 截止日。"
+    source_table: "stock_ohlcv_daily"
+    fields:
+      - trade_date
+      - ts_code
+      - stock_name
+      - open
+      - high
+      - low
+      - close
+      - qfq_close
+      - pre_close
+      - pct_chg
+      - vol
+      - amount
+      - up_limit
+      - down_limit
+      - suspend_timing
+  valuation_context:
+    description: "补充换手、量比、估值和市值上下文。"
+    source_table: "stock_valuation_daily"
+    fields:
+      - turnover_rate
+      - turnover_rate_f
+      - volume_ratio
+      - pe_ttm
+      - pb
+      - ps_ttm
+      - dv_ttm
+      - total_mv
+      - circ_mv
+  moneyflow_context:
+    description: "构造订单流Delta代理变量，不替代真实逐笔订单流。"
+    source_table: "stock_moneyflow_daily"
+    fields:
+      - net_mf_amount
+      - buy_lg_amount
+      - sell_lg_amount
+      - buy_elg_amount
+      - sell_elg_amount
+
+frequencies:
+  main: ["D", "W", "M"]
+  rolling: ["3D", "5D", "10D", "20D", "60D", "120D"]
+  aggregation:
+    open: "窗口首日open"
+    high: "窗口最高high"
+    low: "窗口最低low"
+    close: "窗口末日close"
+    volume: "窗口成交量合计"
+    amount: "窗口成交额合计"
+    moneyflow: "窗口资金流合计"
+    valuation: "窗口末日估值与换手上下文"
+
+event_card_fields:
+  price_shape:
+    - body_pct
+    - upper_shadow_pct
+    - lower_shadow_pct
+    - close_position
+    - range_pct
+    - gap_pct
+  trend_context:
+    - ret_5
+    - ret_20
+    - ret_60
+    - ret_120
+    - ma_5
+    - ma_20
+    - ma_60
+    - ma_120
+    - drawdown_60
+    - near_high_60
+    - near_low_60
+  volume_moneyflow:
+    - volume_ratio_20
+    - amount_ratio_20
+    - turnover_rate
+    - volume_ratio
+    - moneyflow_delta
+    - moneyflow_pressure
+  forward_labels:
+    - fwd_ret_5
+    - fwd_ret_10
+    - fwd_ret_20
+    - fwd_ret_60
+    - max_up_20
+    - max_down_20
+
+theory_families:
+  single_candle:
+    - 十字星
+    - 长腿十字
+    - 蜻蜓十字
+    - 墓碑十字
+    - 锤头线
+    - 上吊线
+    - 倒锤头
+    - 射击之星
+    - 光头光脚阳线
+    - 光头光脚阴线
+    - 长上影线
+    - 长下影线
+  two_candle:
+    - 看涨吞没
+    - 看跌吞没
+    - 孕线
+    - 刺透形态
+    - 乌云盖顶
+    - 平头底
+    - 平头顶
+    - 内包日
+    - 外包日
+  three_candle:
+    - 早晨之星
+    - 黄昏之星
+    - 红三兵
+    - 三只乌鸦
+    - 三内上涨
+    - 三内下跌
+    - 三外上涨
+    - 三外下跌
+  breakout:
+    - 箱体向上突破
+    - 箱体向下跌破
+    - 假突破回落
+    - 假跌破修复
+    - 波动收缩后向上
+    - 波动收缩后向下
+  volume_price:
+    - 放量上涨确认
+    - 放量下跌确认
+    - 缩量回撤
+    - 量价背离风险
+  orderflow_proxy:
+    - 资金流正Delta确认
+    - 资金流负Delta确认
+    - 资金流背离
+  multi_frequency:
+    - 日周共振
+    - 周月趋势确认
+    - 短周期反向预警
+  review_memory:
+    - 失败样本回顾
+    - 条件适用标记
+    - 危险形态降权
+
+learning_split:
+  train: "前60%时间序列样本，只用于学习规则有效性和信号分位阈值。"
+  validation: "中间20%时间序列样本，用于检查过拟合和条件适用性。"
+  test: "最后20%时间序列样本，用于最终样本外评价。"
+  full: "全历史仅用于汇总展示，不用于提前学习测试集阈值。"
+
+rule_states:
+  active: "训练、验证和测试均有正向证据，可进入信号汇总。"
+  conditional: "整体有效但失败回撤或方向稳定性要求额外条件。"
+  watch: "样本或验证证据不足，只进入观察。"
+  deprecated: "训练有效但验证或测试明显衰减。"
+  rejected: "训练阶段没有可用正向证据。"
+  danger: "方向反向或失败损失显著，作为风险记忆。"
+
+gpt_review:
+  provider: "OpenAI-compatible endpoint"
+  env_keys:
+    api_key: "AI_ROUTER_API_KEY or OPENAI_API_KEY"
+    base_url: "AI_ROUTER_BASE_URL or OPENAI_BASE_URL"
+    model: "KLINE_GPT_MODEL, default gpt-5.5"
+    reasoning_effort: "KLINE_GPT_REASONING_EFFORT, default xhigh"
+  role: "复核规则、解释失败、提出条件，不替代本地可复现统计。"
+
+outputs:
+  notes_txt: "learned_kline_notes.txt"
+  rules_csv: "learned_rules.csv"
+  result_json: "learned_kline_result.json"
+  trades_csv: "trades.csv"
+  equity_csv: "equity_curve.csv"
+  chart_svg: "kline_trade_marks.svg"
+  optional_db_table: "kline_feature_daily"
+
+public_service:
+  mode: "--serve"
+  default_bind: "127.0.0.1:8877"
+  current_public_url: "https://desktop-i22b489.tailf9d7ac.ts.net:10006/"
+  auth_required: false
+  server_side_gpt_env_only: true
+  write_db: false
+  max_workers_default: 1
+  endpoints:
+    - "GET /"
+    - "GET /health"
+    - "GET /api/stocks"
+    - "GET /api/dates?code=<ts_code>"
+    - "POST /api/jobs"
+    - "GET /api/jobs/<job_id>"
+    - "GET /outputs/<job_id>/<filename>"
+  deployment_rule: "公网部署必须使用远程电脑上的独立端口和独立路由，不复用既有监控端口。"

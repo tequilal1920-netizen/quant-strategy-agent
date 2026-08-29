@@ -420,12 +420,27 @@ def gap_register_items() -> list[GapItem]:
 
 
 def strict_gate_rows(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    manifest = con.execute(
+        """
+        select run_id
+        from v3_run_manifest
+        where lower(status) in ('ready', 'completed')
+        order by coalesce(ended_at, started_at) desc, started_at desc, run_id desc
+        limit 1
+        """
+    ).fetchone()
+    if not manifest:
+        return []
+    source_run_id = manifest["run_id"]
     rows = con.execute(
         """
-        select universe, model_name, split_name, annual_return, sharpe, issues_json
+        select universe, model_name, split_name, periods, annual_return, sharpe, issues_json
         from v3_backtest_audit
-        where lower(year) = 'all' and split_name in ('test','full')
-        """
+        where run_id = ?
+          and lower(year) = 'all'
+          and split_name in ('train','valid','test','full')
+        """,
+        (source_run_id,),
     ).fetchall()
     pairs: dict[tuple[str, str], dict[str, Any]] = {}
     for row in rows:
@@ -433,8 +448,13 @@ def strict_gate_rows(con: sqlite3.Connection) -> list[dict[str, Any]]:
         item = pairs.setdefault(
             key,
             {
+                "source_run_id": source_run_id,
                 "universe": row["universe"],
                 "model_name": row["model_name"],
+                "train_periods": 0,
+                "valid_periods": 0,
+                "test_periods": 0,
+                "full_periods": 0,
                 "test_annual": None,
                 "test_sharpe": None,
                 "full_annual": None,
@@ -442,22 +462,38 @@ def strict_gate_rows(con: sqlite3.Connection) -> list[dict[str, Any]]:
                 "issues": [],
             },
         )
-        if row["split_name"] == "test":
+        split_name = row["split_name"]
+        item[f"{split_name}_periods"] = int(row["periods"] or 0)
+        if split_name == "test":
             item["test_annual"] = row["annual_return"]
             item["test_sharpe"] = row["sharpe"]
-        elif row["split_name"] == "full":
+        elif split_name == "full":
             item["full_annual"] = row["annual_return"]
             item["full_sharpe"] = row["sharpe"]
         if row["issues_json"]:
             try:
-                item["issues"].extend(json.loads(row["issues_json"]))
+                parsed = json.loads(row["issues_json"])
+                for issue in parsed if isinstance(parsed, list) else [parsed]:
+                    if issue and issue != "passed_or_no_issue":
+                        item["issues"].append(issue)
             except json.JSONDecodeError:
                 item["issues"].append(row["issues_json"])
 
     out = []
     for item in pairs.values():
+        complete_splits = all(
+            item[f"{split}_periods"] > 0
+            for split in ("train", "valid", "test", "full")
+        )
+        independent_full_sample = (
+            item["full_periods"] > item["test_periods"]
+            and item["full_periods"]
+            >= item["train_periods"] + item["valid_periods"] + item["test_periods"]
+        )
         pass_flag = int(
-            item["test_annual"] is not None
+            complete_splits
+            and independent_full_sample
+            and item["test_annual"] is not None
             and item["test_sharpe"] is not None
             and item["full_annual"] is not None
             and item["full_sharpe"] is not None
@@ -467,6 +503,14 @@ def strict_gate_rows(con: sqlite3.Connection) -> list[dict[str, Any]]:
             and item["full_sharpe"] >= 1.50
         )
         issue_parts = []
+        missing_splits = [
+            split for split in ("train", "valid", "test", "full")
+            if item[f"{split}_periods"] <= 0
+        ]
+        if missing_splits:
+            issue_parts.append("missing formal split evidence: " + ",".join(missing_splits))
+        if complete_splits and not independent_full_sample:
+            issue_parts.append("full sample is not independent from test evidence")
         if item["test_annual"] is None or item["full_annual"] is None:
             issue_parts.append("missing test/full formal audit")
         else:

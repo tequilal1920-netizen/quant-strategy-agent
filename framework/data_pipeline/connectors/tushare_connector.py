@@ -13,6 +13,11 @@ DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[3]
 API_URL = os.environ.get("TUSHARE_API_URL", "http://api.tushare.pro")
 START_DATE = "20120101"
 END_DATE = "20260630"
+INDEX_UNIVERSES = {
+    "CSI500_ENH": "000905.SH",
+    "CSI800_ENH": "000906.SH",
+    "CSI2000_ENH": "932000.CSI",
+}
 
 
 def now():
@@ -427,12 +432,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", default=str(DEFAULT_PROJECT_ROOT / "database" / "research_warehouse.db"))
     parser.add_argument("--mode", choices=["probe", "index_weight", "lhb", "market_gap"], required=True)
+    parser.add_argument("--universe", choices=["ALL", *INDEX_UNIVERSES], default="ALL")
     parser.add_argument("--start", default=START_DATE)
     parser.add_argument("--end", default=END_DATE)
     parser.add_argument("--pause", type=float, default=0.35)
     parser.add_argument("--max-calls", type=int, default=None)
     parser.add_argument("--source-db", default=os.environ.get("SOURCE_DB", ""), help="Required for market_gap; may also be set via SOURCE_DB.")
     parser.add_argument("--out", default=str(DEFAULT_PROJECT_ROOT / "output" / "framework" / "data_pipeline" / "tushare_connector_result.json"))
+    parser.add_argument("--no-output", action="store_true", help="Write only to the warehouse; do not create a connector result file.")
     args = parser.parse_args()
     if args.mode == "market_gap" and not args.source_db:
         parser.error("--source-db is required for market_gap or set SOURCE_DB.")
@@ -442,18 +449,24 @@ def main():
     if args.mode == "probe":
         result = probe(conn, args.start, args.end)
     elif args.mode == "index_weight":
-        result["CSI800_ENH"] = fill_index_weight(conn, "000906.SH", "CSI800_ENH", args.start, args.end, args.pause, args.max_calls)
-        result["CSI2000_ENH"] = fill_index_weight(conn, "932000.CSI", "CSI2000_ENH", args.start, args.end, args.pause, args.max_calls)
+        selected = INDEX_UNIVERSES if args.universe == "ALL" else {args.universe: INDEX_UNIVERSES[args.universe]}
+        for universe, index_code in selected.items():
+            result[universe] = fill_index_weight(
+                conn, index_code, universe, args.start, args.end, args.pause, args.max_calls)
     elif args.mode == "lhb":
         result = fill_lhb(conn, args.start, args.end, args.pause, args.max_calls)
     elif args.mode == "market_gap":
         result = fill_market_gap(conn, args.start, args.end, args.pause, args.max_calls, args.source_db)
     conn.close()
 
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps({"mode": args.mode, "out": str(out), "result": result}, ensure_ascii=False))
+    if not args.no_output:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        out_path = str(out)
+    else:
+        out_path = None
+    print(json.dumps({"mode": args.mode, "out": out_path, "result": result}, ensure_ascii=False))
 
 
 if __name__ == "__main__":
