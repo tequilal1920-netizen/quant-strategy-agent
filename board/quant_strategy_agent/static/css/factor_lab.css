@@ -307,6 +307,47 @@
   font-size: 12px;
 }
 
+.flx-champion {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.flx-champion article {
+  min-height: 82px;
+  padding: 12px 14px;
+  border: 1px solid #ead6d0;
+  border-left: 4px solid var(--flx-red);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.flx-champion span,
+.flx-champion em {
+  display: block;
+  color: var(--flx-muted);
+  font-style: normal;
+}
+
+.flx-champion span {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.flx-champion strong {
+  display: block;
+  margin: 7px 0 4px;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.flx-champion em {
+  font-size: 12px;
+}
+
 .flx-taxonomy {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));

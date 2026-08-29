@@ -1545,3 +1545,14 @@ Next best action: run a full production-cap screened-domain timing experiment us
 - 可视化和表格：前端全部改为网页内 Plotly 交互图与 HTML 表格，不再以截图替代；新增因子实验室专用表格样式，沿用数据看板红表头、浅米首列、灰阶表体和正负左右色阶条，色阶文字不加粗。
 - 部署：已同步到 homeserver 8096 公网生产目录并重启 `QuantStrategyAgent8096R340VisualOptimizer`；公网 `/quant-agent/healthz` 返回 `2026.08.29-factor-lab-full-framework-v1`。
 - 验证：本地 `py_compile` 通过 `factor_lab_backend.py/main.py`；本地 `node --check` 通过 `factor_lab.js/app.js`；生产目录 Flask test client 通过三页、415 因子、29 入模因子、30 个 LLM 因子、299 个净值/RankIC 点、Top10 个股和公式校验。浏览器扩展通道本轮连接超时/关闭，未完成自动截图级视觉验收。
+
+## 2026-08-29 行业风格轮动全框架替换 v1
+
+- 范围：仅替换行业风格一级板块的 `行业景气度 / 行业轮动 / 风格轮动` 三个二级页展示层与交互图表层；同步主站和 vnext，避免资产配置/组合优化后续部署再次回退行业风格页面。
+- 行业景气度：页面固定覆盖 `频率转换-数据处理-因变量构造-自变量筛选-景气度合成-回测`，包含一级行业、细分指标、合成方式控件，指标表/工业增加值映射表、八指标排序表、处理后时序、景气度合成、行业月度排名、加速度-分位矩阵、月末 Top5/Bottom5 与下月收益、年度收益表和净值/回撤图。
+- 行业轮动：页面固定覆盖 `因子构造-因子检验-打分构造-策略回测-因子归因`，包含因子表、处理与检验流程、检验表、相关性、单因子 RankIC/多空/分组、全行业排名、加速度-分位矩阵、Top5/Bottom5 月末跟踪、年度收益、趋势图、年度归因和 YTD 月度归因。
+- 风格轮动：页面固定覆盖 `风格标签-因子构造-数据处理-因子检验打分构造-策略回测-因子归因`，包含风格标签和晨星风格箱逻辑、因子表、检验表、相关性、单因子 RankIC/多空/分组、12 类风格/市值排名、风格和市值拆分排名、月末排序及下月收益、年度收益、趋势图、年度归因和 YTD 月度归因。
+- 可视化和表格：全部改为网页内 Plotly 交互图与 HTML 表格，不再插入静态截图；表格沿用数据看板红表头、浅米首列、灰阶表体和正负左右色阶条；页面布局继续沿用数据看板卡片、控件、中文标题和整体色系。
+- 回归保护：主站和 vnext 均加入最终导航稳定器，防止旧首页或异步旧宏观页在点击后覆盖目标板块；因子实验室保留冠军模型提示，满足“训练/验证选模，测试只报告”语义。
+- 部署：已同步到 homeserver 8096 公网生产目录并重启 `QuantStrategyAgent8096R340VisualOptimizer`；公网 `/quant-agent/healthz` 返回 `2026.08.29-industry-style-full-framework-v1`。
+- 验证：`model/industry_rotation/test_contract.py` 通过，行业数 31、字段数 248、全部字段 live 标记、风格股票 4951；主站 `qa/test_canonical_app.py` 15 项通过；主站/vnext `node --check` 通过 `app.js`、`rotation_module.js` 和因子实验室相关脚本；本地与公网 Playwright 均逐页通过，行业景气度 4 图 6 表、行业轮动 6 图 8 表、风格轮动 9 图 10 表，因子实验室三页保持可渲染。

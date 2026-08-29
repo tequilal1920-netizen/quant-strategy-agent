@@ -4376,6 +4376,43 @@ Object.assign(COL,{model:'模型',year:'年度',benchmark_annual_return:'等权�
     return kllmOldWorkspaceRenderSection(section);
   };
   kllmPatchNav();
+  function bindFinalPrimaryNav(){
+    const stable=function(target,attempt){
+      const delays=[500,1400,2800];
+      if(attempt>=delays.length)return;
+      window.setTimeout(function(){
+        if(S.active!==target)return;
+        const config=workspaceConfig(),section=workspaceSection(config);
+        const routeOk=document.body.dataset.workspaceRoute===target;
+        const sectionOk=!section||document.body.dataset.workspaceSection===section.id;
+        if(!routeOk||!sectionOk){
+          render(true).catch(function(error){console.error('主导航稳定重渲染异常',error);});
+        }
+        stable(target,attempt+1);
+      },delays[attempt]);
+    };
+    const run=function(target,attempt){
+      if((navBusy||workspaceControlPending)&&attempt<80){
+        window.setTimeout(function(){run(target,attempt+1);},150);
+        return;
+      }
+      requestNav(target).then(function(){stable(target,0);}).catch(function(error){console.error('主导航跳转异常',error);});
+    };
+    document.querySelectorAll('.section-nav .nav-item[data-target]').forEach(function(button){
+      if(button.dataset.finalPrimaryNavBound==='1')return;
+      button.dataset.finalPrimaryNavBound='1';
+      button.addEventListener('click',function(event){
+        if(!event.isTrusted)return;
+        const target=button.dataset.target;
+        if(!target)return;
+        event.preventDefault();
+        run(target,0);
+      },true);
+    });
+  }
+  const finalOldBindNav=bindNav;
+  bindNav=function(){finalOldBindNav();bindFinalPrimaryNav();};
+  bindFinalPrimaryNav();
 
   function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 })();

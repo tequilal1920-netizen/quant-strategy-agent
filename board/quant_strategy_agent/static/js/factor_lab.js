@@ -88,6 +88,30 @@
     return '<section class="flx-section ' + esc(extraClass || '') + '"><header><h2>' + esc(title) + '</h2></header>' + body + '</section>';
   }
 
+  function championHtml(champion) {
+    champion = obj(champion);
+    const gate = obj(champion.gate_summary);
+    const rows = arr(champion.splits).map(row => ({
+      split: row.split === 'valid' ? '验证集' : row.split === 'test' ? '测试集' : '训练集',
+      annual_return: pct(row.annual_return, 1),
+      sharpe: n(row.sharpe, 2),
+      max_drawdown: pct(row.max_drawdown, 1),
+      turnover: pct(row.turnover, 1)
+    }));
+    const status = champion.status === 'ok' && gate.all_passed ? '通过' : '观察';
+    return section('冠军模型审计',
+      '<div class="flx-champion">' +
+        '<article><span>选择依据</span><strong>训练集与验证集选择，测试集仅作一次性报告</strong><em>' + esc(champion.active_engine_version || '') + '</em></article>' +
+        '<article><span>候选数量</span><strong>' + esc(champion.candidate_count ?? '—') + '</strong><em>最终状态：' + esc(status) + '</em></article>' +
+        '<article><span>门控结果</span><strong>' + esc(gate.passed ?? '—') + ' / ' + esc(gate.total ?? '—') + '</strong><em>' + esc(champion.selection_basis || '') + '</em></article>' +
+      '</div>' +
+      table('分样本审计', rows, [
+        { key: 'split', label: '样本' }, { key: 'annual_return', label: '年化收益' },
+        { key: 'sharpe', label: 'Sharpe' }, { key: 'max_drawdown', label: '最大回撤' }, { key: 'turnover', label: '换手' }
+      ])
+    );
+  }
+
   function metricGrid(items) {
     return '<div class="flx-metrics">' + items.map(item =>
       '<div class="flx-metric"><span>' + esc(item.label) + '</span><strong>' + esc(item.value) + '</strong><em>' + esc(item.note || '') + '</em></div>'
@@ -203,6 +227,7 @@
       { label: '数据截止', value: data.source_watermark || '—', note: '研究库水位' },
       { label: '引擎', value: data.engine_version || '—', note: '测试集只报告' }
     ]) +
+      championHtml(obj(obj(state.bootstrap).champion)) +
       section('因子框架', taxonomyCards(data)) +
       section('数据处理与因子检验流程', flow(arr(dash.process_rows))) +
       section('单因子控件', control) +

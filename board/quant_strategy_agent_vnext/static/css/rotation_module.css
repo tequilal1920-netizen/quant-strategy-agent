@@ -406,59 +406,58 @@ button.style-box-cell:hover {
   }
 }
 
+
+/* 行业/风格轮动最终收益区：年度表格 + Plotly 日度趋势。 */
 .rotation-final-figures {
   margin: 0 0 18px;
+}
+.rotation-final-figures .panel-header {
+  margin-bottom: 10px;
+}
+.rotation-result-group {
+  margin: 0 0 18px;
+  padding: 12px 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
   background: #fff;
 }
-
-.rotation-result-group {
-  margin: 14px 0 22px;
-}
-
 .rotation-result-group:last-child {
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
-
 .rotation-result-group h4 {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
+  justify-content: space-between;
   gap: 8px 14px;
   margin: 0 0 10px;
-  padding-left: 9px;
-  border-left: 3px solid #b42318;
-  color: #18212b;
-  font-size: 14px;
-  line-height: 1.35;
+  color: var(--ink);
+  font: 700 15px/1.45 KaiTi, "STKaiti", "Kaiti SC", Arial, sans-serif;
 }
-
 .rotation-result-group h4 span {
-  color: #667085;
-  font-size: 11px;
-  font-weight: 600;
+  color: var(--muted);
+  font: 500 12px/1.45 Arial, KaiTi, sans-serif;
 }
-
 .rotation-result-pair {
   display: grid;
-  grid-template-columns: minmax(280px, .9fr) minmax(360px, 1.1fr);
+  grid-template-columns: minmax(260px, .92fr) minmax(360px, 1.38fr);
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
 }
-
-.rotation-result-pair figure {
+.rotation-result-figure {
   margin: 0;
   min-width: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
   background: #fff;
+  overflow: hidden;
 }
-
-.rotation-result-pair img {
+.rotation-result-figure img {
   display: block;
   width: 100%;
   height: auto;
-  border: 1px solid #e4e8ec;
   background: #fff;
 }
-
 @media (max-width: 980px) {
   .rotation-result-pair {
     grid-template-columns: 1fr;
@@ -488,7 +487,7 @@ button.style-box-cell:hover {
 .rotation-v6-flow { margin: 0 0 14px; padding: 12px; }
 .rotation-v6-flow-row {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
   gap: 8px;
   align-items: stretch;
 }
@@ -510,17 +509,20 @@ button.style-box-cell:hover {
 .rotation-v6-step-grid strong { display:block; margin:3px 0; color:#000; font:700 12px/1.35 KaiTi,Arial,sans-serif; }
 .rotation-v6-step-grid span { display:block; color:#344054; font:400 11px/1.45 KaiTi,Arial,sans-serif; }
 .rotation-v6 .data-table { table-layout: fixed; width: 100%; border-collapse: collapse; color:#000; font-family: KaiTi, "STKaiti", "Kaiti SC", Arial, sans-serif; }
-.rotation-v6 .data-table th { background:#1f4e79; color:#fff; font-size:11px; font-weight:700; text-align:center; padding:6px 5px; border:1px solid #ffffff; }
+.rotation-v6 .data-table th { background:#8b1f14; color:#fff; font-size:11px; font-weight:700; text-align:center; padding:6px 5px; border:1px solid #ffffff; }
 .rotation-v6 .data-table td { color:#000; font-size:10.5px; line-height:1.35; text-align:center; padding:5px 5px; border:1px solid #ffffff; word-break:break-word; }
-.rotation-v6 .data-table tbody tr:nth-child(even) td { background:#e8eef6; }
-.rotation-v6 .data-table tbody tr:nth-child(odd) td { background:#fff; }
-.rotation-v6 .table-scroll { overflow: visible; }
+.rotation-v6 .data-table tbody tr:nth-child(even) td { background:#e6e6e6; }
+.rotation-v6 .data-table tbody tr:nth-child(odd) td { background:#f7f7f7; }
+.rotation-v6 .data-table tbody td:first-child { background:#f2ece6; font-weight:700; }
+.rotation-v6 .data-table tbody tr:hover td { background:#f4eee9; }
+.rotation-v6 .data-table tbody tr:hover td:first-child { background:#eadfd6; }
+.rotation-v6 .table-scroll { overflow: auto; }
 .rotation-v6-arrow { display:inline-block; min-width:16px; margin-right:3px; font:900 15px/1 Arial,sans-serif; vertical-align:-1px; }
 .rotation-v6-arrow.up { color:#c00000; }
 .rotation-v6-arrow.down { color:#168a47; }
 .rotation-v6-arrow + em { font-style:normal; color:#000; }
 .rotation-v6-matrix { width:100%; height:100%; border-collapse:collapse; table-layout:fixed; color:#000; font-family:KaiTi,Arial,sans-serif; }
-.rotation-v6-matrix th { border:1px solid #fff; padding:8px 6px; background:#1f4e79; color:#fff; font-size:12px; }
+.rotation-v6-matrix th { border:1px solid #fff; padding:8px 6px; background:#8b1f14; color:#fff; font-size:12px; font-weight:700; }
 .rotation-v6-matrix td { min-height:96px; border:1px solid #fff; padding:9px 8px; background:#fff; vertical-align:top; }
 .rotation-v6-matrix tbody tr:nth-child(1) td:nth-child(4),
 .rotation-v6-matrix tbody tr:nth-child(1) td:nth-child(3),
@@ -531,6 +533,21 @@ button.style-box-cell:hover {
 .rotation-v6-matrix td span { display:block; margin-top:5px; color:#667085; font:400 10px/1.35 Arial,KaiTi,sans-serif; }
 .rotation-v6-final { margin:0 0 18px; padding:12px; }
 .rotation-v6-final .rotation-result-pair { grid-template-columns: minmax(300px, .9fr) minmax(480px, 1.45fr); }
+.rotation-v6-result-table {
+  min-width: 0;
+  max-height: 350px;
+  border: 1px solid #eceff3;
+  border-radius: 6px;
+  background: #fff;
+}
+.rotation-v6-result-table .data-table {
+  min-width: 0;
+  table-layout: fixed;
+}
+.rotation-v6-result-table .data-table th,
+.rotation-v6-result-table .data-table td {
+  white-space: nowrap;
+}
 .rotation-v6 .rotation-status-card { border-top-color:#c00000; background:#fff; }
 .rotation-v6 .rotation-status-card.pass { border-top-color:#168a47; }
 .rotation-v6 .rotation-status-card.review { border-top-color:#ffc000; background:#fff; }
