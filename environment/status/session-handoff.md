@@ -1,6 +1,16 @@
 # 会话交接
 
-当前生产版本仍为 `2026.07.23-research-workspace-r16.3`，K 线模型为 `9.0-cohort-wyckoff-evolution`。公网统一入口、账号迁移、27 个二级页面、51 个页内功能、8 个一级 Skill、文件清理和既有 GitHub 公开发布均保持原状态。资金面数据源改造代码已在本地正式仓库完成，39/49 个精确序列已落入正式 SQLite；因剩余 10 个授权序列不可取，尚未生成新快照、提交 GitHub 或部署。
+当前生产版本为 `2026.08.29-portfolio-full-framework-v1`。公网统一入口正常，组合优化三页已完成最新框架发布：优化求解器按“默认参数-约束解释-人工确认-HiGHS选股-Clarabel求权”全链路运行，宽基择时和指数增强保持最新内容与数据看板式表格。资金面数据源改造仍沿用此前严格门禁状态：39/49 个精确序列已落入正式 SQLite，剩余 10 个授权序列不可取时不得宣称完整刷新。
+
+## 2026-08-29 组合优化交接
+
+- 公网：https://desktop-i22b489.tailf9d7ac.ts.net/quant-agent/
+- 生产版本：`2026.08.29-portfolio-full-framework-v1`
+- 远端目录：`F:\apps\quant_strategy_agent_r44_13_data_dashboard_visual_fix_20260819_165807\board\quant_strategy_agent`
+- 远端备份：`F:\apps\quant_strategy_agent_deployment_backups\portfolio_full_framework_20260829_092700`
+- 任务：`QuantStrategyAgent8096R340VisualOptimizer`
+- 验证：`python ai-models/portfolio-optimization/scripts/query.py current/solver/backtest --compact`、`python -m unittest model.portfolio_optimization.test_portfolio_optimization_engine -v`、`python -m unittest board.quant_strategy_agent.qa.test_canonical_app -v`、两份 `portfolio_optimizer.js` 语法、两份 Flask 入口编译、三页真实浏览器检查、约束方案-草案-校验-确认-排队接口全链路、公网 health/version/static 资源检查全部通过。
+- 注意：本轮未提交 `state/`、`test-results/`、数据库、缓存、凭据或技术分析自动刷新的 kline 快照。
 
 ## 已验证状态
 

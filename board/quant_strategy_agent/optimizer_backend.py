@@ -1493,6 +1493,40 @@ class OptimizerBackendService:
         else:
             broad_index_timing = {"status": BLOCKED_DATA, "message": "broad_index_timing_snapshot_missing"}
 
+        research_snapshot_path = PROJECT_ROOT / "board" / "quant_strategy_agent" / "data" / "portfolio_optimization_snapshot.json"
+        optimizer_research_snapshot: dict[str, Any] = {}
+        if research_snapshot_path.is_file():
+            try:
+                raw_research = json.loads(research_snapshot_path.read_text(encoding="utf-8"))
+                raw_optimization = raw_research.get("optimization") if isinstance(raw_research.get("optimization"), Mapping) else {}
+                raw_backtest = raw_research.get("backtest") if isinstance(raw_research.get("backtest"), Mapping) else {}
+                optimizer_research_snapshot = {
+                    "status": raw_research.get("status"),
+                    "engine_version": raw_research.get("engine_version"),
+                    "generated_at": raw_research.get("generated_at"),
+                    "data_as_of": raw_research.get("data_as_of"),
+                    "optimization": {
+                        "leaderboard": raw_optimization.get("leaderboard", []),
+                        "efficient_frontier": raw_optimization.get("efficient_frontier", []),
+                        "solver_benchmark": raw_optimization.get("solver_benchmark", []),
+                    },
+                    "backtest": {
+                        "cost_sensitivity_test": raw_backtest.get("cost_sensitivity_test", []),
+                        "stress_scenarios": raw_backtest.get("stress_scenarios", []),
+                        "promotion_gate": raw_backtest.get("promotion_gate", {}),
+                    },
+                }
+            except (OSError, ValueError, TypeError) as exc:
+                optimizer_research_snapshot = {
+                    "status": BLOCKED_DATA,
+                    "message": f"portfolio_optimization_snapshot_read_failed:{type(exc).__name__}:{exc}",
+                }
+        else:
+            optimizer_research_snapshot = {
+                "status": BLOCKED_DATA,
+                "message": "portfolio_optimization_snapshot_missing",
+            }
+
         return {
             "status": "ready" if len(assets) == 500 else BLOCKED_DATA,
             "universe": {
@@ -1506,6 +1540,7 @@ class OptimizerBackendService:
             "industry_summary": industries,
             "factor_weight_history": factor_weight_history,
             "framework": framework,
+            "optimizer_research_snapshot": optimizer_research_snapshot,
             "broad_index_timing": broad_index_timing,
             "selected_run": selected_run,
             "latest_diagnostic_run": (

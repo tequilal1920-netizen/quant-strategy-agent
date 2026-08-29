@@ -36,7 +36,7 @@ import optimizer_backend
 import technical_factor_backend
 
 
-APP_VERSION = "2026.08.28-vnext-all-modules-final-verification-v2"
+APP_VERSION = "2026.08.29-portfolio-full-framework-v1"
 legacy.APP_VERSION = APP_VERSION
 rotation.APP_VERSION = APP_VERSION
 

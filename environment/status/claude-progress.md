@@ -1,8 +1,10 @@
 # 当前进度
 
-更新时间：2026-08-11
+更新时间：2026-08-29
 
 ## 已完成并验证
+
+- 组合优化已发布 `2026.08.29-portfolio-full-framework-v1`：优化求解器页面按“默认参数-约束解释-人工确认-HiGHS选股-Clarabel求权”重建，敏感性与回测图均为网页 Plotly 图而非静态图片；宽基择时、指数增强保留最新内容并统一为数据看板式表格。验证通过 `current/solver/backtest` 三个 CLI、14 项组合优化单测、15 项主站 QA、JavaScript/Python 语法、三页真实浏览器零错误、约束方案-草案-校验-确认-排队接口全链路，以及公网 health/version/static 资源检查。
 
 - `agent/` 按 `board/database/environment/framework/model/output/skill` 职责组织；`copy/previous_version_20260721` 作为唯一重组前源码备份，约 1.7MB，不含数据库。
 - 左侧信息架构已收敛为 8 个一级板块、27 个二级页面；旧模型和全部可视化均通过 `framework/integration/ui_module_mapping.json` 映射到新板块，没有删除核心图表或子面板。

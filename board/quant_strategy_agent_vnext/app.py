@@ -62,7 +62,7 @@ def load_private_env() -> None:
 
 load_private_env()
 
-APP_VERSION = "2026.08.25-kline-llm-v1"
+APP_VERSION = "2026.08.29-portfolio-full-framework-v1"
 PUBLIC_HOST = os.environ.get("QUANT_AGENT_PUBLIC_HOST", "https://desktop-i22b489.tailf9d7ac.ts.net").rstrip("/")
 USERNAME = os.environ.get("QUANT_AGENT_USER", "")
 PASSWORD = os.environ.get("QUANT_AGENT_PASSWORD", "")

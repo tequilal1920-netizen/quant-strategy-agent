@@ -1,6 +1,11 @@
 {
-    "updated_at":  "2026-08-14",
+    "updated_at":  "2026-08-29",
     "features":  [
+                     {
+                         "id":  "portfolio-full-framework-v1",
+                         "status":  "passed",
+                         "verification":  "2026-08-29: 组合优化三页保持最新框架；优化求解器改为默认参数-约束解释-人工确认-HiGHS选股-Clarabel求权全流程，敏感性和回测图均为网页Plotly图；宽基择时与指数增强表格沿用数据看板样式。模型CLI current/solver/backtest、14项组合优化单测、15项主站QA、JS/Python语法、真实浏览器三页零错误、约束方案-草案-校验-确认-排队端到端、公网health/version/static资源校验均通过；公网版本2026.08.29-portfolio-full-framework-v1。"
+                     },
                      {
                          "id":  "repository-layout",
                          "status":  "passed",

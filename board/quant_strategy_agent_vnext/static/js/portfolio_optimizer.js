@@ -257,6 +257,9 @@
   function charts(x) {
     return '<div class="optimizer-chart-grid">' + x.join("") + "</div>";
   }
+  function chartsSingle(x) {
+    return '<div class="optimizer-chart-grid optimizer-chart-grid-single">' + x.join("") + "</div>";
+  }
   function kpi(l, v, n, t) {
     return (
       '<article class="optimizer-kpi ' +
@@ -560,6 +563,8 @@
           volatility: present(x.annual_volatility, x.volatility),
           sharpe: present(x.sharpe, x.sharpe_ratio),
           information_ratio: present(x.information_ratio, x.ir),
+          annual_excess_return: present(x.annual_excess_return, x.excess_return),
+          positive_month_rate: present(x.positive_month_rate, x.win_rate),
           max_drawdown: x.max_drawdown,
           tracking_error: x.tracking_error,
           turnover: present(x.turnover, x.average_turnover),
@@ -2077,41 +2082,57 @@
 
   function timingAnnualTable(rows, benchmarkName) {
     const head = ["年度", "策略收益", benchmarkName || "基准", "超额收益", "最大回撤"];
+    const body = arr(rows)
+      .map(
+        (r) =>
+          '<tr><td>' +
+          esc(r.year) +
+          '</td><td>' +
+          esc(r.strategy_return) +
+          '</td><td>' +
+          esc(r.benchmark_return) +
+          '</td><td>' +
+          esc(r.excess_return) +
+          '</td><td>' +
+          esc(r.max_drawdown) +
+          '</td></tr>',
+      )
+      .join("");
     return (
-      '<div class="ix-table-wrap"><div class="ix-table-title"><h3>年度收益明细</h3><p>与本页日频曲线同口径</p></div><table class="ix-table"><thead><tr>' +
+      '<section class="table-panel optimizer-table-panel optimizer-mini-table"><div class="optimizer-table-title"><h3>年度收益明细</h3><p>与本页日频曲线同口径</p></div><div class="table-scroll"><table class="data-table optimizer-data-table"><thead><tr>' +
       head.map((x) => '<th>' + esc(x) + '</th>').join("") +
       '</tr></thead><tbody>' +
-      arr(rows).map((r) =>
-        '<tr><td>' + esc(r.year) + '</td><td>' + esc(r.strategy_return) + '</td><td>' + esc(r.benchmark_return) + '</td><td>' + esc(r.excess_return) + '</td><td>' + esc(r.max_drawdown) + '</td></tr>'
-      ).join("") +
-      '</tbody></table></div>'
+      (body || '<tr><td colspan="' + head.length + '">暂无年度收益数据</td></tr>') +
+      '</tbody></table></div></section>'
     );
   }
   function optimizerMiniTable(title, note, rows, cols) {
     rows = arr(rows);
     cols = arr(cols);
+    const head = cols.map((c) => '<th>' + esc(c.label || c.key || c) + '</th>').join('');
+    const body = rows
+      .map((row) =>
+        '<tr>' +
+        cols
+          .map((c) => {
+            const key = c.key || c,
+              val = typeof c.format === 'function' ? c.format(row[key], row) : row[key];
+            return '<td>' + esc(val == null ? '--' : val) + '</td>';
+          })
+          .join('') +
+        '</tr>',
+      )
+      .join('');
     return (
-      '<div class="ix-table-wrap optimizer-mini-table"><div class="ix-table-title"><h3>' +
+      '<section class="table-panel optimizer-table-panel optimizer-mini-table"><div class="optimizer-table-title"><h3>' +
       esc(title) +
       '</h3><p>' +
       esc(note || String(rows.length) + ' 行') +
-      '</p></div><table class="ix-table"><thead><tr>' +
-      cols.map((c) => '<th>' + esc(c.label || c.key || c) + '</th>').join('') +
+      '</p></div><div class="table-scroll"><table class="data-table optimizer-data-table"><thead><tr>' +
+      head +
       '</tr></thead><tbody>' +
-      rows
-        .map((row) =>
-          '<tr>' +
-          cols
-            .map((c) => {
-              const key = c.key || c,
-                val = typeof c.format === 'function' ? c.format(row[key], row) : row[key];
-              return '<td>' + esc(val == null ? '--' : val) + '</td>';
-            })
-            .join('') +
-          '</tr>',
-        )
-        .join('') +
-      '</tbody></table></div>'
+      (body || '<tr><td colspan="' + Math.max(cols.length, 1) + '">暂无表格数据</td></tr>') +
+      '</tbody></table></div></section>'
     );
   }
   function timingFlow() {
@@ -3543,6 +3564,166 @@
     if (confirmButton) confirmButton.onclick = confirm;
     if (submitButton) submitButton.onclick = submit;
   }
+  function researchSnapshot() {
+    return obj(obj(state.snapshot).optimizer_research_snapshot);
+  }
+  function percentNumber(value) {
+    const n = Number(String(value == null ? "" : value).replace("%", ""));
+    return Number.isFinite(n) ? n : null;
+  }
+  function solverFrontierRows() {
+    const research = researchSnapshot(),
+      frontier = arr(obj(research.optimization).efficient_frontier)
+        .map((row) => ({
+          lambda: num(row.risk_aversion != null ? row.risk_aversion : row.lambda),
+          expected_return: num(row.expected_return != null ? row.expected_return : row.annual_return),
+          volatility: num(row.volatility != null ? row.volatility : row.annual_volatility),
+          expected_sharpe: num(row.expected_sharpe != null ? row.expected_sharpe : row.sharpe),
+        }))
+        .filter((row) => row.lambda != null);
+    if (frontier.length) return frontier.sort((a, b) => a.lambda - b.lambda);
+    return arr(obj(research.optimization).leaderboard)
+      .map((row) => ({
+        lambda: num(row.risk_aversion),
+        expected_return: num(row.validation_annual_return != null ? row.validation_annual_return : row.train_annual_return),
+        volatility: num(row.validation_annual_volatility != null ? row.validation_annual_volatility : row.train_annual_volatility),
+        expected_sharpe: num(row.validation_sharpe != null ? row.validation_sharpe : row.train_sharpe),
+      }))
+      .filter((row) => row.lambda != null)
+      .sort((a, b) => a.lambda - b.lambda);
+  }
+  function emptyPlot(id, text) {
+    plot(id, [], {
+      annotations: [
+        {
+          text: text || "暂无可绘制数据",
+          x: 0.5,
+          y: 0.5,
+          xref: "paper",
+          yref: "paper",
+          showarrow: false,
+          font: { color: "#7a8491", size: 13 },
+        },
+      ],
+      xaxis: { visible: false },
+      yaxis: { visible: false },
+    });
+  }
+  function plotSolverSensitivity() {
+    const rows = solverFrontierRows();
+    if (!rows.length) {
+      emptyPlot("solver-sensitivity", "暂无风险厌恶系数敏感性数据");
+      return;
+    }
+    plot(
+      "solver-sensitivity",
+      [
+        {
+          type: "scatter",
+          mode: "lines+markers",
+          name: "预期收益",
+          x: rows.map((row) => row.lambda),
+          y: rows.map((row) => row.expected_return),
+          line: { color: C.red, width: 2.8 },
+          marker: { size: 6 },
+        },
+        {
+          type: "scatter",
+          mode: "lines+markers",
+          name: "预期波动",
+          x: rows.map((row) => row.lambda),
+          y: rows.map((row) => row.volatility),
+          line: { color: C.blue, width: 2.4 },
+          marker: { size: 6 },
+        },
+        {
+          type: "scatter",
+          mode: "lines+markers",
+          name: "预期夏普（右轴）",
+          x: rows.map((row) => row.lambda),
+          y: rows.map((row) => row.expected_sharpe),
+          yaxis: "y2",
+          line: { color: C.gold, width: 2.4 },
+          marker: { size: 6 },
+        },
+      ],
+      {
+        hovermode: "x unified",
+        xaxis: { title: "风险厌恶系数 λ", type: "log", gridcolor: C.grid },
+        yaxis: { title: "收益 / 波动", tickformat: ".1%", gridcolor: C.grid },
+        yaxis2: { title: "夏普", overlaying: "y", side: "right", showgrid: false },
+        legend: { orientation: "h", y: -0.2 },
+      },
+    );
+  }
+  function plotSolverBacktest(v) {
+    if (!v) {
+      emptyPlot("solver-backtest-line", "等待认证组合回测数据");
+      emptyPlot("solver-backtest-annual", "等待年度收益数据");
+      return;
+    }
+    const benchmark = arr(v.nav.benchmark),
+      optimized = arr(v.nav.constrained_optimizer),
+      relative = excess(optimized, benchmark).map((row) => ({
+        date: row.date,
+        value: 1 + row.value,
+      }));
+    plot(
+      "solver-backtest-line",
+      [
+        line(benchmark, "中证500", C.gold, 2.4),
+        line(optimized, "优化组合", C.red, 2.8),
+        Object.assign(line(relative, "相对强度（右轴）", C.blue, 2.6), { yaxis: "y2" }),
+      ],
+      {
+        hovermode: "x unified",
+        xaxis: { type: "date", showgrid: false },
+        yaxis: { title: "净值" },
+        yaxis2: { title: "相对强度", overlaying: "y", side: "right", showgrid: false },
+        legend: { orientation: "h", y: -0.22 },
+      },
+    );
+    const rows = indexAnnualRows(v).filter((row) => String(row.year).indexOf("区间") < 0);
+    if (!rows.length) {
+      emptyPlot("solver-backtest-annual", "暂无年度收益数据");
+      return;
+    }
+    plot(
+      "solver-backtest-annual",
+      [
+        {
+          type: "bar",
+          name: "优化组合",
+          x: rows.map((row) => row.year),
+          y: rows.map((row) => percentNumber(row.strategy_return)),
+          marker: { color: C.red },
+        },
+        {
+          type: "bar",
+          name: "中证500",
+          x: rows.map((row) => row.year),
+          y: rows.map((row) => percentNumber(row.benchmark_return)),
+          marker: { color: C.gold },
+        },
+        {
+          type: "scatter",
+          mode: "lines+markers",
+          name: "超额收益（右轴）",
+          x: rows.map((row) => row.year),
+          y: rows.map((row) => percentNumber(row.excess_return)),
+          yaxis: "y2",
+          line: { color: C.blue, width: 2.4 },
+          marker: { size: 6 },
+        },
+      ],
+      {
+        barmode: "group",
+        yaxis: { title: "收益(%)" },
+        yaxis2: { title: "超额(%)", overlaying: "y", side: "right", showgrid: false },
+        legend: { orientation: "h", y: -0.22 },
+      },
+    );
+  }
   function renderLearningContent() {
     const v = vm(),
       o = v ? metric(v, "constrained_optimizer") : {},
@@ -3568,21 +3749,19 @@
       section("约束解释与人工确认", "文本输入、返回方程方案、人工选择修改、校验确认、提交求解。", workflowBody()) +
       section(
         "敏感性分析",
-        "三类关键参数、10个等差序列、日度回测口径。",
-        '<div class="optimizer-static-grid single">' +
-          staticFigure("关键参数敏感性分析", "solver_sensitivity.png", "跟踪误差 / 单票主动权重 / 换手上限") +
-          "</div>",
+        "风险厌恶系数 λ 序列，直接读取当前研究快照的有效前沿。",
+        chartsSingle([card("厌恶系数敏感性", "solver-sensitivity", "预期收益 / 波动 / 夏普")]),
       ) +
       section(
         "回测图表",
-        "年度收益表与相对强度三线图，直接使用当前最优默认求解器结果。",
-        '<div class="optimizer-static-grid">' +
-          staticFigure("年度收益明细", "solver_annual_table.png", "策略收益 / 中证500 / 超额收益 / 最大回撤") +
-          staticFigure("相对强度三线图", "solver_relative_strength.png", "中证500 / 组合优化器 / 相对强度") +
-          "</div>",
+        "年度收益表与趋势折线图，直接使用当前最优默认求解器结果。",
+        charts([card("趋势折线图", "solver-backtest-line", "中证500 / 优化组合 / 相对强度"), card("年度收益图", "solver-backtest-annual", "策略 / 基准 / 超额")]) +
+          timingAnnualTable(v ? indexAnnualRows(v) : [], "中证500"),
       ) +
       "</div>";
     bindWorkflowControls();
+    plotSolverSensitivity();
+    plotSolverBacktest(v);
   }
   async function learningPage() {
     state.currentPage = "learning";

@@ -34,7 +34,7 @@ import optimizer_backend
 import technical_factor_backend
 
 
-APP_VERSION = "2026.08.29-industry-style-full-framework-v1"
+APP_VERSION = "2026.08.29-portfolio-full-framework-v1"
 legacy.APP_VERSION = APP_VERSION
 rotation.APP_VERSION = APP_VERSION
 
